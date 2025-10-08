@@ -37,6 +37,29 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth scroll for entire page */
+        html {
+          scroll-behavior: smooth;
+        }
+      
+        @layer utilities {
+          @keyframes fadeInUp {
+            0% {
+              opacity: 0;
+              transform: translateY(40px);
+            }
+            100% {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .animate-fadeInUp {
+            animation: fadeInUp 1.2s ease-out forwards;
+          }
+        }
+      </style>
+      
 
     <!-- Mobile Menu Script -->
     <script>
@@ -173,7 +196,7 @@
     <!-- Welcome -->
     <section id="home" class="scroll-mt-20 relative bg-cover bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1705785012/goclegal/sfcitybgmobile.webp')] lg:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp')]">
         <span class="absolute inset-x-1 inset-y-1 lg:inset-y-0 lg:left-0 lg:right-auto lg:w-[35%] lg:h-full rounded-md bg-[#00305bc7] m-2 lg:m-0"></span>
-        <div class="relative z-5 max-w-[1200px] m-auto w-full h-full bg-[#00305b30] flex flex-col items-start text-white p-7 lg:px-0 lg:py-20">
+        <div class="relative z-5 max-w-[1200px] m-auto w-full h-full bg-[#00305b30] flex flex-col items-start text-white p-7 lg:px-0 lg:py-20 animate-fadeInUp">
             <div class="w-[300px] text-[32px] font-bold pb-6">GOC LEGAL, P.C.</div>
             <h1 class="w-[300px] text-[32px] font-bold pb-6">Oakland Personal Injury & Auto Accident Lawyer</h1>
             <h2 class="w-[300px] text-[24px] lg:text-[30px] pb-4">We fight to get you the money you deserve.</h2>
