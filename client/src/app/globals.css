@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "swiper/css";
+@import "swiper/css/navigation";
+@import "swiper/css/pagination";
 
 
 :root {
@@ -20,8 +23,12 @@
   }
 }
 
+@layer utilities {
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-cormorant-garamond), sans-serif;
 }
+
