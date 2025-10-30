@@ -5,7 +5,7 @@ import { Pagination, Autoplay } from "swiper/modules";
 import Image from "next/image";
 import { urlFor } from "../util";
 
-interface SwiperType {
+type SwiperType = {
     slides: slide[]
 }
 export default function Slider({ slides }: SwiperType) {
