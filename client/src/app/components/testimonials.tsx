@@ -4,20 +4,20 @@ import Slider from "./slider"
 
 const TESTIMONIALS_PAGE_QUERY = groq`*[_type == "slider" && slug.current == "testimonials"][0]{title, description, slides}`
 
-export type slide = {
+export type Slide = {
     image: Record<string, string>
     paragraph: string
     label: string
 }
-type testimonialsPage = {
+type TestimonialsPage = {
     title: string
-    description: string,
-    slides: slide[]
+    description: string
+    slides: Slide[]
 }
 
 export default async function Testimonials() {
-    const sliderData = await client.fetch<testimonialsPage>(TESTIMONIALS_PAGE_QUERY)
-    const {title, description, slides} = sliderData
+    const testimonialsPage = await client.fetch<TestimonialsPage>(TESTIMONIALS_PAGE_QUERY)
+    const {title, description, slides} = testimonialsPage
 
 
     return (

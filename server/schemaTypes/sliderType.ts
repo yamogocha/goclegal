@@ -7,24 +7,24 @@ export const sliderType = defineType({
     fields: [
         defineField({
             name: "title",
-            title: "title",
+            title: "Title",
             type: "string",
             validation: (rule) => rule.required(),
         }),
         defineField({
             name: "slug",
-            title: "slug",
+            title: "Slug",
             type: "slug",
             validation: (rule) => rule.required(),
         }),
         defineField({
             name: "description",
-            title: "description",
+            title: "Description",
             type: "string",
         }),
         defineField({
             name: "slides",
-            title: "slides",
+            title: "Slides",
             type: "array",
             of: [
                 defineArrayMember({

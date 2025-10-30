@@ -7,12 +7,17 @@ export const slideType = defineType({
     fields: [
         defineField({
             name: "paragraph",
-            title: "paragraph",
+            title: "Paragraph",
+            type: "string",
+        }),
+        defineField({
+            name: "backgroundColor",
+            title: "Background Color",
             type: "string",
         }),
         defineField({
             name: "image",
-            title: "image",
+            title: "Image",
             type: "image",
             options: {
                 hotspot: true, //be able to crop and position
@@ -20,7 +25,7 @@ export const slideType = defineType({
         }),
         defineField({
             name: "label",
-            title: "label",
+            title: "Label",
             type: "string",
         }),
     ]

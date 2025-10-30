@@ -1,6 +1,6 @@
 "use client"
 import { Swiper, SwiperSlide } from "swiper/react";
-import { slide } from "./testimonials";
+import { Slide } from "./testimonials";
 import { Pagination, Autoplay } from "swiper/modules";
 import Image from "next/image";
 import { urlFor } from "../util";
@@ -8,7 +8,7 @@ import MotionWrapper from "./motionWraper";
 import { Motions } from "./welcome";
 
 type SwiperType = {
-    slides: slide[]
+    slides: Slide[]
 }
 export default function Slider({ slides }: SwiperType) {
 
