@@ -6,6 +6,11 @@ export const slideType = defineType({
     type: "object",
     fields: [
         defineField({
+            name: "slug",
+            title: "Slug",
+            type: "string",
+        }),
+        defineField({
             name: "paragraph",
             title: "Paragraph",
             type: "string",
