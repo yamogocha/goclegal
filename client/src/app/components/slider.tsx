@@ -4,6 +4,8 @@ import { slide } from "./testimonials";
 import { Pagination, Autoplay } from "swiper/modules";
 import Image from "next/image";
 import { urlFor } from "../util";
+import MotionWrapper from "./motionWraper";
+import { Motions } from "./welcome";
 
 type SwiperType = {
     slides: slide[]
@@ -16,8 +18,10 @@ export default function Slider({ slides }: SwiperType) {
                 <div className="flex justify-center pb-5">
                     <Image src={urlFor(image).url()} alt="" width={25} height={25}/>
                 </div>
-                <p className="font-montserrat text-[16px] h-[250px]">{paragraph}</p>
-                <div className="font-montserrat text-[22px] pt-5 border-t-2 border-[#e3dfd6]">{label}</div>
+                <MotionWrapper type={Motions.FADEUP}>
+                    <p className="font-montserrat text-[16px] h-[250px]">{paragraph}</p>
+                    <div className="font-montserrat text-[22px] pt-5 border-t-2 border-[#e3dfd6]">{label}</div>
+                </MotionWrapper>
             </div>
         </SwiperSlide>
     ))
