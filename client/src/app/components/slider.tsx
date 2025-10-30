@@ -38,7 +38,7 @@ export default function Slider({ slides }: SwiperType) {
             }}
             spaceBetween={50}
             slidesPerView={1}
-            onSlideChange={() => console.log("slide change")}
+            // onSlideChange={() => console.log("slide change")}
             // Add breakpoints for responsiveness if needed
             breakpoints={{
                 640: { slidesPerView: 2, spaceBetween: 20 },
