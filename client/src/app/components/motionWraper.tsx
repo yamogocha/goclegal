@@ -29,7 +29,7 @@ export default function MotionWrapper({
             initial={variant.initial}
             whileInView={variant.whileInView}
             transition={{ duration: .8, ease: "easeOut" }}
-            viewport={{ once: true, amount: .3 }}
+            viewport={{ once: false, amount: .3 }}
         >
             {children}
         </motion.div>
