@@ -34,14 +34,7 @@ export const pageType = defineType({
       type: 'image',
       options: {
         hotspot: true, // Allows cropping and positioning of the image
-      },
-      fields: [
-        defineField({
-          name: 'alt',
-          title: 'Alternative text',
-          type: 'string',
-        }),
-      ],
+      }
     }),
     defineField({
       name: 'h1',

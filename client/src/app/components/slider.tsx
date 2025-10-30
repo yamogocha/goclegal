@@ -1,30 +1,11 @@
 "use client"
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Slide } from "./testimonials";
+import { Swiper } from "swiper/react";
 import { Pagination, Autoplay } from "swiper/modules";
-import Image from "next/image";
-import { urlFor } from "../util";
-import MotionWrapper from "./motionWraper";
-import { Motions } from "./welcome";
 
 type SwiperType = {
-    slides: Slide[]
+    children: JSX.Element[]
 }
-export default function Slider({ slides }: SwiperType) {
-
-    const slidesContent = slides.map(({image, paragraph, label}, index) => (
-        <SwiperSlide key={index}>
-            <div className="bg-white p-10 h-[410px] lg:h-[480px]">
-                <div className="flex justify-center pb-5">
-                    <Image src={urlFor(image).url()} alt="Slider icon" width={25} height={25}/>
-                </div>
-                <MotionWrapper type={Motions.FADEUP}>
-                    <p className="font-montserrat text-[16px] lg:text-[18px] h-[250px] lg:h-[320px]">{paragraph}</p>
-                    <div className="font-montserrat text-[22px] pt-5 border-t-2 border-[#e3dfd6]">{label}</div>
-                </MotionWrapper>
-            </div>
-        </SwiperSlide>
-    ))
+export default function Slider({ children }: SwiperType) {
 
     return (
         <Swiper
@@ -45,7 +26,7 @@ export default function Slider({ slides }: SwiperType) {
                 1024: { slidesPerView: 3, spaceBetween: 40 },
                 }}
             >
-            <>{slidesContent}</>
+            <>{children}</>
         </Swiper>
     )
 }
