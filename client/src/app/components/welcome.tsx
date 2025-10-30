@@ -2,6 +2,7 @@ import { client } from "@/sanity/client";
 import { groq } from "next-sanity";
 import Image from "next/image";
 import Link from "next/link";
+import MotionWrapper from "./motionWraper";
 
 const WELCOME_PAGE_QUERY = groq`*[_type == "page" && slug.current == "welcome"][0]
 { description, "imageUrl": mainImage.asset->url, "imageAlt": mainImage.alt, h1, h2, paragraph, btnText, btnNumber }`;
@@ -16,6 +17,12 @@ type WelcomePage = {
   btnText: string;
   btnNumber: string | number;
 };
+export enum Motions {
+  FADEUP = "fadeUp",
+  FADEIN = "fadeIn",
+  FADERIGHT = "fadeRight",
+  FADELEFT = "fadeLeft"
+}
 
 export default async function Welcome() {
     const welcomePage = await client.fetch<WelcomePage>(WELCOME_PAGE_QUERY);
@@ -35,12 +42,17 @@ export default async function Welcome() {
     return (
         <main id="home" className="scroll-mt-20 relative overflow-hidden">
           <Image src={imageUrl} alt={imageAlt || "Background image"} fill className="object-cover" priority sizes="100vw" />
+          {/* blue overlay */}
           {/* <span className="absolute inset-x-1 inset-y-1 lg:inset-y-0 lg:left-0 lg:right-auto lg:w-[35%] lg:h-full rounded-md lg:rounded-none bg-[#00305bc7] m-2 lg:m-0"></span> */}
           <div className="relative z-5 max-w-[1200px] m-auto w-full h-screen p-5 flex flex-col justify-center items-start">          
-              <h1 className="w-full lg:w-[800px] text-[48px] lg:text-[64px] leading-tight lg:leading-normal font-bold pb-6 lg:pb-12">{h1}</h1>
-              {/* <h2 className="w-[300px] text-[24px] lg:text-[30px] font-bold text-center lg:text-left pb-4">{h2}</h2> */}
+              <MotionWrapper>
+                <h1 className="w-full lg:w-[800px] text-[48px] lg:text-[64px] leading-tight lg:leading-normal font-bold pb-6 lg:pb-12">{h1}</h1>
+              </MotionWrapper>
+              {/* <h2 className="text-[24px] lg:text-[30px] font-bold text-center lg:text-left pb-4">{h2}</h2> */}
               <div className="flex flex-col lg:flex-row items-center justify-end w-full">
-                  <p className="font-montserrat w-full lg:w-[600px] text-[18px] lg:text-[24px] pb-6">{paragraph}</p>
+                  <MotionWrapper type={Motions.FADEUP}>
+                    <p className="font-montserrat w-full lg:w-[600px] text-[18px] lg:text-[24px] pb-6">{paragraph}</p>
+                  </MotionWrapper>
                   <Link href="tel:+15108460928" className="font-montserrat mb-4 w-full lg:w-[250px] text-white text-center text-[18px] lg:text-[20px] font-bold p-4 bg-[#00305b] hover:bg-[#0f4c85] transition duration-500 ease-in-out">{btnText}</Link>
               </div>
           </div>
