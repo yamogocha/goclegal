@@ -13,13 +13,14 @@ type Slide = {
 }
 export type TestimonialsPage = {
     title: string
+    slug: string
     description: string
     slides: Slide[]
 }
 
 export default function TestimonialsComponent(testimonialsPage: TestimonialsPage) {
     
-    const {title, description, slides} = testimonialsPage
+    const {title, slug, description, slides} = testimonialsPage
 
     const children = slides.map(({image, paragraph, label}, index) => (
         <SwiperSlide key={index}>
@@ -37,7 +38,7 @@ export default function TestimonialsComponent(testimonialsPage: TestimonialsPage
 
 
     return (
-        <div className="w-full h-full lg:h-screen bg-[#e3dfd6] p-5 lg:py-[120px]">
+        <div id={slug} className="scroll-mt-20 w-full h-full lg:h-screen bg-[#e3dfd6] p-5 lg:py-[120px]">
             <div className="max-w-[1200px] m-auto text-center">
                 <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold">{title}</h2>
                 <p className="font-montserrat text-[18px] lg:text-[24px] pb-6 lg:pb-12">{description}</p>
