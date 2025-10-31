@@ -17,10 +17,12 @@ const variants: Record<Motions, variantType> = {
 type MotionType = {
     type?: Motions,
     children: ReactNode
+    className?: string
 }
 export default function MotionWrapper({
     type = Motions.FADEIN,
-    children
+    children,
+    className,
 }: MotionType) {
     
     const variant = variants[type]
@@ -30,6 +32,7 @@ export default function MotionWrapper({
             whileInView={variant.whileInView}
             transition={{ duration: .8, ease: "easeOut" }}
             viewport={{ once: false, amount: .3 }}
+            className={className}
         >
             {children}
         </motion.div>
