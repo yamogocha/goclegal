@@ -16,14 +16,22 @@ export const navType = defineType({
       description: "A descriptive title for this navigation menu (e.g., 'Main Navigation', 'Footer Navigation')",
     }),
     defineField({
-      name: 'navId',
+      name: 'slug',
       type: 'slug',
-      title: "Navigation ID",
+      title: "Slug",
       options: {
         source: 'title',
         maxLength: 96,
       },
       description: "A unique identifier for this navigation menu (e.g., 'mainNav', 'footerNav')",
+    }),
+    defineField({
+      name: "logo",
+      title: "Logo",
+      type: "image",
+      options: {
+        hotspot: true,
+      }
     }),
     defineField({
       name: "items",
