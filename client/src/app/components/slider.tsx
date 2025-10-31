@@ -1,6 +1,7 @@
 "use client"
 import { Swiper } from "swiper/react";
 import { Pagination, Autoplay } from "swiper/modules";
+import { JSX } from "react";
 
 type SwiperType = {
     children: JSX.Element[]
@@ -9,7 +10,6 @@ export default function Slider({ children }: SwiperType) {
 
     return (
         <Swiper
-            className="h-[465px] lg:h-[550px]"
             modules={[Pagination, Autoplay]}
             pagination={{ clickable: true }}
             autoplay={{

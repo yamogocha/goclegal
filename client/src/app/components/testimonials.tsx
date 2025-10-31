@@ -23,13 +23,13 @@ export default function TestimonialsComponent(testimonialsPage: TestimonialsPage
 
     const children = slides.map(({image, paragraph, label}, index) => (
         <SwiperSlide key={index}>
-            <div className="bg-white p-10 h-[410px] lg:h-[480px]">
-                <div className="flex justify-center pb-5">
+            <div className="bg-white mb-14 p-10 flex flex-col justify-between">
+                <div className="flex justify-center pb-6">
                     <Image src={urlFor(image).url()} alt="Slider icon" width={25} height={25}/>
                 </div>
                 <MotionWrapper type={Motions.FADEUP}>
-                    <p className="font-montserrat text-[16px] lg:text-[18px] h-[250px] lg:h-[320px]">{paragraph}</p>
-                    <div className="font-montserrat text-[22px] pt-5 border-t-2 border-[#e3dfd6]">{label}</div>
+                    <p className="font-montserrat text-[16px] lg:text-[18px] h-[250px] lg:h-[300]">{paragraph}</p>
+                    <div className="font-montserrat text-[22px] leading-tight lg:leading-normal pt-6 border-t-2 border-[#e3dfd6]">{label}</div>
                 </MotionWrapper>
             </div>
         </SwiperSlide>
