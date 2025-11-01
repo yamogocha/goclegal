@@ -23,33 +23,25 @@ export const pageType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'description',
-      title: 'Description',
-      type: 'text',
-      rows: 3,
-    }),
-    defineField({
       name: 'mainImage',
       title: 'Main image',
       type: 'image',
       options: {
         hotspot: true, // Allows cropping and positioning of the image
-      }
+      },
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'h1',
       title: 'Title one',
       type: 'string',
-    }),
-    defineField({
-      name: 'h2',
-      title: 'Title two',
-      type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'paragraph',
       title: 'Paragraph',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'btnNumber',
