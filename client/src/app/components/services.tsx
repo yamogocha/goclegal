@@ -1,6 +1,6 @@
 "use client"
 import Image from "next/image";
-import { urlFor, useIsMobile } from "../util";
+import { useIsMobile } from "../util";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import RightArrow from "./arrowRight";
@@ -9,7 +9,7 @@ import { Motions } from "./welcome";
 
 type Slide = {
     paragraph?: string
-    image?: Record<string, string>
+    image?: string
     backgroundColor?: string
     label?: string
     slug?: string
@@ -27,15 +27,15 @@ export default function Component({ title, slug, slides }: ServicesPage) {
     const [animate, setAnimate] = useState<number>(0)
 
     const swapServices = (size = 4) => {
-        setIndex((prev) => (prev + size) % slides.length)
-        setService(slides.slice(index, index + size))
+        const source = isMobile ? slides.filter(item => !item.image) : slides
+        setIndex((prev) => (prev + size) % source.length)
+        setService(source.slice(index, index + size))
         setAnimate((prev) => prev + 1)
     }
 
     useEffect(() => {
         if (isMobile == null) return
-        setIndex(isMobile ? 2 : 4)
-        setService(slides.slice(0, isMobile ? 2 : 4))
+        setService(slides.slice(0, isMobile ? 1 : 4))
     }, [isMobile, slides])
 
     return (
@@ -49,7 +49,7 @@ export default function Component({ title, slug, slides }: ServicesPage) {
                             <div key={index} className="w-full lg:w-[45%] h-[400px]">
                                 {image ? 
                                 <MotionWrapper key={`${animate}1`} className="relative w-full h-full">
-                                   <Image src={urlFor(image).url()} alt="Service image" fill className="object-cover" />
+                                    <Image src={image} alt="Service image" fill className="object-cover" />
                                 </MotionWrapper> :
                                 <MotionWrapper key={`${animate}2`} className={`w-full h-full p-10 flex flex-col justify-between 
                                     ${backgroundColor == "#00305b" ? "bg-[#00305b] text-white" : backgroundColor == "#e3dfd6" ? "bg-[#e3dfd6] text-[#323232]" : "bg-[#ffffff] text-[#323232]"}`}>
@@ -62,12 +62,16 @@ export default function Component({ title, slug, slides }: ServicesPage) {
                                 </MotionWrapper>}
                             </div>
                     )})}
+                    <MotionWrapper className="relative w-full lg:w-[45%] h-[400px] block lg:hidden">
+                        <Image src={"https://cdn.sanity.io/images/3zonvthd/production/811d964414f183b4aa64129e1984cd0eedfc276f-2400x1108.webp"} alt="Service image" fill className="object-cover" />
+                    </MotionWrapper>
                     <span 
-                        className="absolute right-0 top-1/2 -translate-y-1/2 bg-[#00305b] hover:bg-[#0f4c85] px-5 py-10 cursor-pointer transition duration-300 ease-out h-[104px] 1-[64px] shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
-                        onClick={() => swapServices(isMobile ? 2 : 4)}>
+                        className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 bg-[#0f4c85] lg:bg-[#00305b] hover:bg-[#0f4c85] px-2 py-5 lg:px-5 lg:py-10 cursor-pointer transition duration-300 ease-out shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
+                        onClick={() => swapServices(isMobile ? 1 : 4)}>
                         <RightArrow />
                     </span>
                 </div>
+                
             </div>
         </div>
     )
