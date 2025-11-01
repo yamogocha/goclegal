@@ -21,7 +21,7 @@ export enum Motions {
 }
 
 export default function WelcomeCompnent(welcomePage: WelcomePage) {
-  const { description, mainImage, h1, h2, paragraph, btnText, btnNumber } = welcomePage
+  const { mainImage, h1, paragraph, btnText, btnNumber } = welcomePage
     
     const handleClick = () => {
         if (typeof window !== "undefined" && window.gtag) {
@@ -36,7 +36,7 @@ export default function WelcomeCompnent(welcomePage: WelcomePage) {
 
     return (
         <main id="home" className="scroll-mt-20 relative overflow-hidden">
-          <Image src={urlFor(mainImage).url()} alt={"Background image"} fill className="object-cover" priority sizes="100vw" />
+          <Image src={urlFor(mainImage).url()} alt={"Welcome page background image"} fill className="object-cover" priority sizes="100vw" />
           {/* blue overlay */}
           {/* <span className="absolute inset-x-1 inset-y-1 lg:inset-y-0 lg:left-0 lg:right-auto lg:w-[35%] lg:h-full rounded-md lg:rounded-none bg-[#00305bc7] m-2 lg:m-0"></span> */}
           <div className="relative z-5 max-w-[1200px] m-auto w-full h-[calc(100vh-119px)] p-5 flex flex-col justify-center items-start">          
