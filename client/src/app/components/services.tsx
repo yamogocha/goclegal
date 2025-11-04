@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useIsMobile } from "../util";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import RightArrow from "./arrowRight";
+import Arrow from "./arrow";
 import MotionWrapper from "./motionWraper";
 import { Motions } from "./welcome";
 
@@ -71,7 +71,7 @@ export default function ServicesComponent({ title, slug, slides }: ServicesPage)
                     <span 
                         className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 bg-[#0f4c85] lg:bg-[#00305b] hover:bg-[#0f4c85] px-2 py-5 lg:px-5 lg:py-10 cursor-pointer transition duration-300 ease-out shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
                         onClick={() => swapServices(isMobile ? 1 : 4)}>
-                        <RightArrow />
+                        <Arrow />
                     </span>
                 </div>
                 
