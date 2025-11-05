@@ -23,8 +23,8 @@ export const pageType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'mainImage',
-      title: 'Main image',
+      name: 'image',
+      title: 'Image',
       type: 'image',
       options: {
         hotspot: true, // Allows cropping and positioning of the image
@@ -32,26 +32,36 @@ export const pageType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'h1',
-      title: 'Title one',
+      name: 'description',
+      title: 'Description',
       type: 'string',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'paragraph',
-      title: 'Paragraph',
+      name: 'buttonText',
+      title: "Button Text",
       type: 'string',
-      validation: (Rule) => Rule.required(),
+      validation: (rule) => rule.required(),
     }),
     defineField({
-      name: 'btnNumber',
-      title: 'Phone number button',
+      name: 'phoneNumber',
+      title: "Phone Number",
       type: 'string',
+      validation: (rule) => rule.required(),
     }),
     defineField({
-      name: 'btnText',
-      title: 'Call now button',
-      type: 'string',
+      name: 'photo',
+      title: 'Photo',
+      type: 'image',
+      options: {
+        hotspot: true, // Allows cropping and positioning of the image
+      },
+    }),
+    defineField({
+      name: "body",
+      title: "Body Paragraphs",
+      type: "array",
+      of: [{type: "block"}],
     })
   ],
 });
