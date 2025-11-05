@@ -31,6 +31,11 @@ export const sliderType = defineType({
                     type: "slide"
                 })
             ]
-        })
+        }),
+        defineField({
+            name: "strip",
+            title: "Recognition Strip",
+            type: "string",
+        }),
     ]
 })
