@@ -12,6 +12,11 @@ export const slideType = defineType({
             to: [{ type: "post" }, { type: "page" },{ type: "slider" }]
         }),
         defineField({
+            name: "label",
+            title: "Label",
+            type: "string",
+        }),
+        defineField({
             name: "paragraph",
             title: "Paragraph",
             type: "string",
@@ -28,11 +33,6 @@ export const slideType = defineType({
             options: {
                 hotspot: true, //be able to crop and position
             }
-        }),
-        defineField({
-            name: "label",
-            title: "Label",
-            type: "string",
         }),
     ]
 })
