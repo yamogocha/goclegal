@@ -7,11 +7,11 @@ import Navigation from "./navigation/page";
 export default async function Home() {
 
     return (
-        <>
+        <div className="relative min-h-screen">
           <Navigation />
           <Welcome />
           <Services />
           <Testimonials />
-        </>
+        </div>
     )
 }

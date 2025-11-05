@@ -10,9 +10,9 @@ export default async function ConstructionSiteAccidents() {
     const postQuery = await client.fetch<Post>(CONSTRUCTION_SITE_ACCIDENTS_QUERY)
 
     return (
-        <>
+        <div className="relative min-h-screen">
             <Navigation />
             <PostComponent {...postQuery} />
-        </>
+        </div>
     )
 }

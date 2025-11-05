@@ -10,9 +10,9 @@ export default async function WrongfulDeath() {
     const postQuery = await client.fetch<Post>(WRONGFUL_DEATH_QUERY)
 
     return (
-        <>
+        <div className="relative min-h-screen">
             <Navigation />
             <PostComponent {...postQuery} />
-        </>
+        </div>
     )
 }

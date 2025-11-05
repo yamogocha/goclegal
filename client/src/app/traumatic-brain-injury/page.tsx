@@ -10,9 +10,9 @@ export default async function TrumaticBrainInjury() {
     const postQuery = await client.fetch<Post>(TRAUMATIC_BRAIN_INJURY_QUERY)
 
     return (
-        <>
+        <div className="relative min-h-screen">
             <Navigation />
             <PostComponent {...postQuery} />
-        </>
+        </div>
     )
 }

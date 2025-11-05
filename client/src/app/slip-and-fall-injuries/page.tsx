@@ -10,9 +10,9 @@ export default async function SlipAndFallInjuries() {
     const postQuery = await client.fetch<Post>(SLIP_AND_FALL_QUERY)
 
     return (
-        <>
+        <div className="relative min-h-screen">
             <Navigation />
             <PostComponent {...postQuery} />
-        </>
+        </div>
     )
 }
