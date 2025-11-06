@@ -4,9 +4,9 @@ import { Pagination, Autoplay } from "swiper/modules";
 import { JSX } from "react";
 
 type SwiperType = {
-    children: JSX.Element[]
+    slides: JSX.Element[]
 }
-export default function Slider({ children }: SwiperType) {
+export default function Slider({ slides }: SwiperType) {
 
     return (
         <Swiper
@@ -26,7 +26,7 @@ export default function Slider({ children }: SwiperType) {
                 1024: { slidesPerView: 3, spaceBetween: 40 },
                 }}
             >
-            <>{children}</>
+            <>{slides}</>
         </Swiper>
     )
 }
