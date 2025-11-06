@@ -15,14 +15,15 @@ export type TestimonialsPage = {
     title: string
     slug: string
     description: string
+    strip: string
     slides: Slide[]
 }
 
 export default function TestimonialsComponent(testimonialsPage: TestimonialsPage) {
     
-    const {title, slug, description, slides} = testimonialsPage
+    const {title, slug, description, strip, slides: testimonialsSlides} = testimonialsPage
 
-    const children = slides.map(({image, paragraph, label}, index) => (
+    const slides = testimonialsSlides.map(({image, paragraph, label}, index) => (
         <SwiperSlide key={index}>
             <div className="bg-white mb-14 p-10 flex flex-col justify-between">
                 <div className="flex justify-center pb-6">
@@ -38,11 +39,12 @@ export default function TestimonialsComponent(testimonialsPage: TestimonialsPage
 
 
     return (
-        <div id={slug} className="scroll-mt-20 w-full h-full lg:h-screen bg-[#e3dfd6] px-5 py-10 lg:py-[120px]">
+        <div id={slug} className="scroll-mt-20 lg:scroll-mt-0 w-full h-full lg:h-screen bg-[#e3dfd6] px-5 py-10 lg:py-[120px]">
             <div className="max-w-[1200px] m-auto text-center">
-                <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold">{title}</h2>
+                <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-2    ">{title}</h2>
                 <p className="font-montserrat text-[18px] lg:text-[24px] pb-6 lg:pb-12">{description}</p>
-                <Slider {...{ children }} />
+                <Slider {...{ slides }} />
+                <p className="font-montserrat lg:w-2/3 m-auto text-[16px] lg:text-[18px] pt-6">{strip}</p>
             </div>
         </div>
     )
