@@ -23,7 +23,7 @@ export default function PostComponent(postQuery: Post) {
                 <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{title}</h1>
                 <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{description}</p>
             </div>
-            <div className="bg-[#e3dfd6] px-5 py-10 lg:py-[120px]">
+            <div className="bg-white px-5 py-10 lg:py-[120px]">
                 <div className="max-w-[1200px] m-auto flex flex-wrap justify-between">
                     {[columnLeft, columnRight].map((items, index) => (
                         <div key={index} className="w-full lg:w-[48%]">
@@ -31,7 +31,7 @@ export default function PostComponent(postQuery: Post) {
                                 value={items}
                                 components={{
                                     block: {
-                                        h3: ({children}) => <h3 className="font-bold text-[24px] lg:text-[30px] text-[#00305b]">{children}</h3>,
+                                        h3: ({children}) => <h3 className="font-bold text-[24px] lg:text-[30px] text-[#00305b] pb-6">{children}</h3>,
                                         normal: ({children}) => <p className="font-montserrat text-[16px] lg:text-[18px] pb-6">{children}</p>,
                                     },
                                     listItem: {
