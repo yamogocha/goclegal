@@ -24,8 +24,70 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="">
       <head>
+        <meta charSet="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="author" content="GOC Legal" />
+        <meta name="theme-color" content="#0b3d91" />
+
+        {/*  Favicon  */}
+        <link rel="icon" href="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png" type="image/png" />
+        <link rel="preload" href="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png" as="image" />
+
+        {/*  SEO Title & Description  */}
+        <title>GOC Legal — Oakland Personal Injury & Auto Accident Lawyer</title>
+        <meta name="robots" content="index,follow" />
+        <meta name="description" content="GOC Legal is an experienced personal injury and auto accident law firm in Oakland, CA. No upfront fees, maximum compensation, and free consultations. Call us today." />
+        <meta name="keywords" content="Personal Injury Lawyer Oakland, Oakland Personal Injury Attorney, Auto Accident Lawyer Oakland, Best Injury Lawyer Oakland, Oakland Injury Attorney" />
+
+        {/*  Open Graph  */}
+        <meta property="og:title" content="GOC Legal — Oakland Personal Injury & Auto Accident Lawyer" />
+        <meta property="og:site_name" content="GOC Legal" />
+        <meta property="og:image" content="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.goclegal.com/" />
+        <meta property="og:description" content="GOC Legal, led by Oakland personal injury lawyer Greg O’Connell, represents victims of car accidents, truck crashes, slip and fall injuries, and wrongful death. Free consultation available." />
+
+        {/*  Twitter Card  */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="GOC Legal — Oakland Personal Injury & Auto Accident Lawyer" />
+        <meta name="twitter:description" content="GOC Legal provides expert personal injury and auto accident legal services in Oakland, CA. No upfront fees and maximum compensation." />
+        <meta name="twitter:image" content="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp" />
+
+        {/*  Canonical  */}
+        <link rel="canonical" href="https://www.goclegal.com/" />
+        {/* <link href="" rel="publisher" /> */}
+        {/*  Schema.org Markup  */}
+        <Script id="schema-markup-json" type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LegalService",
+            "name": "GOC Legal",
+            "url": "https://www.goclegal.com",
+            "logo": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png",
+            "image": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp",
+            "description": "GOC Legal is a trusted Oakland personal injury and auto accident law firm. Zero upfront fees, maximum compensation, and free consultations.",
+            "telephone": "+1-510-846-0928",
+            "address": {
+                "@type": "PostalAddress",
+                "streetAddress": "10 Villanova Drive",
+                "addressLocality": "Oakland",
+                "addressRegion": "CA",
+                "postalCode": "94611",
+                "addressCountry": "US"
+            },
+            "areaServed": {
+                "@type": "City",
+                "name": "Oakland"
+            },
+            "openingHours": "Mo-Fr 09:00-17:00",
+            "sameAs": [
+                "https://www.facebook.com/goclegal",
+                "https://www.linkedin.com/company/goclegal"
+            ]
+          })}
+        </Script>
         {/* Google Tag (gtag.js) */}
         <Script
           async
@@ -39,6 +101,8 @@ export default function RootLayout({
             gtag('config', 'AW-17444498530');
           `}
         </Script>
+        {/* Live Chat Script  */}
+        <Script id="live-chat" src="https://app.livechatai.com/embed.js" data-id="cmg7bwm430003l404hl3ixvxf" async defer></Script>
       </head>
       <body
         className={`${montserrat.variable} ${cormorantGaramond.variable} antialiased`}
