@@ -4,7 +4,7 @@ import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 
 const TRAUMATIC_BRAIN_INJURY_QUERY = groq`*[_type == "post" && slug.current == "traumatic-brain-injury"][0]
-{title, description, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
+{headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
 
 export default async function TrumaticBrainInjury() {
     const postQuery = await client.fetch<Post>(TRAUMATIC_BRAIN_INJURY_QUERY)

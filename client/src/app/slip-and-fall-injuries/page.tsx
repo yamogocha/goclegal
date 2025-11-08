@@ -4,7 +4,7 @@ import Navigation from "../navigation/page";
 import PostComponent, { Post } from "../components/post";
 
 const SLIP_AND_FALL_QUERY = groq`*[_type == "post" && slug.current == "slip-and-fall-injuries"][0]
-{title, description, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
+{headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
 
 export default async function SlipAndFallInjuries() {
     const postQuery = await client.fetch<Post>(SLIP_AND_FALL_QUERY)

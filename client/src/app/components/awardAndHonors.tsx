@@ -9,13 +9,13 @@ type Slide = {
     label: string
 }
 export type AwardsAndHonorsPage = {
-    title: string
-    description: string
+    headline: string
+    subHeadline: string
     slug: string
     slides: Slide[]
 }
 export default function AwardsAndHonorsComponent(awardsAndHonorsPage: AwardsAndHonorsPage) {
-    const { title, description, slug, slides: awardsAndHonorsSlides} = awardsAndHonorsPage
+    const { headline, subHeadline, slug, slides: awardsAndHonorsSlides} = awardsAndHonorsPage
 
     const renderImage = (label: string, image?: string) => {
         if (image) {
@@ -67,8 +67,8 @@ export default function AwardsAndHonorsComponent(awardsAndHonorsPage: AwardsAndH
     return (
         <div id={slug} className="scroll-mt-20 w-full h-full px-5 py-10 lg:pb-[50px] bg-white">
             <div className="max-w-[1200px] m-auto text-center">
-                <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6">{title}</h2>
-                {/* <p className="font-montserrat w-full lg:w-2/3 m-auto text-[18px] lg:text-[24px] pb-6 lg:pb-12">{description}</p> */}
+                <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6">{headline}</h2>
+                {/* <p className="font-montserrat w-full lg:w-2/3 m-auto text-[18px] lg:text-[24px] pb-6 lg:pb-12">{subHeadline}</p> */}
                 <Slider {...{ slides }}/>
             </div>
         </div>

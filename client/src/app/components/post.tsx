@@ -5,8 +5,8 @@ import Link from 'next/link';
 
 
 export type Post = {
-    title: string
-    description: string
+    headline: string
+    subHeadline: string
     image: string
     columnLeft: PortableTextBlock[]
     columnRight: PortableTextBlock[]
@@ -14,14 +14,14 @@ export type Post = {
     phoneNumber: string
 }
 export default function PostComponent(postQuery: Post) {
-    const { title, description, image, columnLeft, columnRight, buttonText, phoneNumber } = postQuery
+    const { headline, subHeadline, image, columnLeft, columnRight, buttonText, phoneNumber } = postQuery
 
     return(
         <div className="bg-[#00305bcf] w-full h-full">
             <Image src={image} alt="Auto Accidents background image" fill className='object-cover -z-5'/>
             <div className="w-full lg:w-2/3 m-auto h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
-                <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{title}</h1>
-                <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{description}</p>
+                <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
+                <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
             </div>
             <div className="bg-white px-5 py-10 lg:py-[120px]">
                 <div className="max-w-[1200px] m-auto flex flex-wrap justify-between">

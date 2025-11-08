@@ -4,7 +4,7 @@ import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 
 const BICYCLE_ACCIDENTS_QUERY = groq`*[_type == "post" && slug.current == "bicycle-accidents"][0]
-{title, description, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
+{headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
 
 export default async function BicycleAccidents() {
     const postQuery = await client.fetch<Post>(BICYCLE_ACCIDENTS_QUERY)

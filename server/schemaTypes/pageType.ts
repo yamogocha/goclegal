@@ -23,18 +23,24 @@ export const pageType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'headline',
+      title: 'Headline',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'subHeadline',
+      title: 'Sub Headline',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'image',
       title: 'Image',
       type: 'image',
       options: {
         hotspot: true, // Allows cropping and positioning of the image
       },
-      validation: (Rule) => Rule.required(),
-    }),
-    defineField({
-      name: 'description',
-      title: 'Description',
-      type: 'string',
       validation: (Rule) => Rule.required(),
     }),
     defineField({

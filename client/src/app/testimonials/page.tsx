@@ -2,7 +2,7 @@ import { client } from "@/sanity/client"
 import { groq } from "next-sanity"
 import TestimonialsComponent, { TestimonialsPage } from "../components/testimonials"
 
-const TESTIMONIALS_PAGE_QUERY = groq`*[_type == "slider" && slug.current == "testimonials"][0]{title, "slug": slug.current, description, strip, slides}`
+const TESTIMONIALS_PAGE_QUERY = groq`*[_type == "slider" && slug.current == "testimonials"][0]{headline, "slug": slug.current, subHeadline, strip, slides}`
 
 
 

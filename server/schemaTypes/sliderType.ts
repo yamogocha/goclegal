@@ -18,8 +18,14 @@ export const sliderType = defineType({
             validation: (rule) => rule.required(),
         }),
         defineField({
-            name: "description",
-            title: "Description",
+            name: "headline",
+            title: "Headline",
+            type: "string",
+            validation: (rule) => rule.required(),
+        }),
+        defineField({
+            name: "subHeadline",
+            title: "Sub Headline",
             type: "string",
         }),
         defineField({

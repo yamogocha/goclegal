@@ -4,7 +4,7 @@ import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 
 const AUTO_ACCIDENTS_QUERY = groq`*[_type == "post" && slug.current == "auto-accidents"][0]
-{title, description, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
+{headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
 
 export default async function AutoAccidents() {
     const postQuery = await client.fetch<Post>(AUTO_ACCIDENTS_QUERY)
