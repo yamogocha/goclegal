@@ -14,7 +14,7 @@ export const navItemType = defineType({
         name: 'reference',
         type: 'reference',
         title: 'Reference',
-        to: [{ type: 'page' }, { type: 'slider' }, { type: 'post' }], // Example: Link to 'page' or 'post' documents
+        to: [{ type: 'page' }, { type: 'slider' }, { type: 'post' }, { type: 'contact' }], // Example: Link to 'page' or 'post' documents
         description: 'Alternatively, link to a Sanity document.',
       }),
       defineField({
