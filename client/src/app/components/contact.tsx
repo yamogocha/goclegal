@@ -17,6 +17,11 @@ export type ContactType = {
 }
 export default function ContactComponent(contact: ContactType) {
     const {headline, subHeadlines, slug, name, email, phoneNumber, message, callUs} = contact
+    const trustBadges = [
+      {text: subHeadlines[0], icon: <ScalesOfJustice className="size-9 stroke-[#B8860B]"/>},
+      {text: subHeadlines[1], icon: <Trophy className="size-9 stroke-[#B8860B]"/>},
+      {text: subHeadlines[2], icon: <SheildCheck className="size-9 stroke-[#B8860B]"/>},
+    ]
 
     const handleClick = () => {
         if (typeof window !== "undefined" && window.gtag) {
@@ -30,16 +35,16 @@ export default function ContactComponent(contact: ContactType) {
       };
 
     return (
-        <form id={slug} action="https://formspree.io/f/mpwydejv" method="post" className="bg-[#323232] w-full h-full px-5 py-10 lg:pt-[80px] lg:pb-[100]">
+        <form id={slug} action="https://formspree.io/f/mpwydejv" method="post" className="scroll-mt-20 bg-[#323232] w-full h-full px-5 py-10 lg:pt-[80px] lg:pb-[100]">
             <MotionWrapper className="grid grid-cols-2 gap-6 w-full lg:w-1/2 m-auto">
                 <h2 className="col-span-2 text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold text-center text-[#e3dfd6]">{headline}</h2>
-                <div className="col-span-2 flex items-center justify-between pb-6 lg:pb-18">
-                  <ScalesOfJustice className="size-9 stroke-[#B8860B]"/>
-                  <span  className="font-montserrat text-[16px] lg:text-[18px] text-[#e3dfd6]">{subHeadlines[0]}</span>
-                  <Trophy className="size-8 stroke-[#B8860B]"/>
-                  <span  className="font-montserrat text-[16px] lg:text-[18px] text-[#e3dfd6]">{subHeadlines[1]}</span>  
-                  <SheildCheck className="size-9 stroke-[#B8860B]"/>
-                  <span  className="font-montserrat text-[16px] lg:text-[18px] text-[#e3dfd6]">{subHeadlines[2]}</span>  
+                <div className="col-span-2 flex flex-col lg:flex-row justify-center gap-3 pb-6 lg:pb-18">
+                  {trustBadges.map(({text, icon}, index) => (
+                    <div key={index} className="flex items-center">
+                      {icon}
+                      <span className="whitespace-nowrap font-montserrat text-[16px] lg:text-[18px] text-[#e3dfd6] pl-3">{text}</span>
+                    </div>
+                  ))}
                 </div>
                 <input name="name" type="text" placeholder={name} className="col-span-2 font-montserrat font-medium p-5 bg-white border-none focus:outline-none placeholder:text-[#323232]" required />
                 <input name="email" type="email" placeholder={email} className="col-span-2 lg:col-span-1 font-montserrat font-medium p-5 bg-white border-none focus:outline-none placeholder:text-[#323232]" required />
