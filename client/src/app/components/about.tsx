@@ -6,14 +6,14 @@ import { useState } from "react"
 
 
 export type AboutPage = {
-    title: string,
-    description: string,
+    headline: string,
+    subHeadline: string,
     image: string,
     photo: string
     body: PortableTextBlock[]
 }
 export default function AboutComponent(aboutPage: AboutPage) {
-    const {title, description, image, photo, body} = aboutPage
+    const {headline, subHeadline, image, photo, body} = aboutPage
     const [readMore, setReadMore] = useState(false)
     const lessContent = body.slice(0, 8)
 
@@ -43,8 +43,8 @@ export default function AboutComponent(aboutPage: AboutPage) {
         <div className="bg-[#00305bcf] w-full h-full">
             <Image src={image} alt="About page background image" fill className="object-cover -z-5" />
             <div className="w-full lg:w-2/3 m-auto h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
-                <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{title}</h1>
-                <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{description}</p>
+                <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
+                <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
             </div>
             <div className="bg-white px-5 py-10 lg:py-[120px]">
                 <div className="flex flex-col lg:flex-row justify-between items-start">
