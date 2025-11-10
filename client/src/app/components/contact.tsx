@@ -19,7 +19,7 @@ export default function ContactComponent(contact: ContactType) {
     const {headline, subHeadlines, slug, name, email, phoneNumber, message, callUs} = contact
     const trustBadges = [
       {text: subHeadlines[0], icon: <ScalesOfJustice className="size-9 stroke-[#B8860B]"/>},
-      {text: subHeadlines[1], icon: <Trophy className="size-9 stroke-[#B8860B]"/>},
+      {text: subHeadlines[1], icon: <Trophy className="size-8 stroke-[#B8860B]"/>},
       {text: subHeadlines[2], icon: <SheildCheck className="size-9 stroke-[#B8860B]"/>},
     ]
 

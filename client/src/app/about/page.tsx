@@ -3,6 +3,7 @@ import { groq } from "next-sanity";
 import AboutComponent, { AboutPage } from "../components/about";
 import Navigation from "../navigation/page";
 import AwardsAndHonors from "../rewards-and-honors/page";
+import Contact from "../contact/page";
 
 const ABOUT_PAGE_QUERY = groq`*[_type == "page" && slug.current == "about"][0]{headline, subHeadline, "image": image.asset->url, "photo": photo.asset->url, body}`
 
@@ -14,6 +15,7 @@ export default async function About() {
             <Navigation />
             <AboutComponent {...aboutPage} />
             <AwardsAndHonors />
+            <Contact />
         </div>
     )
 }
