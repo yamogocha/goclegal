@@ -32,7 +32,6 @@ export const pageType = defineType({
       name: 'subHeadline',
       title: 'Sub Headline',
       type: 'string',
-      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'image',
@@ -47,13 +46,11 @@ export const pageType = defineType({
       name: 'buttonText',
       title: "Button Text",
       type: 'string',
-      validation: (rule) => rule.required(),
     }),
     defineField({
       name: 'phoneNumber',
       title: "Phone Number",
       type: 'string',
-      validation: (rule) => rule.required(),
     }),
     defineField({
       name: 'photo',
@@ -67,7 +64,7 @@ export const pageType = defineType({
       name: "body",
       title: "Body Paragraphs",
       type: "array",
-      of: [{type: "block"}],
+      of: [{ type: "block" }, { type: "table" }],
     })
   ],
 });
