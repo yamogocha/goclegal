@@ -2,6 +2,7 @@
 import Image from "next/image"
 import Slider from "./slider"
 import { SwiperSlide } from "swiper/react"
+import MotionWrapper from "./motionWraper"
 
 type Slide = {
     paragraph: string
@@ -66,11 +67,11 @@ export default function AwardsAndHonorsComponent(awardsAndHonorsPage: AwardsAndH
 
     return (
         <div id={slug} className="scroll-mt-20 w-full h-full px-5 py-10 lg:pb-[50px] bg-white">
-            <div className="max-w-[1200px] m-auto text-center">
+            <MotionWrapper className="max-w-[1200px] m-auto text-center">
                 <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6">{headline}</h2>
                 {/* <p className="font-montserrat w-full lg:w-2/3 m-auto text-[18px] lg:text-[24px] pb-6 lg:pb-12">{subHeadline}</p> */}
                 <Slider {...{ slides }}/>
-            </div>
+            </MotionWrapper>
         </div>
     )
 } 
