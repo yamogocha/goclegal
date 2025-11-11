@@ -1,6 +1,0 @@
-1:"$Sreact.fragment"
-2:I[57466,["/_next/static/chunks/6e11ed1507887fed.js","/_next/static/chunks/3e41d7e1a2caee41.js","/_next/static/chunks/8dfaf141615be7a1.js"],"default"]
-3:I[57111,["/_next/static/chunks/69a565f4f967e448.js","/_next/static/chunks/3970ee9af08a2e8c.js"],"OutletBoundary"]
-4:"$Sreact.suspense"
-0:{"buildId":"i5ixP-vor3q5tjS5k7kaH","rsc":["$","$1","c",{"children":[["$","$L2",null,{"callUs":"If this is urgent, call us now at (510) 846-0928.","email":"Email:","headline":"Start Your Recovery with GOC Legal","message":"Briefly describe your accident or legal issue…","name":"Name:","phoneNumber":"Phone Number:","slug":"contact","subHeadlines":["No Fees Unless We Win","Millions Recovered","Top-Rated Oakland Injury Firm"]}],[["$","script","script-0",{"src":"/_next/static/chunks/3e41d7e1a2caee41.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/8dfaf141615be7a1.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
-5:null
