@@ -3,6 +3,7 @@ import Services from "./services/page";
 import Testimonials from "./testimonials/page";
 import Navigation from "./navigation/page";
 import Contact from "./contact/page";
+import Footer from "./footer/page";
 
 
 export default async function Home() {
@@ -14,6 +15,7 @@ export default async function Home() {
           <Services />
           <Testimonials />
           <Contact />
+          <Footer />
         </div>
     )
 }

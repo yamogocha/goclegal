@@ -3,6 +3,7 @@ import { groq } from "next-sanity";
 import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 import Contact from "../contact/page";
+import Footer from "../footer/page";
 
 const TRAUMATIC_BRAIN_INJURY_QUERY = groq`*[_type == "post" && slug.current == "traumatic-brain-injury"][0]
 {headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
@@ -15,6 +16,7 @@ export default async function TrumaticBrainInjury() {
             <Navigation />
             <PostComponent {...postQuery} />
             <Contact />
+            <Footer />
         </div>
     )
 }

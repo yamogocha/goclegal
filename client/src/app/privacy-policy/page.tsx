@@ -2,6 +2,7 @@ import { client } from "@/sanity/client";
 import { groq } from "next-sanity";
 import PrivacyPolicyComponent, { PrivacyPolicyPage } from "../components/privacyPolicy";
 import Navigation from "../navigation/page";
+import Footer from "../footer/page";
 
 const PRIVACY_POLICY_QUERY = groq`*[_type == "page" && slug.current == "privacy-policy"][0]{headline, "image": image.asset->url, body}`
 
@@ -13,6 +14,7 @@ export default async function PrivacyPolicy() {
     <div className="relative min-h-screen">
         <Navigation />
         <PrivacyPolicyComponent {...privacyPolicyPage} />
+        <Footer />
     </div>
     )
 }

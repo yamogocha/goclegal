@@ -3,6 +3,7 @@ import { groq } from "next-sanity";
 import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 import Contact from "../contact/page";
+import Footer from "../footer/page";
 
 const WRONGFUL_DEATH_QUERY = groq`*[_type == "post" && slug.current == "wrongful-death"][0]
 {headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
@@ -15,6 +16,7 @@ export default async function WrongfulDeath() {
             <Navigation />
             <PostComponent {...postQuery} />
             <Contact />
+            <Footer />
         </div>
     )
 }
