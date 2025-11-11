@@ -17,7 +17,7 @@ export default function PrivacyPolicyComponent(privacyPolicyPage: PrivacyPolicyP
             <MotionWrapper className="w-full lg:w-2/3 m-auto h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
                 <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
             </MotionWrapper>
-            <div className="bg-white px-5 py-10 lg:py-[120px]">
+            <div className="bg-white px-5 py-10 lg:py-[80px]">
                 <div className="max-w-[1200px] m-auto flex flex-col">
                     <PortableTextComponent {...{ body }} />
                 </div>

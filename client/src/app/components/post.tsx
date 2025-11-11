@@ -24,7 +24,7 @@ export default function PostComponent(postQuery: Post) {
                 <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
                 <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
             </div>
-            <div className="bg-white px-5 py-10 lg:py-[120px]">
+            <div className="bg-white px-5 py-10 lg:py-[80px]">
                 <div className="max-w-[1200px] m-auto flex flex-wrap justify-between">
                     <div className="w-full lg:w-[48%]">
                         <PortableTextComponent {...{ body: columnLeft }}/>
