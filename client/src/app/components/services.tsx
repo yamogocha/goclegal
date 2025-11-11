@@ -69,7 +69,7 @@ export default function ServicesComponent({ headline, slug, slides }: ServicesPa
                         <Image src={"https://cdn.sanity.io/images/3zonvthd/production/811d964414f183b4aa64129e1984cd0eedfc276f-2400x1108.webp"} alt="Services image" fill className="object-cover" />
                     </div>
                     <span 
-                        className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 bg-[#0f4c85] lg:bg-[#00305b] hover:bg-[#0f4c85] px-2 py-5 lg:px-5 lg:py-10 cursor-pointer transition duration-300 ease-out shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
+                        className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 bg-gradient-to-l from-[#00305b] to-[#004c8f] lg:bg-[#00305b] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] px-2 py-5 lg:px-5 lg:py-10 cursor-pointer transition duration-300 ease-out shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
                         onClick={() => swapServices(isMobile ? 1 : 4)}>
                         <Arrow />
                     </span>
