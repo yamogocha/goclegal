@@ -9,6 +9,7 @@ type variantType = {
 };
 const variants: Record<Motions, variantType> = {
     fadeUp: { initial: { opacity: 0 , y: 40 }, whileInView: { opacity: 1, y: 0 }},
+    fadeDown: { initial: { opacity: 0 , y: -40 }, whileInView: { opacity: 1, y: 0 }},
     fadeIn: { initial: { opacity: 0 }, whileInView: { opacity: 1 }},
     fadeRight: { initial: { opacity: 0 , x: -40 }, whileInView: { opacity: 1, x: 0 }},
     fadeLeft: { initial: { opacity: 0 , x: 40 }, whileInView: { opacity: 1, x: 0 }},
