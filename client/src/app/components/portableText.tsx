@@ -6,6 +6,10 @@ import Link from "next/link";
 type PortableTextComponentType = {
     body: PortableTextBlock[]
 }
+
+type TableRow = {
+    cells: PortableTextBlock[]
+}
 export default function PortableTextComponent({ body }: PortableTextComponentType) {
 
     return (
@@ -28,10 +32,12 @@ export default function PortableTextComponent({ body }: PortableTextComponentTyp
                         <div className="overflow-x-auto">
                             <table className="font-montserrat my-6 min-w-full border border-gray-300 text-[#00305B] text-[16px] lg:text-[18px]">
                                 <tbody>
-                                    {value.rows.map((row: any, i: number)=> (
+                                    {value.rows.map((row: TableRow, i: number)=> (
                                         <tr key={i} className="bg-gray-100">
-                                            {row.cells.map((cell: any, j: number) =>(
-                                                <td key={j} className="border px-4 py-2">{cell}</td>
+                                            {row.cells.map((cell: PortableTextBlock, j: number) =>(
+                                                <td key={j} className="border px-4 py-2">{
+                                                    <PortableText value={cell} />
+                                                }</td>
                                             ))}
                                         </tr>
                                     ))}

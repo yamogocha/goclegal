@@ -16,7 +16,7 @@ export type AwardsAndHonorsPage = {
     slides: Slide[]
 }
 export default function AwardsAndHonorsComponent(awardsAndHonorsPage: AwardsAndHonorsPage) {
-    const { headline, subHeadline, slug, slides: awardsAndHonorsSlides} = awardsAndHonorsPage
+    const { headline, slug, slides: awardsAndHonorsSlides} = awardsAndHonorsPage
 
     const renderImage = (label: string, image?: string) => {
         if (image) {
