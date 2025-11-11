@@ -1,3 +1,4 @@
+"use client"
 import { PortableTextBlock } from "next-sanity"
 import Image from "next/image"
 import MotionWrapper from "./motionWraper"

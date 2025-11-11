@@ -1,3 +1,4 @@
+"use client"
 import Link from "next/link"
 import Location from "../assets/location"
 import Mail from "../assets/mail"

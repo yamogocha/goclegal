@@ -1,3 +1,4 @@
+"use client"
 import { PortableText, PortableTextBlock } from "next-sanity";
 import Link from "next/link";
 
