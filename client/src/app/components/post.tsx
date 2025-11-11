@@ -1,7 +1,8 @@
 "use client"
-import { PortableText, PortableTextBlock } from 'next-sanity';
+import { PortableTextBlock } from 'next-sanity';
 import Image from 'next/image';
 import Link from 'next/link';
+import PortableTextComponent from './portableText';
 
 
 export type Post = {
@@ -25,28 +26,17 @@ export default function PostComponent(postQuery: Post) {
             </div>
             <div className="bg-white px-5 py-10 lg:py-[120px]">
                 <div className="max-w-[1200px] m-auto flex flex-wrap justify-between">
-                    {[columnLeft, columnRight].map((items, index) => (
-                        <div key={index} className="w-full lg:w-[48%]">
-                            <PortableText 
-                                value={items}
-                                components={{
-                                    block: {
-                                        h3: ({children}) => <h3 className="font-bold text-[24px] lg:text-[30px] text-[#00305b] pb-6">{children}</h3>,
-                                        normal: ({children}) => <p className="font-montserrat text-[16px] lg:text-[18px] pb-6">{children}</p>,
-                                    },
-                                    listItem: {
-                                        bullet: ({children}) => <li className="relative pl-6 pb-3 font-montserrat text-[16px] lg:text-[18px] before:content-['*'] before:absolute before:left-0 before:top-0">{children}</li>
-                                    }
-                            }}/> 
-                        </div>
-                    ))}  
-                </div>
-                <div className="w-full flex justify-center">
-                    <Link href="tel:+15108460928" className="font-montserrat font-medium border border-[#00305b] lg:m-10 px-5 lg:px-10 py-10 space-y-3 text-center text-[18px] lg:text-[20px] text-[#00305b] 
-                        hover:bg-[#00305b] hover:text-white transition duration-300 ease-out">
-                        <p>{buttonText}</p>
-                        <strong>{phoneNumber}</strong>
-                    </Link>
+                    <div className="w-full lg:w-[48%]">
+                        <PortableTextComponent {...{ body: columnLeft }}/>
+                    </div> 
+                    <div className="w-full lg:w-[48%]">
+                        <PortableTextComponent {...{ body: columnRight }}/> 
+                        <Link href="tel:+15108460928" className="block font-montserrat font-medium lg:w-[400px] m-auto p-5 space-y-3 text-center text-[18px] lg:text-[20px]
+                            bg-[#00305b] text-white hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] transition duration-300 ease-out">
+                            <p className="">{buttonText}</p>
+                            <strong>{phoneNumber}</strong>
+                        </Link> 
+                    </div>
                 </div>
             </div>
         </div>

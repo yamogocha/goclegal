@@ -5,7 +5,7 @@ import Navigation from "../navigation/page";
 import AwardsAndHonors from "../rewards-and-honors/page";
 import Contact from "../contact/page";
 
-const ABOUT_PAGE_QUERY = groq`*[_type == "page" && slug.current == "about"][0]{headline, subHeadline, "image": image.asset->url, "photo": photo.asset->url, body}`
+const ABOUT_PAGE_QUERY = groq`*[_type == "page" && slug.current == "about"][0]{headline, subHeadline, "image": image.asset->url, "photo": photo.asset->url, body, buttonText, phoneNumber}`
 
 export default async function About() {
     const aboutPage = await client.fetch<AboutPage>(ABOUT_PAGE_QUERY)

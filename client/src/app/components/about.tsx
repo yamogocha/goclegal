@@ -1,9 +1,10 @@
 "use client"
-import { PortableText, PortableTextBlock } from "next-sanity"
+import { PortableTextBlock } from "next-sanity"
 import Image from "next/image"
-import Link from "next/link"
 import { useState } from "react"
 import MotionWrapper from "./motionWraper"
+import PortableTextComponent from "./portableText"
+import Link from "next/link"
 
 
 export type AboutPage = {
@@ -12,32 +13,14 @@ export type AboutPage = {
     image: string,
     photo: string
     body: PortableTextBlock[]
+    buttonText: string
+    phoneNumber: string
 }
 export default function AboutComponent(aboutPage: AboutPage) {
-    const {headline, subHeadline, image, photo, body} = aboutPage
+    const {headline, subHeadline, image, photo, body, buttonText, phoneNumber} = aboutPage
     const [readMore, setReadMore] = useState(false)
     const lessContent = body.slice(0, 8)
 
-    const portableContent = (body: PortableTextBlock[]) => {
-        return (
-            <PortableText 
-                value={body}
-                components={{
-                    block: {
-                        h3: ({children}) => <h3 className="font-bold text-[24px] lg:text-[30px] text-[#00305b] pb-6">{children}</h3>,
-                        h4: ({children}) => <h4 className="font-bold text-[22px] lg:text-[24px] text-[#00305b] pb-3">{children}</h4>,
-                        normal: ({children}) => <p className="font-montserrat text-[16px] lg:text-[18px] pb-6">{children}</p>,
-                    },
-                    listItem: {
-                        bullet: ({children}) => <li className="relative pl-6 pb-3 font-montserrat text-[16px] lg:text-[18px] before:content-['*'] before:absolute before:left-0 before:top-0">{children}</li>
-                    },
-                    marks: {
-                        link: ({ value, children }) => <Link href={value.href} className="underlinetext-[#00305b] text-[#00305b] hover:text-[#0f4c85] underline underline-offset-2">{children}</Link>
-                    }
-                }} 
-            />
-        )
-    }
     const toggleReadMore = () => {
         setReadMore(!readMore)
         if (readMore) {
@@ -57,7 +40,12 @@ export default function AboutComponent(aboutPage: AboutPage) {
                 <div className="max-w-[1200px] m-auto flex flex-col lg:flex-row justify-between items-start">
                     <Image src={photo} alt="Gregory OConnel attorney photo" width={300} height={300} className="w-full lg:w-[48%] object-contain"/>
                     <div className="w-full lg:w-[48%] pt-6 lg:pt-0">
-                        {portableContent(readMore ? body : lessContent)}
+                        {readMore ? <PortableTextComponent {...{ body }} /> : <PortableTextComponent {...{ body: lessContent }} />}
+                        <Link href="tel:+15108460928" className="block font-montserrat font-medium mb-6 lg:w-[400px] m-auto p-5 space-y-3 text-center text-[18px] lg:text-[20px] text-white 
+                            bg-[#00305b] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] cursor-pointer transition duration-300 ease-out">
+                            <p>{buttonText}</p>
+                            <strong>{phoneNumber}</strong>
+                        </Link>
                         <div className="flex items-center space-x-2 cursor-pointer" onClick={toggleReadMore}>
                             <span className="w-full border border-t border-[#32323240]"/>
                             <span className="text-[#00305b] hover:text-[#0f4c85] text-[18px] lg:text-[20px] font-bold whitespace-nowrap">{readMore ?  "Read Less" : "Read More"}</span>
