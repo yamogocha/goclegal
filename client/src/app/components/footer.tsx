@@ -5,6 +5,7 @@ import Phone from "../assets/phone"
 import Facebook from "../assets/facebook"
 import LinkedIn from "../assets/linkedIn"
 import Instagram from "../assets/instagram"
+import MotionWrapper from "./motionWraper"
 
 type FirmInformation = {
     label: string
@@ -54,7 +55,7 @@ export default function FooterComponent(footerQuery: FooterType) {
     
     return (
         <div className="bg-white w-full h-full">
-            <div className="max-w-[1200px] m-auto flex flex-wrap justify-between px-5 py-10 lg:py-[80px]">
+            <MotionWrapper className="max-w-[1200px] m-auto flex flex-wrap justify-between px-5 py-10 lg:py-[80px]">
                 <div className="flex flex-col gap-3 pb-6">
                     <span className="text-[24px] lg:text-[30px] font-medium">{firmInformationTitle}</span>
                     {firmInformation.map(({label, detail}, index) => (
@@ -82,7 +83,7 @@ export default function FooterComponent(footerQuery: FooterType) {
                     ))}
                 </div>
                 <div className="basis-full text-[22px] font-medium pt-12 lg:pt-30">{copyright}</div>
-            </div>
+            </MotionWrapper>
         </div>
     )
 }
