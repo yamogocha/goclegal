@@ -2,6 +2,6 @@ export {}
 
 declare global {
     interface Window {
-        gtag?: (...args: any[]) => void;
+      gtag?: (command: 'config' | 'event' | 'set' | 'consent', targetId?: string, params?: Record<string, unknown>) => void;
     }
-}
+  }

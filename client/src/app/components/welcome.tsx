@@ -20,7 +20,7 @@ export enum Motions {
 }
 
 export default function WelcomeCompnent(welcomePage: WelcomePage) {
-  const { image, headline, subHeadline, buttonText, phoneNumber } = welcomePage
+  const { image, headline, subHeadline, buttonText } = welcomePage
     
     const handleClick = () => {
       if (typeof window !== "undefined" && window.gtag) {
