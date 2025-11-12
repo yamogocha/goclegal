@@ -29,10 +29,10 @@ export default function FAQsComponent(faqsPage: FAQsPage) {
             </MotionWrapper>
             <div className="bg-white px-5 py-10 lg:py-[80px]">
                 <div className="max-w-[1200px] m-auto flex justify-between">
-                    <div className="w-[48%]">
+                    <div className="w-full lg:w-[48%]">
                         <PortableTextComponent {...{ body: leftColumn }} />
                     </div>
-                    <div className="w-[48%]">
+                    <div className="w-full lg:w-[48%]">
                         <PortableTextComponent {...{ body: rightColumn }} />
                         <Link href="tel:+15108460928" className="block font-montserrat font-medium mb-6 lg:w-[400px] m-auto p-5 space-y-3 text-center text-[18px] lg:text-[20px] text-white 
                             bg-[#00305b] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] cursor-pointer transition duration-300 ease-out">
