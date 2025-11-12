@@ -2,9 +2,9 @@
 import { PortableTextBlock } from "next-sanity"
 import Image from "next/image"
 import { useState } from "react"
-import MotionWrapper from "./motionWraper"
 import PortableTextComponent from "./portableText"
 import Link from "next/link"
+import MotionWrapper from "./motionWraper"
 
 
 export type AboutPage = {
@@ -31,11 +31,13 @@ export default function AboutComponent(aboutPage: AboutPage) {
 
     return (
         <div className="bg-[#00305bcf] w-full h-full">
-            <Image id="greg-photo" src={image} alt="About page background image" fill className="object-cover -z-5" />
-            <MotionWrapper className="w-full lg:w-2/3 m-auto h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
-                <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
-                <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
-            </MotionWrapper>
+            <div className="relative w-full h-[300px] lg:h-[400px]">
+                <Image id="greg-photo" src={image} alt="About page background image" fill className="object-cover -z-5" />
+                <MotionWrapper className="relative w-full lg:w-2/3 m-auto h-[300px] lg:h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
+                    <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
+                    <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
+                </MotionWrapper>
+            </div>
             <div className="bg-white px-5 pt-10 lg:py-[80px]">
                 <div className="max-w-[1200px] m-auto flex flex-col lg:flex-row justify-between items-start">
                     <Image src={photo} alt="Gregory OConnel attorney photo" width={300} height={300} className="w-full lg:w-[48%] object-contain"/>
