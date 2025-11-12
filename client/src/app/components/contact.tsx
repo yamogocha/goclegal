@@ -35,7 +35,7 @@ export default function ContactComponent(contact: ContactType) {
       };
 
     return (
-        <form id={slug} action="https://formspree.io/f/mpwydejv" method="post" className="scroll-mt-20 bg-[#323232] w-full h-full px-5 py-10 lg:pt-[80px] lg:pb-[100]">
+        <form id={slug} action="https://formspree.io/f/mpwydejv" method="post" className="scroll-mt-20 bg-[#323232] w-full h-full px-5 py-10 lg:pt-[80px] lg:pb-[100px]">
             <MotionWrapper className="grid grid-cols-2 gap-6 w-full lg:w-1/2 m-auto">
                 <h2 className="col-span-2 text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold text-center text-[#e3dfd6]">{headline}</h2>
                 <div className="col-span-2 flex flex-col lg:flex-row justify-center gap-3 pb-6 lg:pb-18">
