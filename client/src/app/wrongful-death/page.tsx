@@ -4,6 +4,8 @@ import PostComponent, { Post } from "../components/post";
 import Navigation from "../navigation/page";
 import Contact from "../contact/page";
 import Footer from "../footer/page";
+import Script from "next/script";
+import { wrongfulDeathSchema } from "../util/schema";
 
 const WRONGFUL_DEATH_QUERY = groq`*[_type == "post" && slug.current == "wrongful-death"][0]
 {headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
@@ -13,6 +15,9 @@ export default async function WrongfulDeath() {
 
     return (
         <div className="relative min-h-screen">
+            <Script id="wrongful-death-schema" type="application/ld+json">
+                {JSON.stringify(wrongfulDeathSchema)}
+            </Script>
             <Navigation />
             <PostComponent {...postQuery} />
             <Contact />

@@ -58,36 +58,7 @@ export default function RootLayout({
         {/*  Canonical  */}
         <link rel="canonical" href="https://www.goclegal.com/" />
         {/* <link href="" rel="publisher" /> */}
-        {/*  Schema.org Markup  */}
-        <Script id="schema-markup-json" type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LegalService",
-            "name": "GOC Legal",
-            "url": "https://www.goclegal.com",
-            "logo": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png",
-            "image": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp",
-            "description": "GOC Legal is a trusted Oakland personal injury and auto accident law firm. Zero upfront fees, maximum compensation, and free consultations.",
-            "telephone": "+1-510-846-0928",
-            "address": {
-                "@type": "PostalAddress",
-                "streetAddress": "10 Villanova Drive",
-                "addressLocality": "Oakland",
-                "addressRegion": "CA",
-                "postalCode": "94611",
-                "addressCountry": "US"
-            },
-            "areaServed": {
-                "@type": "City",
-                "name": "Oakland"
-            },
-            "openingHours": "Mo-Fr 09:00-17:00",
-            "sameAs": [
-                "https://www.facebook.com/goclegal",
-                "https://www.linkedin.com/company/goclegal"
-            ]
-          })}
-        </Script>
+
         {/* Google Tag (gtag.js) */}
         <Script
           async

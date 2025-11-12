@@ -39,7 +39,7 @@ export default function TestimonialsComponent(testimonialsPage: TestimonialsPage
 
 
     return (
-        <div id={slug} className="scroll-mt-20 lg:scroll-mt-10 w-full h-full bg-[#e3dfd6] px-5 py-10 lg:pt-[80] lg:pb-[100px]">
+        <div id={slug} className="scroll-mt-20 w-full h-full bg-[#e3dfd6] px-5 py-10 lg:pt-[80] lg:pb-[100px]">
             <MotionWrapper><div className="max-w-[1200px] m-auto text-center">
                 <h2 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-2">{headline}</h2>
                 <p className="font-montserrat text-[18px] lg:text-[24px] pb-6 lg:pb-18">{subHeadline}</p>
