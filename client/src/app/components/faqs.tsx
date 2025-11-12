@@ -28,7 +28,7 @@ export default function FAQsComponent(faqsPage: FAQsPage) {
                 <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
             </MotionWrapper>
             <div className="bg-white px-5 py-10 lg:py-[80px]">
-                <div className="max-w-[1200px] m-auto flex justify-between">
+                <div className="max-w-[1200px] m-auto flex flex-wrap justify-between">
                     <div className="w-full lg:w-[48%]">
                         <PortableTextComponent {...{ body: leftColumn }} />
                     </div>
