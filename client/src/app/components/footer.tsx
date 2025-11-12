@@ -55,7 +55,7 @@ export default function FooterComponent(footerQuery: FooterType) {
     }
     
     return (
-        <div className="bg-white w-full h-full">
+        <div className="bg-white w-full h-full shadow-[0_-5px_10px_#14365c1a]">
             <MotionWrapper className="max-w-[1200px] m-auto flex flex-wrap justify-between px-5 py-10 lg:py-[80px]">
                 <div className="flex flex-col gap-3 pb-6">
                     <span className="text-[24px] lg:text-[30px] font-medium">{firmInformationTitle}</span>

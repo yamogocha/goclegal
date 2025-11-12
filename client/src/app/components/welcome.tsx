@@ -45,7 +45,7 @@ export default function WelcomeCompnent(welcomePage: WelcomePage) {
                   <MotionWrapper type={Motions.FADEUP}>
                     <p className="font-montserrat font-medium w-full lg:w-[600px] text-[18px] lg:text-[24px] pb-6">{subHeadline}</p>
                   </MotionWrapper>
-                  <Link onClick={handleClick} href="tel:+15108460928" className="font-montserrat mb-4 w-full lg:w-[250px] text-white text-center text-[18px] lg:text-[20px] font-bold p-4 bg-gradient-to-l from-[#00305b] to-[#004c8f] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] shadow-[0_0px_10px_rgba(0,0,0,0.3)] transition duration-300 ease-out">{buttonText}</Link>
+                  <Link onClick={handleClick} href="tel:+15108460928" className="font-montserrat mb-4 w-full lg:w-[250px] text-white text-center text-[18px] lg:text-[20px] font-bold p-4 bg-gradient-to-l from-[#00305b] to-[#004c8f] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] shadow-[-5px_-5px_10px_#14365c1a] transition duration-300 ease-out">{buttonText}</Link>
               </div>
           </MotionWrapper>
         </main>

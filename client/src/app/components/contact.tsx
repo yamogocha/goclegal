@@ -50,7 +50,7 @@ export default function ContactComponent(contact: ContactType) {
                 <input name="email" type="email" placeholder={email} className="col-span-2 lg:col-span-1 font-montserrat font-medium p-5 bg-white border-none focus:outline-none placeholder:text-[#323232]" required />
                 <input name="phoneNumber" type="tel" placeholder={phoneNumber} className="col-span-2 lg:col-span-1 font-montserrat font-medium p-5 bg-white border-none focus:outline-none placeholder:text-[#323232]" required />
                 <textarea name="message" placeholder={message} className="col-span-2 h-[300px] font-montserrat font-medium p-5 bg-white border-none focus:outline-none placeholder:text-[#323232]" />
-                <input onClick={handleClick} type="submit" className="col-span-2 font-montserrat mb-6  text-white text-center text-[18px] lg:text-[20px] font-bold p-4 bg-gradient-to-l from-[#00305b] to-[#004c8f] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] shadow-[0_0px_10px_rgba(0,0,0,0.3)] cursor-pointer transition duration-300 ease-out" />
+                <input onClick={handleClick} type="submit" className="col-span-2 font-montserrat mb-6  text-white text-center text-[18px] lg:text-[20px] font-bold p-4 bg-gradient-to-l from-[#00305b] to-[#004c8f] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] shadow-[-5px_-5px_10px_#14365c1a] cursor-pointer transition duration-300 ease-out" />
                 <Link href="tel:+15108460928" className="col-span-2 font-montserrat text-[#e3dfd6] text-[18px] lg:text-[20px] text-center underline">{callUs}</Link>
             </MotionWrapper>
         </form>
