@@ -74,23 +74,23 @@ export default function NavigationComponent(navigation: NavigationType) {
                         {items.map(({label, slug, subNavItems}, index) => {
                             const individualPage = slug == "about"
                             return(
-                                <li key={index} className="flex items-start">
-                                    <a onClick={toggleMobileMenu} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
-                                        {label}
-                                    </a>
-                                    {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`px-2 transition duration-300 ease-out ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}
+                                <div key={index}>
+                                    <li className="flex items-start">
+                                        <a onClick={toggleMobileMenu} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
+                                            {label}
+                                        </a>
+                                        {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`px-2 transition duration-300 ease-out ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}
+                                    </li>
                                     {showSubNav && subNavItems && 
-                                        <ul className="absolute top-30 right-0 bg-white flex flex-col pb-5 w-[300px] rounded">
-                                            {subNavItems.map(({label, slug}, index) => (
-                                                <li key={index}>
-                                                    <a href={`/${slug}`} className="font-montserrat font-medium block pl-10 py-3 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] whitespace-nowrap">
-                                                        <MotionWrapper>{label}</MotionWrapper>
-                                                    </a>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                        subNavItems.map(({label, slug}, index) => (
+                                            <li key={index}>
+                                                <a href={`/${slug}`} className="font-montserrat font-medium block pb-6 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] whitespace-nowrap">
+                                                    <MotionWrapper>{label}</MotionWrapper>
+                                                </a>
+                                            </li>
+                                        ))
                                     }
-                                </li>
+                                </div>
                             )}
                         )}
                     </ul>
