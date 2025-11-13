@@ -50,7 +50,7 @@ export default function CaseResultComponent({ caseResultsPage, caseResultsSlider
             <div className="relative w-full h-[200px] lg:h-[400px]">
                 <Image src={image} alt="Case Results page background image" fill className="object-cover -z-5" />
                 <MotionWrapper className="max-w-[1200px] m-auto w-full h-[200px] lg:h-[400px] px-5 text-white text-center flex justify-center items-center">
-                    <h1 className="text-[36px] lg:text-[48px] leading-tight lg:leading-normal pb-6">{pageHeadline}</h1>
+                    <h1 className="font-bold text-[36px] lg:text-[48px] leading-tight lg:leading-normal pb-6">{pageHeadline}</h1>
                 </MotionWrapper>
             </div>
             <div className="bg-white px-5 py-10 lg:py-[80px]">
@@ -58,7 +58,7 @@ export default function CaseResultComponent({ caseResultsPage, caseResultsSlider
                     <PortableTextComponent {...{ body: topContent }}/>
                     <div className="py-6 lg:py-20">
                         <div className="w-full lg:w-3/4 m-auto font-bold leading-tight lg:leading-normal text-[#00305b] text-[24px] lg:text-[30px] text-center pb-6 lg:pb-12">{headline}</div>
-                        <div className="font-bold text-[#00305b] text-[22px] lg:text-[24px] text-center">{subHeadline}</div>
+                        <div className="font-montserrat font-medium text-[#00305b] text-[22px] lg:text-[24px] text-center">{subHeadline}</div>
                         <CardSwiper {...{ cards }} />
                     </div>
                     <PortableTextComponent {...{ body: bottomContent }}/>
