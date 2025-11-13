@@ -15,6 +15,7 @@ export const sliderType = defineType({
             name: "slug",
             title: "Slug",
             type: "slug",
+            options: { source: "title" },
             validation: (rule) => rule.required(),
         }),
         defineField({

@@ -1,8 +1,8 @@
 "use client"
 import Image from "next/image"
-import Slider from "./slider"
 import { SwiperSlide } from "swiper/react"
 import MotionWrapper from "./motionWraper"
+import { Slider } from "./slider"
 
 type Slide = {
     paragraph: string
