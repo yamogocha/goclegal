@@ -32,12 +32,12 @@ export default function AnimatedCTA({ buttonText, phoneNumber }:CTAType) {
 
     return (
       <motion.div
-        className="mb-12 p-5 lg:w-[400px] m-auto rounded text-center"
+        className="mb-12 p-5 w-full lg:w-[400px] m-auto rounded text-center"
         style={{ background }}
         onHoverStart={() => animate(angle, 90, { duration: 1})}
         onHoverEnd={() => animate(angle, 0, { duration: 1 })}
         >
-        <Link onClick={handleGTagClick} href="tel:+15108460928" className="space-y-3 font-montserrat font-medium  text-[18px] lg:text-[20px] text-white">
+        <Link onClick={handleGTagClick} href="tel:+15108460928" className="space-y-3 font-montserrat font-medium text-[18px] lg:text-[20px] text-white">
             <p>{buttonText}</p>
             {phoneNumber && <strong>{phoneNumber}</strong>}
         </Link>
