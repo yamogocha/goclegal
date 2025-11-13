@@ -5,6 +5,7 @@ import { useState } from "react"
 import PortableTextComponent from "./portableText"
 import Link from "next/link"
 import MotionWrapper from "./motionWraper"
+import AnimatedCTA from "./animatedCTA"
 
 
 export type AboutPage = {
@@ -43,11 +44,7 @@ export default function AboutComponent(aboutPage: AboutPage) {
                     <Image src={photo} alt="Gregory OConnel attorney photo" width={300} height={300} className="w-full lg:w-[48%] object-contain"/>
                     <div className="w-full lg:w-[48%] pt-6 lg:pt-0">
                         {readMore ? <PortableTextComponent {...{ body }} /> : <PortableTextComponent {...{ body: lessContent }} />}
-                        <Link href="tel:+15108460928" className="block font-montserrat font-medium mb-12 lg:w-[400px] m-auto p-5 space-y-3 text-center text-[18px] lg:text-[20px] text-white 
-                            bg-[#00305b] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] cursor-pointer transition duration-300 ease-out">
-                            <p>{buttonText}</p>
-                            <strong>{phoneNumber}</strong>
-                        </Link>
+                        <AnimatedCTA {...{ buttonText, phoneNumber}} />
                         <div className="flex items-center space-x-2 cursor-pointer" onClick={toggleReadMore}>
                             <span className="w-full border border-t border-[#32323240]"/>
                             <span className="text-[#00305b] hover:text-[#0f4c85] text-[18px] lg:text-[20px] font-bold whitespace-nowrap">{readMore ?  "Read Less" : "Read More"}</span>

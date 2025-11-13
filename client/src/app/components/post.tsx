@@ -1,9 +1,9 @@
 "use client"
 import { PortableTextBlock } from 'next-sanity';
 import Image from 'next/image';
-import Link from 'next/link';
 import PortableTextComponent from './portableText';
 import MotionWrapper from './motionWraper';
+import AnimatedCTA from './animatedCTA';
 
 
 export type Post = {
@@ -34,11 +34,7 @@ export default function PostComponent(postQuery: Post) {
                     </div> 
                     <div className="w-full lg:w-[48%]">
                         <PortableTextComponent {...{ body: columnRight }}/> 
-                        <Link href="tel:+15108460928" className="block font-montserrat font-medium lg:w-[400px] m-auto p-5 space-y-3 text-center text-[18px] lg:text-[20px]
-                            bg-[#00305b] text-white hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] transition duration-300 ease-out">
-                            <p className="">{buttonText}</p>
-                            <strong>{phoneNumber}</strong>
-                        </Link> 
+                        <AnimatedCTA {...{buttonText, phoneNumber}} /> 
                     </div>
                 </div>
             </div>

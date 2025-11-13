@@ -44,6 +44,12 @@ export const contactType = defineType({
             validation: rule => rule.required()
         }),
         defineField({
+            name: "buttonText",
+            title: "Button Text",
+            type: "string",
+            validation: rule => rule.required()
+        }),
+        defineField({
             name: "phoneNumber",
             title: "Phone Number",
             type: "string",
@@ -54,12 +60,6 @@ export const contactType = defineType({
             title: "Message",
             type: "text",
             validation: rule => rule.required().min(10)
-        }),
-        defineField({
-            name: "callUs",
-            title: "Call Us Button",
-            type: "string",
-            validation: rule => rule.required()
         }),
     ]
 })

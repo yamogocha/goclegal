@@ -50,15 +50,15 @@ export default function ServicesComponent({ headline, slug, slides }: ServicesPa
                             <div key={index} className="w-full lg:w-[45%] h-[400px]">
                                 {image ? 
                                 <div className="relative w-full h-full">
-                                    <Image src={image} alt="Services image" fill className="object-cover" />
+                                    <Image src={image} alt="Services image" fill className="object-cover rounded" />
                                 </div> :
-                                <div className={`w-full h-full p-10 flex flex-col justify-between 
+                                <div className={`w-full h-full rounded p-10 flex flex-col justify-between 
                                     ${backgroundColor == "#00305b" ? "bg-[#00305b] text-white" : backgroundColor == "#e3dfd6" ? "bg-[#e3dfd6] text-[#323232]" : "bg-[#ffffff] text-[#323232]"}`}>
                                     <MotionWrapper key={animate} type={Motions.FADELEFT}>
                                         <div className="font-bold text-[24px] lg:text-[30px] pb-6" >{label}</div>
                                         <p className="font-montserrat text-[16px] lg:text-[18px] pb-6">{paragraph}</p>
                                     </MotionWrapper>
-                                    <Link href={`/${slug}`} className={`w-fit font-montserrat font-medium text-[16px] lg:text-[18px] p-2 border-1 transition duration-300 ease-out
+                                    <Link href={`/${slug}`} className={`w-fit font-montserrat font-medium rounded text-[16px] lg:text-[18px] p-2 border-1 transition duration-300 ease-out
                                          ${backgroundColor == "#00305b" ? "hover:text-[#00305b] hover:bg-white" : backgroundColor == "#e3dfd6" ? "hover:text-[#e3dfd6] hover:bg-[#323232]" : "hover:text-[#ffffff] hover:bg-[#323232]"}`}>
                                         Learn More
                                     </Link>
@@ -66,10 +66,10 @@ export default function ServicesComponent({ headline, slug, slides }: ServicesPa
                             </div>
                     )})}
                     <div className="relative w-full lg:w-[45%] h-[400px] block lg:hidden">
-                        <Image src={"https://cdn.sanity.io/images/3zonvthd/production/811d964414f183b4aa64129e1984cd0eedfc276f-2400x1108.webp"} alt="Services image" fill className="object-cover" />
+                        <Image src={"https://cdn.sanity.io/images/3zonvthd/production/811d964414f183b4aa64129e1984cd0eedfc276f-2400x1108.webp"} alt="Services image" fill className="object-cover rounded" />
                     </div>
                     <span 
-                        className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 bg-gradient-to-l from-[#00305b] to-[#004c8f] lg:bg-[#00305b] hover:bg-gradient-to-r hover:from-[#00305b] hover:to-[#004c8f] px-2 py-5 lg:px-5 lg:py-10 cursor-pointer transition duration-300 ease-out shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
+                        className="absolute right-0 top-[200px] lg:top-1/2 -translate-y-1/2 rounded-tl rounded-bl bg-gradient-to-r from-[#00305b] to-[#004c8f] gradient-animate px-2 py-5 lg:px-5 lg:py-10 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
                         onClick={() => swapServices(isMobile ? 1 : 4)}>
                         <Arrow />
                     </span>

@@ -1,10 +1,10 @@
 "use client"
-import Slider from "./slider"
 import { SwiperSlide } from "swiper/react"
 import Image from "next/image"
 import MotionWrapper from "./motionWraper"
 import { Motions } from "./welcome"
 import { urlFor } from "../util"
+import { Slider } from "./slider"
 
 type Slide = {
     image: Record<string, string>
@@ -25,7 +25,7 @@ export default function TestimonialsComponent(testimonialsPage: TestimonialsPage
 
     const slides = testimonialsSlides.map(({image, paragraph, label}, index) => (
         <SwiperSlide key={index}>
-            <div className="bg-white mb-14 p-10 flex flex-col justify-between">
+            <div className="bg-white rounded mb-14 p-10 flex flex-col justify-between">
                 <div className="flex justify-center pb-6">
                     <Image src={urlFor(image).url()} alt="Slider icon" width={25} height={25}/>
                 </div>
