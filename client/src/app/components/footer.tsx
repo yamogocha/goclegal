@@ -60,9 +60,9 @@ export default function FooterComponent(footerQuery: FooterType) {
                 <div className="flex flex-col gap-3 pb-6">
                     <span className="text-[24px] lg:text-[30px] font-medium">{firmInformationTitle}</span>
                     {firmInformation.map(({label, detail}, index) => (
-                        <div key={index} className="font-montserrat flex items-center gap-3">
+                        <div key={index} className="flex items-center gap-3">
                             {renderIcon(label)}
-                            <Link href={renderHref(label)} target="_blank" className={`text-[16px] lg:text-[18px] hover:text-[#00305b] ${label == "Name" ? "font-medium text-[22px] lg:text-[24px]" : "underline"}`}>{detail}</Link>
+                            <Link href={renderHref(label)} target="_blank" className={`text-[16px] lg:text-[18px] hover:text-[#00305b] ${label == "Name" ? "font-bold text-[22px] lg:text-[24px]" : "font-montserrat underline"}`}>{detail}</Link>
                         </div>
                     ))}
                     <div className="flex items-center space-x-6 pt-6">
