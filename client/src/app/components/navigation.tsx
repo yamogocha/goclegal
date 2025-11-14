@@ -28,6 +28,16 @@ export default function NavigationComponent(navigation: NavigationType) {
         setShowSubNav(false)
         setShowMobileNav(false)
     }
+    const toggleMenu = (label: string) => {
+        if (label == "Services") {
+            if (showSubNav) {
+                toggleOverlay()
+            } else {
+                toggleSubNavMenu()
+            }
+        }
+    }
+    
     return(
         <>
             <div onClick={toggleOverlay} className={`absolute z-10 w-full h-full top-0 right-0 p-5 bg-[#000000b5] transition duration-300 ease-out ${showSubNav || showMobileNav ? "block" :"hidden"}`} />
@@ -38,11 +48,12 @@ export default function NavigationComponent(navigation: NavigationType) {
                 <ul className="bg-white hidden lg:flex flex-row list-none">
                     {items.map(({label, slug, subNavItems}, index) => {
                         const individualPage = slug == "about" || slug == "case-results"
+                        const Element = !subNavItems || showSubNav ? "a" : "span"
                         return (
                         <li key={index} className="relative flex items-center">
-                            <a href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium p-5 cursor-pointer text-[18px] text-[#0f4c85] hover:text-[#028695]">
+                            <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium p-5 cursor-pointer text-[18px] text-[#0f4c85] hover:text-[#028695]">
                                 {label}
-                            </a>
+                            </Element>
                             {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`transition duration-300 ease-out px-2 ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}
                             {showSubNav && subNavItems && 
                                 <ul className="absolute top-15 -left-5 bg-white flex flex-col pb-5 rounded">
@@ -73,12 +84,13 @@ export default function NavigationComponent(navigation: NavigationType) {
                             transition duration-300 ease-out ${showMobileNav ? "block" :"hidden"}`}>
                         {items.map(({label, slug, subNavItems}, index) => {
                             const individualPage = slug == "about" || slug == "case-results"
+                            const Element = !subNavItems || showSubNav ? "a" : "span"
                             return(
                                 <div key={index}>
                                     <li className="flex items-start">
-                                        <a onClick={toggleMobileMenu} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
+                                        <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
                                             {label}
-                                        </a>
+                                        </Element>
                                         {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`px-2 transition duration-300 ease-out ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}
                                     </li>
                                     {showSubNav && subNavItems && 
