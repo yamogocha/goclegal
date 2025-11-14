@@ -14,7 +14,7 @@ export function Slider({ slides }: SwiperType) {
             pagination={{ clickable: true }}
             autoplay={{
                 delay: 10000, // 3 seconds
-                disableOnInteraction: false, // continue autoplay after user interacts
+                disableOnInteraction: true, // continue autoplay after user interacts
                 reverseDirection: true,
             }}
             spaceBetween={50}
@@ -44,7 +44,7 @@ export function CardSwiper({ cards }: CardSwiperType) {
             pagination={{ clickable: true }}
             autoplay={{
                 delay: 10000, // 3 seconds
-                disableOnInteraction: false, // continue autoplay after user interacts
+                disableOnInteraction: true, // continue autoplay after user interacts
                 reverseDirection: true,
             }}
         >
