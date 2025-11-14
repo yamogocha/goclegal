@@ -3,6 +3,7 @@ import Image from "next/image"
 import { SwiperSlide } from "swiper/react"
 import MotionWrapper from "./motionWraper"
 import { Slider } from "./slider"
+import Script from "next/script"
 
 type Slide = {
     paragraph: string
@@ -24,31 +25,31 @@ export default function AwardsAndHonorsComponent(awardsAndHonorsPage: AwardsAndH
         } else {
             if (label.includes("Selected in 2023")) {
                 return (
-                    <div className="w-[180px] h-[150px] rounded text-[#808080] text-center my-[25px] mx-auto" data-slbadge="v2-slbadge-gray"
-                        data-text1="Selected in 2023" data-text2="Thomson Reuters" style={{ fontFamily: "arial, sans-serif" }}>
-                        <script async type="text/javascript"
+                    <div className="w-[180px] h-[150px] rounded text-[#808080] text-center my-[25px] mx-auto" 
+                        data-slbadge="v2-slbadge-gray" data-text1="Selected in 2023" data-text2="Thomson Reuters" style={{ fontFamily: "arial, sans-serif" }}>
+                        <Script id="super-lawyer" type="text/javascript"
                             src="https://www.superlawyers.com/static/sl-badge/v2/load.min.js">
-                            </script>
+                        </Script>
                         <a className="slbadge_profileurl"
                             title="View the profile of Northern California Personal Injury - General Attorney Gregory J. O&amp;#039;Connell"
-                            href="https://profiles.superlawyers.com/california/oakland/lawyer/gregory-j-oconnell/1719201a-ffd6-41e3-8ec8-2970004dbb1e.html?npcmp=slb:badge:sl_badge:1719201a-ffd6-41e3-8ec8-2970004dbb1e:year&utm_source=1719201a-ffd6-41e3-8ec8-2970004dbb1e&utm_campaign=v2-slbadge-gray&utm_content=profile">Gregory
-                            J. O&#039;Connell</a>
-                        {/* <div className="mt-[6px]">Rated by Super Lawyers<br /><br /><br />loading ...</div> */}
+                            href="https://profiles.superlawyers.com/california/oakland/lawyer/gregory-j-oconnell/1719201a-ffd6-41e3-8ec8-2970004dbb1e.html?npcmp=slb:badge:sl_badge:1719201a-ffd6-41e3-8ec8-2970004dbb1e:year&utm_source=1719201a-ffd6-41e3-8ec8-2970004dbb1e&utm_campaign=v2-slbadge-gray&utm_content=profile">
+                                Gregory J. O&#039;Connell
+                        </a>
                     </div>
                 )
             }
              if (label.includes("Rising Stars")) {
                 return (
-                    <div className="w-[180px] h-[150px] rounded text-[#808080] text-center my-[25px] mx-auto" data-slbadge="v2-rsbadge-blue"
-                        style={{ fontFamily: "arial, sans-serif" }}>
-                        <script async type="text/javascript"
+                    <div className="w-[180px] h-[150px] rounded text-[#808080] text-center my-[25px] mx-auto" 
+                        data-slbadge="v2-rsbadge-blue" style={{ fontFamily: "arial, sans-serif" }}>
+                        <Script id="rising-stars" type="text/javascript"
                             src="https://www.superlawyers.com/static/sl-badge/v2/load.min.js">
-                            </script>
+                        </Script>
                         <a className="slbadge_profileurl"
                             title="View the profile of Northern California Personal Injury - General Attorney Gregory J. O&amp;#039;Connell"
-                            href="https://profiles.superlawyers.com/california/oakland/lawyer/gregory-j-oconnell/1719201a-ffd6-41e3-8ec8-2970004dbb1e.html?npcmp=rsb:badge:sl_badge:1719201a-ffd6-41e3-8ec8-2970004dbb1e:main&utm_source=1719201a-ffd6-41e3-8ec8-2970004dbb1e&utm_campaign=v2-rsbadge-blue&utm_content=profile">Gregory
-                            J. O&#039;Connell</a>
-                        {/* <div className="mt-[6px]">Rated by Super Lawyers<br /><br /><br />loading ...</div> */}
+                            href="https://profiles.superlawyers.com/california/oakland/lawyer/gregory-j-oconnell/1719201a-ffd6-41e3-8ec8-2970004dbb1e.html?npcmp=rsb:badge:sl_badge:1719201a-ffd6-41e3-8ec8-2970004dbb1e:main&utm_source=1719201a-ffd6-41e3-8ec8-2970004dbb1e&utm_campaign=v2-rsbadge-blue&utm_content=profile">
+                                Gregory J. O&#039;Connell
+                        </a>
                     </div>
                 )
             }

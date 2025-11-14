@@ -3,7 +3,6 @@ import { PortableTextBlock } from "next-sanity"
 import Image from "next/image"
 import { useState } from "react"
 import PortableTextComponent from "./portableText"
-import Link from "next/link"
 import MotionWrapper from "./motionWraper"
 import AnimatedCTA from "./animatedCTA"
 
