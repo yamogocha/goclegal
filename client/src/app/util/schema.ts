@@ -67,6 +67,11 @@ export const testimonialSchema = {
 "@context": "https://schema.org",
 "@type": "LegalService",
 "name": "GOC Legal",
+"aggregateRating": {
+  "@type": "AggregateRating",
+  "ratingValue": "5",
+  "ratingCount": "4"
+},
 "review": [
     {
     "@type": "Review",
