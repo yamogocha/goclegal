@@ -33,7 +33,6 @@ export default function RootLayout({
 
         {/*  Favicon  */}
         <link rel="icon" href="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png" type="image/png" />
-        <link rel="preload" href="https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png" as="image" />
 
         {/*  SEO Title & Description  */}
         <title>GOC Legal — Oakland Personal Injury & Auto Accident Lawyer</title>
