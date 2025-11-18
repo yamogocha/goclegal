@@ -144,3 +144,34 @@ export const traumaticBrainInjurySchema = getPracticeAreaSchema(
     "GOC Legal represents victims of traumatic brain injuries in Oakland, CA, helping them secure full compensation for medical costs, lost wages, and long-term care.",
     "https://www.goclegal.com/traumatic-brain-injury"
   );
+
+
+const BASE_URL = "https://www.goclegal.com";
+
+export function buildPageMetadata({
+title,
+description,
+path,
+}: {
+title: string;
+description: string;
+path: string;
+}) {
+const url = `${BASE_URL}${path.startsWith("/") ? path : "/" + path}`;
+
+return {
+    title,
+    description,
+    alternates: {
+    canonical: url,
+    },
+    openGraph: {
+    title,
+    description,
+    url,
+    siteName: "GOC Legal",
+    type: "website",
+    },
+};
+}
+  

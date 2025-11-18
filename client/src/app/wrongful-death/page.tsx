@@ -5,10 +5,18 @@ import Navigation from "../navigation/page";
 import Contact from "../contact/page";
 import Footer from "../footer/page";
 import Script from "next/script";
-import { wrongfulDeathSchema } from "../util/schema";
+import { buildPageMetadata, wrongfulDeathSchema } from "../util/schema";
 
 const WRONGFUL_DEATH_QUERY = groq`*[_type == "post" && slug.current == "wrongful-death"][0]
 {headline, subHeadline, "image": image.asset->url, columnLeft, columnRight, buttonText, phoneNumber}`
+
+export function generateMetadata() {
+    return buildPageMetadata({
+        title: "Wrongful Death | GOC Legal",
+        description: "Supporting families after a wrongful death with compassionate, determined legal representation. We pursue justice and maximum compensation.",
+        path: "wrongful-death"
+    })
+}
 
 export default async function WrongfulDeath() {
     const postQuery = await client.fetch<Post>(WRONGFUL_DEATH_QUERY)
