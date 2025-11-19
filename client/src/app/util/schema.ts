@@ -42,8 +42,8 @@ export const homepageSchema = {
 "@type": "LegalService",
 "name": "GOC Legal",
 "url": "https://www.goclegal.com",
-"logo": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705945101/goclegal/favicon-logo.png",
-"image": "https://res.cloudinary.com/dre1b2zmh/image/upload/v1705782311/goclegal/sfcitybgdesktop.webp",
+"logo": "https://www.goclegal.com/logo.png",
+"image": "https://www.goclegal.com/og-default.jpg",
 "description": "GOC Legal is a trusted Oakland personal injury and auto accident law firm. Zero upfront fees, maximum compensation, and free consultations.",
 "telephone": "+1-510-846-0928",
 "address": {
@@ -149,29 +149,38 @@ export const traumaticBrainInjurySchema = getPracticeAreaSchema(
 const BASE_URL = "https://www.goclegal.com";
 
 export function buildPageMetadata({
-title,
-description,
-path,
-}: {
-title: string;
-description: string;
-path: string;
-}) {
-const url = `${BASE_URL}${path.startsWith("/") ? path : "/" + path}`;
+    title,
+    description,
+    path,
+    image = "/og-default.jpg",
+    }: {
+    title: string;
+    description: string;
+    path: string; 
+    image?: string;
+    }) {
+    const url = `${BASE_URL}${path.startsWith("/") ? path : "/" + path}`;
 
-return {
-    title,
-    description,
-    alternates: {
-    canonical: url,
-    },
-    openGraph: {
-    title,
-    description,
-    url,
-    siteName: "GOC Legal",
-    type: "website",
-    },
-};
+    return {
+        title,
+        description,
+        alternates: { 
+            canonical: url 
+        },
+        openGraph: {
+            title,
+            description,
+            url,
+            siteName: "GOC Legal",
+            type: "website",
+            images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
+        },
+        twitter: {
+            card: "summary_large_image",
+            title,
+            description,
+            images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
+        },
+    };
 }
   
