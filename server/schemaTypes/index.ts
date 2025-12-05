@@ -1,8 +1,7 @@
 import {postType} from './postType'
 import {navType, navItem} from './navType'
 import {pageType} from './pageType'
-import { sliderType } from './sliderType'
-import { slideType } from './slideType'
+import { sliderType, slideType } from './sliderType'
 import { contactType } from './contactType'
 import { footerType, information } from './footerType'
 
