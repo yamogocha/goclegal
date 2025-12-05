@@ -7,6 +7,7 @@ import MotionWrapper from "./motionWraper"
 type NavigationItem = {
     label: string
     slug: string
+    manual: string
     subNavItems?: NavigationItem[]
 }
 export type NavigationType = {
@@ -46,12 +47,12 @@ export default function NavigationComponent(navigation: NavigationType) {
             <nav className="max-w-[1200px] m-auto flex justify-between items-center p-5 lg:px-0">
                 <a href={"/"}><Image src={logo} alt="GOC Legal logo" width={300} height={80} className="w-auto h-[60px] lg:h-[80px]" /></a>
                 <ul className="bg-white hidden lg:flex flex-row list-none">
-                    {items.map(({label, slug, subNavItems}, index) => {
-                        const individualPage = slug == "about" || slug == "case-results"
+                    {items.map(({label, slug, manual, subNavItems}, index) => {
+                        const individualPage = slug == "about" || slug == "case-results" || manual == "blog"
                         const Element = !subNavItems || showSubNav ? "a" : "span"
                         return (
                         <li key={index} className="relative flex items-center">
-                            <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium p-5 cursor-pointer text-[18px] text-[#0f4c85] hover:text-[#028695]">
+                            <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug ?? manual}`} className="font-montserrat font-medium p-5 cursor-pointer text-[18px] text-[#0f4c85] hover:text-[#028695]">
                                 {label}
                             </Element>
                             {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`transition duration-300 ease-out px-2 ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}
@@ -82,13 +83,13 @@ export default function NavigationComponent(navigation: NavigationType) {
                     </div>
                     <ul className={`list-none z-5 w-4/5 bg-white rounded-bl-md flex flex-col absolute top-0 right-0 p-10 lg:hidden
                             transition duration-300 ease-out ${showMobileNav ? "block" :"hidden"}`}>
-                        {items.map(({label, slug, subNavItems}, index) => {
-                            const individualPage = slug == "about" || slug == "case-results"
+                        {items.map(({label, slug, manual, subNavItems}, index) => {
+                            const individualPage = slug == "about" || slug == "case-results" || manual == "blog"
                             const Element = !subNavItems || showSubNav ? "a" : "span"
                             return(
                                 <div key={index}>
                                     <li className="flex items-start">
-                                        <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
+                                        <Element onClick={() => toggleMenu(label)} href={`/${individualPage ? "": "#"}${slug ?? manual}`} className="font-montserrat font-medium pb-5 cursor-pointer text-[16px] text-[#0f4c85] hover:text-[#028695] flex">
                                             {label}
                                         </Element>
                                         {subNavItems && <Arrow onClick={toggleSubNavMenu} className={`px-2 transition duration-300 ease-out ${showSubNav ? "rotate-[-90deg]" : "rotate-[90deg]"}`} size={24} color={"#323232"}/>}

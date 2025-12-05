@@ -20,6 +20,12 @@ export const navItem = defineType({
       description: 'Alternatively, link to a Sanity document.',
     }),
     defineField({
+      name: 'manual',
+      title: 'Manual Slug',
+      type: 'string',
+      description: 'Enter a slug or full URL manually.'
+    }),
+    defineField({
       name: 'subNavItems',
       type: 'array',
       title: 'Sub-navigation Items',

@@ -15,6 +15,7 @@ type FirmInformation = {
 type Link = {
     label: string
     slug: string
+    manual: string
 }
 export type FooterType = {
     firmInformationTitle: string
@@ -73,8 +74,8 @@ export default function FooterComponent(footerQuery: FooterType) {
                 </div>
                 <div className="flex flex-col gap-3 pb-6">
                     <span className="text-[24px] lg:text-[30px] font-medium">{resourcesTitle}</span>
-                    {resourcesLinks.map(({label, slug}, index) => (
-                        <Link key={index} href={label == "Awards & Honors" ? `/about#${slug}` : `/${slug}`} className="font-montserrat text-[16px] lg:text-[18px] underline">{label}</Link>
+                    {resourcesLinks.map(({label, slug, manual}, index) => (
+                        <Link key={index} href={label == "Awards & Honors" ? `/about#${slug}` : `/${slug ?? manual}`} className="font-montserrat text-[16px] lg:text-[18px] underline">{label}</Link>
                     ))}
                 </div>
                 <div className="flex flex-col gap-3 pb-6">
