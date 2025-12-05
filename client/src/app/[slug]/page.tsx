@@ -24,10 +24,10 @@ export async function generateMetadata({ params }: Params) {
     return buildPageMetadata(slug)
 }
 
-export default async function AutoAccidents({ params }: Params) {
+export default async function PracticeAreas({ params }: Params) {
     const { slug } = await params
     const AUTO_ACCIDENTS_QUERY = groq`*[_type == "post" && slug.current == $slug][0]
-{headline, subHeadline, "image": image.asset->url, "imageId": image.asset->_id, columnLeft, columnRight, buttonText, phoneNumber}`
+{title, headline, subHeadline, date, "image": image.asset->url, "imageId": image.asset->_id, columnLeft, columnRight, buttonText, phoneNumber}`
 
     const postQuery = await client.fetch<Post>(AUTO_ACCIDENTS_QUERY,{ slug })
 

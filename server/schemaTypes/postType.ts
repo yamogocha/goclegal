@@ -21,7 +21,11 @@ export const postType = defineType({
       name: "subHeadline",
       title: "Sub Headline",
       type: "string",
-      validation: (rule) => rule.required(),
+    }),
+    defineField({
+      name: "date",
+      title: "Date",
+      type: "datetime"
     }),
     defineField({
       name: 'slug',
@@ -47,7 +51,6 @@ export const postType = defineType({
       title: "Column Right",
       type: 'array',
       of: [{type: 'block'}],
-      validation: (rule) => rule.required(),
     }),
     defineField({
       name: 'buttonText',
