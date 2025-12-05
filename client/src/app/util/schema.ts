@@ -86,80 +86,61 @@ export const testimonialSchema = {
 ]
 };
 
-const getPracticeAreaSchema = (areaName: string, description: string, url: string) => ({
-"@context": "https://schema.org",
-"@type": "Service",
-"name": areaName,
-"description": description,
-"provider": {
-    "@type": "LegalService",
-    "name": "GOC Legal",
-    "url": "https://www.goclegal.com"
-},
-"areaServed": {
-    "@type": "City",
-    "name": "Oakland"
-},
-"url": url
-});
-
-export const autoAccidentsSchema = getPracticeAreaSchema(
-"Auto Accidents",
-"GOC Legal helps clients get maximum compensation for auto accident injuries in Oakland, CA.",
-"https://www.goclegal.com/auto-accidents"
-);
-
-export const bicycleAccidentsSchema = getPracticeAreaSchema(
-"Bicycle Accidents",
-"GOC Legal represents clients injured in bicycle accidents in Oakland, CA, to get fair compensation.",
-"https://www.goclegal.com/bicycle-accidents"
-);
-
-export const truckingAccidentsSchema = getPracticeAreaSchema(
-"Trucking Accidents",
-"GOC Legal helps victims of trucking accidents navigate legal claims and secure maximum compensation.",
-"https://www.goclegal.com/trucking-accidents"
-);
-
-export const constructionAccidentsSchema = getPracticeAreaSchema(
-"Construction Site Accidents",
-"GOC Legal assists workers injured on construction sites in Oakland, CA, with legal claims.",
-"https://www.goclegal.com/construction-site-accidents"
-);
-
-export const wrongfulDeathSchema = getPracticeAreaSchema(
-"Wrongful Death",
-"GOC Legal provides compassionate legal representation for wrongful death cases in Oakland, CA.",
-"https://www.goclegal.com/wrongful-death"
-);
-
-export const slipFallSchema = getPracticeAreaSchema(
-"Slip and Fall Injuries",
-"GOC Legal helps clients injured in slip and fall accidents pursue compensation in Oakland, CA.",
-"https://www.goclegal.com/slip-and-fall-injuries"
-);
-
-export const traumaticBrainInjurySchema = getPracticeAreaSchema(
-    "Traumatic Brain Injury",
-    "GOC Legal represents victims of traumatic brain injuries in Oakland, CA, helping them secure full compensation for medical costs, lost wages, and long-term care.",
-    "https://www.goclegal.com/traumatic-brain-injury"
-  );
-
-
 const BASE_URL = "https://www.goclegal.com";
 
-export function buildPageMetadata({
-    title,
-    description,
-    path,
-    image = "/og-default.jpg",
-    }: {
-    title: string;
-    description: string;
-    path: string; 
-    image?: string;
-    }) {
-    const url = `${BASE_URL}${path.startsWith("/") ? path : "/" + path}`;
+function getPageParams(slug: string) {
+    switch(slug) {
+        case "auto-accidents":
+            return autoAccidentsParams;
+        case "bicycle-accidents":
+            return bicycleAccidentsParams;
+        case "trucking-accidents":
+            return truckingAccidentsParams;
+        case "construction-site-accidents":
+            return constructionAccidentsParams;
+        case "wrongful-death":
+            return wrongfulDeathParams;
+        case "slip-and-fall-injuries":
+            return slipFallParams;
+        case "traumatic-brain-injury":
+            return traumaticBrainInjuryParams;
+        case "about":
+            return aboutParams;
+        case "privacy-policy":
+            return privacyPolicyParams;
+        case "faqs":
+            return faqsParams
+        default:
+            return autoAccidentsParams;
+    }
+}
+
+export function buildPracticeAreaSchema(slug: string) {
+    const params = getPageParams(slug)
+    const { title, description, path } = params
+   
+    return {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": title,
+        "description": description,
+        "provider": {
+            "@type": "LegalService",
+            "name": "GOC Legal",
+            "url": "https://www.goclegal.com"
+        },
+        "areaServed": {
+            "@type": "City",
+            "name": "Oakland"
+        },
+        "url": `${BASE_URL}/${path}`
+    }
+};
+
+export function buildPageMetadata(slug: string) {
+    const params = getPageParams(slug)
+    const { title, description, path } = params
+    const url = `${BASE_URL}/${path}`;
 
     return {
         title,
@@ -173,14 +154,73 @@ export function buildPageMetadata({
             url,
             siteName: "GOC Legal",
             type: "website",
-            images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
+            // images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
         },
         twitter: {
             card: "summary_large_image",
             title,
             description,
-            images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
+            // images: [image.startsWith("http") ? image : `${BASE_URL}${image}`],
         },
     };
 }
-  
+
+const autoAccidentsParams = {
+    title: "Auto Accidents | GOC Legal",
+    description: "Experienced California auto accident attorneys fighting for maximum compensation after injuries. Get trusted legal help and a free case evaluation.",
+    path: "auto-accidents"
+};
+
+const bicycleAccidentsParams = {
+    title: "Bicycle Accidents | GOC Legal",
+    description: "Hurt in a bicycle accident? We protect injured cyclists and fight for compensation for medical bills, lost wages, and pain and suffering.",
+    path: "bicycle-accidents"
+};
+
+const truckingAccidentsParams = {
+    title: "Trucking Accidents | GOC Legal",
+    description: "Serious injuries from a truck accident? We take on trucking companies and insurers to secure the compensation you deserve.",
+    path: "trucking-accidents"
+};
+
+const constructionAccidentsParams = {
+    title: "Construction Site Accidents | GOC Legal",
+    description: "Injured on a construction site? Our attorneys handle workplace injury claims and fight for compensation beyond workers’ compensation benefits.",
+    path: "construction-site-accidents"
+};
+
+const wrongfulDeathParams = {
+    title: "Wrongful Death | GOC Legal",
+    description: "Supporting families after a wrongful death with compassionate, determined legal representation. We pursue justice and maximum compensation.",
+    path: "wrongful-death"
+};
+
+const slipFallParams = {
+    title: "Slip and Fall Injuries | GOC Legal",
+    description: "Injured in a slip and fall? Our premises liability lawyers hold negligent property owners accountable. Get expert guidance and a free consultation.",
+    path: "slip-and-fall-injuries"
+};
+
+const traumaticBrainInjuryParams = {
+    title: "Traumatic Brain Injury | GOC Legal",
+    description: "Compassionate legal support for traumatic brain injury victims. We help you secure medical care and full compensation for long-term recovery.",
+    path: "traumatic-brain-injury"
+};
+
+const aboutParams = {
+    title: "About | GOC Legal",
+    description: "Learn about GOC Legal’s mission, values, and dedication to protecting injured individuals across California with skilled, aggressive representation.",
+    path: "about"
+}
+
+const privacyPolicyParams = {
+    title: "Privacy Policy | GOC Legal",
+    description: "Review GOC Legal’s privacy policy to learn how we protect your personal information and keep your data secure.",
+    path: "privacy-policy"
+}
+
+const faqsParams = {
+    title: "FAQS | GOC Legal",
+    description: "Answers to common personal injury questions. Learn what to expect after an accident, how claims work, and how GOC Legal can help you.",
+    path: "faqs"
+}
