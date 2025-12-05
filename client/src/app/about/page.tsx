@@ -8,14 +8,22 @@ import Footer from "../footer/page";
 import Script from "next/script";
 import { attorneySchema, buildPageMetadata } from "../util/schema";
 
+type Params = {
+    params: Promise<{
+        slug: string
+    }>
+}
+
+export async function generateStaticParams() {
+    const slugs = await client.fetch(`*[_type=="post"].slug.current`);
+    return slugs.map((slug: string) => ({ slug }));
+}
+
 const ABOUT_PAGE_QUERY = groq`*[_type == "page" && slug.current == "about"][0]{headline, subHeadline, "image": image.asset->url, "photo": photo.asset->url, body, buttonText, phoneNumber}`
 
-export function generateMetadata() {
-    return buildPageMetadata({
-        title: "About | GOC Legal",
-        description: "Learn about GOC Legal’s mission, values, and dedication to protecting injured individuals across California with skilled, aggressive representation.",
-        path: "about"
-    })
+export async function generateMetadata({ params }: Params) {
+    const { slug } = await params
+    return buildPageMetadata(slug)
 }
 
 export default async function About() {

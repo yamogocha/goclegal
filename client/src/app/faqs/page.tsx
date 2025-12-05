@@ -7,15 +7,22 @@ import Footer from "../footer/page"
 import Script from "next/script"
 import { buildPageMetadata, faqSchema } from "../util/schema"
 
+type Params = {
+    params: Promise<{
+        slug: string
+    }>
+}
+
+export async function generateStaticParams() {
+    const slugs = await client.fetch(`*[_type=="post"].slug.current`);
+    return slugs.map((slug: string) => ({ slug }));
+}
 
 const FAQS_QUERY = groq`*[_type == "page" && slug.current == "faqs"][0]{headline, subHeadline, "image": image.asset->url, body, buttonText, phoneNumber}`
 
-export function generateMetadata() {
-    return buildPageMetadata({
-        title: "FAQS | GOC Legal",
-        description: "Answers to common personal injury questions. Learn what to expect after an accident, how claims work, and how GOC Legal can help you.",
-        path: "faqs"
-    })
+export async function generateMetadata({ params }: Params) {
+    const { slug } = await params
+    return buildPageMetadata(slug)
 }
 
 export default async function FAQs() {
