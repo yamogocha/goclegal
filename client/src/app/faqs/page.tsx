@@ -7,22 +7,11 @@ import Footer from "../footer/page"
 import Script from "next/script"
 import { buildPageMetadata, faqSchema } from "../util/schema"
 
-type Params = {
-    params: Promise<{
-        slug: string
-    }>
-}
-
-export async function generateStaticParams() {
-    const slugs = await client.fetch(`*[_type=="post"].slug.current`);
-    return slugs.map((slug: string) => ({ slug }));
-}
-
 const FAQS_QUERY = groq`*[_type == "page" && slug.current == "faqs"][0]{headline, subHeadline, "image": image.asset->url, body, buttonText, phoneNumber}`
 
-export async function generateMetadata({ params }: Params) {
-    const { slug } = await params
-    return buildPageMetadata(slug)
+export async function generateMetadata() {
+    const pageParams = await client.fetch(`*[_type == "page" && slug.current == "faqs"][0]{title, description, "image": image.asset->url, "slug": slug.current}`)
+    return buildPageMetadata(pageParams)
 }
 
 export default async function FAQs() {

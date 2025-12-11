@@ -5,22 +5,11 @@ import Navigation from "../navigation/page";
 import Footer from "../footer/page";
 import { buildPageMetadata } from "../util/schema";
 
-type Params = {
-    params: Promise<{
-        slug: string
-    }>
-}
-
-export async function generateStaticParams() {
-    const slugs = await client.fetch(`*[_type=="post"].slug.current`);
-    return slugs.map((slug: string) => ({ slug }));
-}
-
 const PRIVACY_POLICY_QUERY = groq`*[_type == "page" && slug.current == "privacy-policy"][0]{headline, "image": image.asset->url, body}`
 
-export async function generateMetadata({ params }: Params) {
-    const { slug } = await params
-    return buildPageMetadata(slug)
+export async function generateMetadata() {
+    const pageParams = await client.fetch(`*[_type == "page" && slug.current == "privacy-policy"][0]{title, description, "image": image.asset->url, "slug": slug.current}`)
+    return buildPageMetadata(pageParams)
 }
 
 export default async function PrivacyPolicy() {
