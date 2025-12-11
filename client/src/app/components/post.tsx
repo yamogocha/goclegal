@@ -24,7 +24,7 @@ export default function PostComponent(postQuery: Post) {
     return(
         <div className="bg-[#00305bcf] w-full h-full">
             <div className="relative w-full h-[300px] lg:h-[400px]">
-                <Image src={`${image}?v=${imageId}`} alt={`${title} background image`} fill className='object-cover -z-5'/>
+                <Image src={`${image}?v=${imageId}`} alt={`${title} Background Image`} fill className='object-cover -z-5'/>
                 <MotionWrapper className="w-full lg:w-2/3 m-auto h-[300px] lg:h-[400px] px-5 flex flex-col justify-center item-center text-center text-white">
                     <h1 className='text-[36px] lg:text-[48px] leading-tight lg:leading-normal font-bold pb-6'>{headline}</h1>
                     <p className="font-montserrat font-medium text-[18px] lg:text-[22px]">{subHeadline}</p>
