@@ -34,6 +34,11 @@ export const pageType = defineType({
       type: 'string',
     }),
     defineField({
+      name: 'description',
+      title: 'Description',
+      type: 'string',
+    }),
+    defineField({
       name: 'image',
       title: 'Image',
       type: 'image',

@@ -23,6 +23,11 @@ export const postType = defineType({
       type: "string",
     }),
     defineField({
+      name: 'description',
+      title: 'Description',
+      type: 'string',
+    }),
+    defineField({
       name: "date",
       title: "Date",
       type: "datetime"
