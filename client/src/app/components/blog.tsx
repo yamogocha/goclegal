@@ -49,7 +49,7 @@ export default function BlogComponent({latestPost, posts}: Blog) {
                                 <Link href={`/blog/${slug}`} key={index} className="lg:w-[32%] group">
                                     <div className="relative w-full h-[300px]">
                                         <Image src={`${image}?v=${imageId}`} alt={`${title} background image`} fill className='object-cover shadow-md shadow-[#14365c4d]'/>
-                                        <div className="opacity-0 group-hover:opacity-100 absolute bg-[#00305bcf] w-full h-full flex items-center justify-center text-white text-[18px] lg:text-[20px] font-bold rounded space-x-3 transition east-out duration-300">
+                                        <div className="opacity-100 lg:opacity-0 group-hover:opacity-100 absolute bg-[#00305bcf] w-full h-full flex items-center justify-center text-white text-[18px] lg:text-[20px] font-bold rounded space-x-3 transition east-out duration-300">
                                             <strong>Read more</strong>
                                             <strong>&#8594;</strong>
                                         </div>
