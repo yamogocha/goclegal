@@ -18,7 +18,6 @@
     "@sanity/client": "^7.13.2",
     "@sanity/table": "^2.0.0",
     "@sanity/vision": "^4.22.0",
-    "openai": "^6.14.0",
     "react": "^19.1",
     "react-dom": "^19.1",
     "sanity": "^4.22.0",
