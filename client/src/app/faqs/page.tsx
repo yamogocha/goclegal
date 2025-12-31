@@ -5,7 +5,7 @@ import Navigation from "../navigation/page"
 import Contact from "../contact/page"
 import Footer from "../footer/page"
 import Script from "next/script"
-import { buildPageMetadata, faqSchema } from "../util/schema"
+import { buildPageMetadata, faqSchema } from "@/lib/schema"
 
 const FAQS_QUERY = groq`*[_type == "page" && slug.current == "faqs"][0]{headline, subHeadline, "image": image.asset->url, body, buttonText, phoneNumber}`
 

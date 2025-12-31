@@ -1,5 +1,5 @@
 import { client } from "@/sanity/client"
-import { urlsetXml, urlTag } from "../util/sitemap"
+import { urlsetXml, urlTag } from "@/lib/sitemap"
 
 export const runtime =  "nodejs"
 const SITE_URL = process.env.SITE_URL!

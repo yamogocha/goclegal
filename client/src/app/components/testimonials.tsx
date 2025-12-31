@@ -3,7 +3,7 @@ import { SwiperSlide } from "swiper/react"
 import Image from "next/image"
 import MotionWrapper from "./motionWraper"
 import { Motions } from "./welcome"
-import { urlFor } from "../util"
+import { urlFor } from "@/lib"
 import { Slider } from "./slider"
 
 type Slide = {

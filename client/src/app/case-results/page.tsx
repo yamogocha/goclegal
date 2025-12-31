@@ -4,7 +4,7 @@ import Navigation from "../navigation/page";
 import Contact from "../contact/page";
 import CaseResultComponent, { CaseResultPage, CaseResultsSlider } from "../components/caseResults";
 import Footer from "../footer/page";
-import { buildPageMetadata, caseResultsSchema } from "../util/schema";
+import { buildPageMetadata, caseResultsSchema } from "@/lib/schema";
 import Script from "next/script";
 
 const CASE_RESULTS_PAGE = groq`*[_type == "page" && slug.current == "case-results"][0]{headline, subHeadline, "image": image.asset->url, body, buttonText, phoneNumber}`

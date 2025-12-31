@@ -6,7 +6,7 @@ import AwardsAndHonors from "../rewards-and-honors/page";
 import Contact from "../contact/page";
 import Footer from "../footer/page";
 import Script from "next/script";
-import { attorneySchema, buildPageMetadata } from "../util/schema";
+import { attorneySchema, buildPageMetadata } from "@/lib/schema";
 
 
 export async function generateMetadata() {

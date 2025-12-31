@@ -3,7 +3,7 @@ import PostComponent, { Post } from "../../components/post"
 import Contact from "../../contact/page"
 import Footer from "../../footer/page"
 import Navigation from "../../navigation/page"
-import { buildBlogSchema, buildPageMetadata } from "../../util/schema"
+import { buildBlogSchema, buildPageMetadata } from "@/lib/schema"
 import { client } from "@/sanity/client"
 import { groq } from "next-sanity"
 

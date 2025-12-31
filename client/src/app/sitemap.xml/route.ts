@@ -1,4 +1,4 @@
-import { sitemapIndexXml } from "../util/sitemap"
+import { sitemapIndexXml } from "@/lib/sitemap"
 
 export const runtime =  "nodejs"
 const SITE_URL = process.env.SITE_URL!

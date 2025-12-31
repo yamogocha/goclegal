@@ -1,6 +1,6 @@
 "use client"
 import Image from "next/image";
-import { useIsMobile } from "../util";
+import { useIsMobile } from "@/lib";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Arrow from "./arrow";

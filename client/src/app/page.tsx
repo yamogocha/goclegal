@@ -5,7 +5,7 @@ import Navigation from "./navigation/page";
 import Contact from "./contact/page";
 import Footer from "./footer/page";
 import Script from "next/script";
-import { homepageSchema } from "./util/schema";
+import { homepageSchema } from "@/lib/schema";
 
 
 export default async function Home() {

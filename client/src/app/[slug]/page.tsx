@@ -5,7 +5,7 @@ import Navigation from "../navigation/page";
 import Contact from "../contact/page";
 import Footer from "../footer/page";
 import Script from "next/script";
-import { buildPracticeAreaSchema, buildPageMetadata } from "../util/schema";
+import { buildPracticeAreaSchema, buildPageMetadata } from "@/lib/schema";
 
 
 type Params = {

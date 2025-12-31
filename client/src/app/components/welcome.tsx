@@ -1,7 +1,7 @@
 "use client"
 import Image from "next/image";
 import MotionWrapper from "./motionWraper";
-import { urlFor } from "../util";
+import { urlFor } from "@/lib";
 import AnimatedCTA from "./animatedCTA";
 
 export type WelcomePage = {
