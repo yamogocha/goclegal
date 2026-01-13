@@ -3,11 +3,21 @@ import "server-only";
 import { createClient } from "next-sanity";
 import OpenAI from "openai";
 import { ResponseOutputItem } from 'openai/resources/responses/responses.mjs'
+import { client } from "@/sanity/client";
 
 export const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY!,
 })
 
+type RecentPost = {
+    title: string
+    slug: string
+    date?: string
+}
+export function getRecentPosts(limit: 12): Promise<RecentPost[]> {
+    const query = `*[_type == "post" | order(date desc)[0...$limit]{title, "slug": slug.current, date}]`
+    return client.fetch(query, { limit })
+}
 
 export function extractImageBase64(response: { output: ResponseOutputItem[] }): string {
     const call = response.output.find(
@@ -17,11 +27,12 @@ export function extractImageBase64(response: { output: ResponseOutputItem[] }): 
     if (!call) throw new Error(`No image generation call found`);
 
     if (typeof call.result === "string") return call.result;
-    if (call.result && typeof call.result === "object" && "image_base64" in call.result) return call.result.image_base64;
+    if (call.result && typeof call.result === "object" && "image_base64" in call.result) {
+        return (call.result as { image_base64: string }).image_base64;
+    }
 
     throw new Error(`Image generation call has no base64 payload`)
 }
-
 
 export const serverClient = createClient({
     projectId: process.env.SANITY_PROJECT_ID!,
