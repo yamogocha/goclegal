@@ -4,6 +4,7 @@ import PortableTextComponent from './portableText';
 import MotionWrapper from './motionWraper';
 import Link from 'next/link';
 import { PortableTextBlock } from 'next-sanity';
+import Pagination from './pagination';
 
 
 export type BlogItem = {
@@ -21,8 +22,10 @@ export type BlogItem = {
 type Blog = {
     latestPost: BlogItem
     posts: BlogItem[]
+    current: number
+    pages: number
 }
-export default function BlogComponent({latestPost, posts}: Blog) {
+export default function BlogComponent({latestPost, posts, current, pages}: Blog) {
     const { title, slug, headline, date, image, imageId, columnLeft } = latestPost
     const body = columnLeft.slice(0, 3)
 
@@ -60,6 +63,7 @@ export default function BlogComponent({latestPost, posts}: Blog) {
                             )
                         })}
                     </div>
+                    <Pagination {...{ current, pages }} />
                 </div>
             </div>
         </div>
