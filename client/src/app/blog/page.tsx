@@ -17,7 +17,7 @@ export default async function Blog({ searchParams }: SearchParams) {
     const LATEST_POST_QUERY = groq`*[_type == "post" && defined(date)] | order(date desc)[0]
     {title, "slug": slug.current, headline, date, "image": image.asset->url, "imageId": image.asset->_id, columnLeft, buttonText, phoneNumber}`
     const latestPost = await client.fetch<BlogItem>(LATEST_POST_QUERY)
-    const POST_PER_PAGE = 3
+    const POST_PER_PAGE = 6
     
     async function getPostsQuery(page: number) {
         const safePage = Number.isFinite(page) && page > 0 ? page : 1
