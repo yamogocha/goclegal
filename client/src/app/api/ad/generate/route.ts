@@ -15,83 +15,83 @@ const CreativeSchema = z.object({
     hashtags: z.array(z.string().min(2).max(40)).min(5).max(25),
   });
 
-  type Creative = z.infer<typeof CreativeSchema>
+type Creative = z.infer<typeof CreativeSchema>
 
-  async function generateCaption(params: { title: string, headline: string }): Promise<Creative> {
-    const prompt = `
-    Write ONE Instagram caption for GOC Legal (California personal injury).
-    Tone: modern, credible, calm. No emojis. No legal advice. No phone/email/website in the caption.
-    Goal: spark curiosity to read more.
+async function generateCaption(params: { title: string, headline: string }): Promise<Creative> {
+  const prompt = `
+  Write ONE Instagram caption for GOC Legal (California personal injury).
+  Tone: modern, credible, calm. No emojis. No legal advice. No phone/email/website in the caption.
+  Goal: spark curiosity to read more.
 
-    REQUIREMENTS:
-    - 1–2 sentences about the blog topic.
-    - MUST end with this exact sentence (verbatim, including punctuation):
-      "Read our blog to find out what your rights are. Link in bio!"
-    - Keep total caption length <= 140 characters (including the required ending).
+  REQUIREMENTS:
+  - 1–2 sentences about the blog topic.
+  - MUST end with this exact sentence (verbatim, including punctuation):
+    "Read our blog to find out what your rights are. Link in bio!"
+  - Keep total caption length <= 140 characters (including the required ending).
 
-    Blog:
-    Title: ${params.title}
-    Headline: ${params.headline ?? ""}
+  Blog:
+  Title: ${params.title}
+  Headline: ${params.headline ?? ""}
 
-    Return ONLY JSON:
-    {"message": string, "hashtags": string[]}
+  Return ONLY JSON:
+  {"message": string, "hashtags": string[]}
 
-    Hashtags: 8-15. CA + personal injury + safety + local intent. No spaces inside hashtags.
-    `;
+  Hashtags: 8-15. CA + personal injury + safety + local intent. No spaces inside hashtags.
+  `;
 
-    const resp = await openai.responses.create({ model: "gpt-5", input: prompt });
-    const text = resp.output_text.trim() ?? "";
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch(err: any) {
-        throw new Error(`Invalid JSON: ${err.message}`);
-    }
-    return CreativeSchema.parse(parsed);
+  const resp = await openai.responses.create({ model: "gpt-5", input: prompt });
+  const text = resp.output_text.trim() ?? "";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch(err: any) {
+      throw new Error(`Invalid JSON: ${err.message}`);
   }
+  return CreativeSchema.parse(parsed);
+}
 
-  async function generateImage(params: { message: string }) {
-    const templatePath = path.join(process.cwd(), "public", "ad-template.jpeg");
-    const attorneyPath = path.join(process.cwd(), "public", "attorney.png");
-    const logoPath = path.join(process.cwd(), "public", "white-logo.png");
+async function generateImage(params: { message: string }) {
+  const templatePath = path.join(process.cwd(), "public", "ad-template.jpeg");
+  const attorneyPath = path.join(process.cwd(), "public", "attorney.png");
+  const logoPath = path.join(process.cwd(), "public", "white-logo.png");
 
-    const images = await Promise.all([
-      toFile(fs.createReadStream(templatePath), null, { type: "image/jpeg" }),
-      toFile(fs.createReadStream(attorneyPath), null, { type: "image/png" }),
-      toFile(fs.createReadStream(logoPath), null, { type: "image/png" }),
-    ]);
+  const images = await Promise.all([
+    toFile(fs.createReadStream(templatePath), null, { type: "image/jpeg" }),
+    toFile(fs.createReadStream(attorneyPath), null, { type: "image/png" }),
+    toFile(fs.createReadStream(logoPath), null, { type: "image/png" }),
+  ]);
 
-    const imgPrompt = `
-    Edit the PROVIDED Instagram square ad template image.
+  const imgPrompt = `
+  Edit the PROVIDED Instagram square ad template image.
 
-    NON-NEGOTIABLE (must be pixel-faithful):
-    - Keep the background exactly the same (pattern, shapes, texture, gradients). Keep primary color #00305b.
-    - Keep ALL existing small text exactly the same: phone number, email, website, and services list.
-    - Keep the CTA button exactly the same.
-    - Keep the white logo EXACTLY the same. Do NOT redraw it, do NOT restyle it, do NOT change its edges. It must match the template.
-    - Keep the overall layout/spacing/positioning exactly identical to the template.
+  NON-NEGOTIABLE (must be pixel-faithful):
+  - Keep the background exactly the same (pattern, shapes, texture, gradients). Keep primary color #00305b.
+  - Keep ALL existing small text exactly the same: phone number, email, website, and services list.
+  - Keep the CTA button exactly the same.
+  - Keep the white logo EXACTLY the same. Do NOT redraw it, do NOT restyle it, do NOT change its edges. It must match the template.
+  - Keep the overall layout/spacing/positioning exactly identical to the template.
 
-    ONLY make these two changes:
-    1) Replace ONLY the large message text block with this exact text (no extra words):
-    "${params.message}"
-    Match the same font style and font size seen in the template message. Keep the same spacing and line-break feel.
+  ONLY make these two changes:
+  1) Replace ONLY the large message text block with this exact text (no extra words):
+  "${params.message}"
+  Match the same font style and font size seen in the template message. Keep the same spacing and line-break feel.
 
-    2) Update ONLY the attorney’s CLOTHING to a different professional outfit for this week.
-    - The attorney’s face must remain IDENTICAL to the template (same identity, facial features, skin tone, expression).
-    - Do not change the attorney’s hair, eyes, head shape, age, or ethnicity.
-    - Do not change pose, crop, or placement.
-    - Change clothing only (suit/blazer/shirt/tie), professional neutral colors.
+  2) Update ONLY the attorney’s CLOTHING to a different professional outfit for this week.
+  - The attorney’s face must remain IDENTICAL to the template (same identity, facial features, skin tone, expression).
+  - Do not change the attorney’s hair, eyes, head shape, age, or ethnicity.
+  - Do not change pose, crop, or placement.
+  - Change clothing only (suit/blazer/shirt/tie), professional neutral colors.
 
-    Output: a clean 1:1 image. Do not add anything new. Do not overlay new elements.
-    `;
+  Output: a clean 1:1 image. Do not add anything new. Do not overlay new elements.
+  `;
 
-    const img = await openai.images.edit({ model: "gpt-image-1.5", image: images, prompt: imgPrompt, size: "1024x1024", input_fidelity: "high" });
-    const b64 = img.data?.[0]?.b64_json;
-    if (!b64) throw new Error("No image returned from image model.");
-    return Buffer.from(b64, "base64")
-  }
+  const img = await openai.images.edit({ model: "gpt-image-1.5", image: images, prompt: imgPrompt, size: "1024x1024", input_fidelity: "high" });
+  const b64 = img.data?.[0]?.b64_json;
+  if (!b64) throw new Error("No image returned from image model.");
+  return Buffer.from(b64, "base64")
+}
 
-export async function saveAdToBlob(buffer: Buffer, filename: string) {
+async function saveAdToBlob(buffer: Buffer, filename: string) {
   // Organize by date/slug so listing later is easy
   const pathname = `ad/${filename}`;
 
@@ -104,6 +104,19 @@ export async function saveAdToBlob(buffer: Buffer, filename: string) {
 
   // blob.url is the public URL Meta can fetch
   return blob.url;
+}
+
+async function saveReelToBlob(videoBuffer: Buffer, filename: string) {
+  const pathname = `reel/${filename}`;
+
+  const blob = await put(pathname, videoBuffer, {
+    access: "public",
+    contentType: "video/mp4",
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    addRandomSuffix: true,
+  });
+
+  return blob.url; // public URL Meta can fetch
 }
 
 function buildInstagramCaption(message: string, hashtags: string[]) {
@@ -124,6 +137,58 @@ async function igCreateImageContainer({ igUserId, accessToken, imageUrl, caption
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data.id as string;
+}
+
+async function igCreateReelContainer(opts: {
+  igUserId: string;
+  accessToken: string;
+  videoUrl: string;
+  caption: string;
+}) {
+  const url = `https://graph.facebook.com/v20.0/${opts.igUserId}/media`;
+
+  const form = new URLSearchParams();
+  form.set("media_type", "REELS");
+  form.set("video_url", opts.videoUrl);
+  form.set("caption", opts.caption);
+  form.set("share_to_feed", "true");
+  form.set("access_token", opts.accessToken);
+
+  const res = await fetch(url, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Create REELS container failed: ${JSON.stringify(data)}`);
+
+  return data.id as string; // creation_id
+}
+
+async function igWaitForContainer(opts: {
+  creationId: string;
+  accessToken: string;
+}) {
+  const timeoutMs = 10 * 60_000; // 10 minutes
+  const started = Date.now();
+
+  while (true) {
+    const url =
+      `https://graph.facebook.com/v20.0/${opts.creationId}` +
+      `?fields=status_code` +
+      `&access_token=${opts.accessToken}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(`Read container status failed: ${JSON.stringify(data)}`);
+
+    const status = data.status_code as string;
+
+    if (status === "FINISHED") return;
+    if (status === "ERROR") throw new Error(`Container processing ERROR: ${JSON.stringify(data)}`);
+
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`Timed out waiting for container. Last status: ${status}`);
+    }
+
+    await new Promise(r => setTimeout(r, 3000)); // wait 3s
+  }
 }
 
 async function igPublish({ igUserId, accessToken, creationId }:{
@@ -148,30 +213,23 @@ export async function generateWeeklyAd() {
   const media = await generateImage({ message });
   const filename = `${slug}.png`
   const imageUrl = await saveAdToBlob(media, filename)
-
   const igCaption = buildInstagramCaption(message, hashtags);
 
   // 4) create container + publish
   const igUserId = process.env.IG_USER_ID!;
   const accessToken = process.env.FB_ACCESS_TOKEN!; // page/user token with publish perms
 
-  const creationId = await igCreateImageContainer({
-    igUserId,
-    accessToken,
-    imageUrl,
-    caption: igCaption,
-  });                 
+  const creationId = await igCreateImageContainer({ igUserId, accessToken, imageUrl, caption: igCaption });                  
+  const postId = await igPublish({ igUserId, accessToken, creationId });
 
-  const mediaId = await igPublish({ igUserId, accessToken, creationId });
-
-  return { mediaId, caption: message, hashtags, imageUrl }
+  return { postId, imageUrl, caption: message, hashtags }
 }
 
-  export async function POST() {
-    try {
-        const result = await generateWeeklyAd()
-        return NextResponse.json({ ok: true, ...result })
-    } catch(err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 })
-    }
+export async function POST() {
+  try {
+      const result = await generateWeeklyAd()
+      return NextResponse.json({ ok: true, ...result })
+  } catch(err: any) {
+      return NextResponse.json({ error: err.message }, { status: 500 })
   }
+}
