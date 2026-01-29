@@ -98,6 +98,7 @@ export async function saveAdToBlob(buffer: Buffer, filename: string) {
   const blob = await put(pathname, buffer, {
     access: "public", // required today
     contentType: "image/jpeg", // or image/jpeg
+    token: process.env.BLOB_READ_WRITE_TOKEN,
     addRandomSuffix: true, // avoids collisions
   });
 
@@ -105,17 +106,71 @@ export async function saveAdToBlob(buffer: Buffer, filename: string) {
   return blob.url;
 }
 
+function buildInstagramCaption(message: string, hashtags: string[]) {
+  const tags = hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+  return `${message}\n\n${tags}`.trim();
+}
+
+async function igCreateImageContainer({ igUserId, accessToken, imageUrl, caption }:{
+  igUserId: string; accessToken: string; imageUrl: string; caption: string;
+}) {
+  const url = `https://graph.facebook.com/v20.0/${igUserId}/media`;
+  const form = new URLSearchParams();
+  form.set("image_url", imageUrl);
+  form.set("caption", caption);
+  form.set("access_token", accessToken);
+
+  const res = await fetch(url, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data.id as string;
+}
+
+async function igPublish({ igUserId, accessToken, creationId }:{
+  igUserId: string; accessToken: string; creationId: string;
+}) {
+  const url = `https://graph.facebook.com/v20.0/${igUserId}/media_publish`;
+  const form = new URLSearchParams();
+  form.set("creation_id", creationId);
+  form.set("access_token", accessToken);
+
+  const res = await fetch(url, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data.id as string;
+}
+
+export async function generateWeeklyAd() {
+  const post = await client.fetch<{title: string, headline: string, slug: string, date: string}>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`)
+  if (!post) throw new Error("No post found");
+  const { title, headline, slug } = post
+  const { message, hashtags } = await generateCaption({ title, headline });
+  const media = await generateImage({ message });
+  const filename = `${slug}.png`
+  const imageUrl = await saveAdToBlob(media, filename)
+
+  const igCaption = buildInstagramCaption(message, hashtags);
+
+  // 4) create container + publish
+  const igUserId = process.env.IG_USER_ID!;
+  const accessToken = process.env.FB_ACCESS_TOKEN!; // page/user token with publish perms
+
+  const creationId = await igCreateImageContainer({
+    igUserId,
+    accessToken,
+    imageUrl,
+    caption: igCaption,
+  });                 
+
+  const mediaId = await igPublish({ igUserId, accessToken, creationId });
+
+  return { mediaId, caption: message, hashtags, imageUrl }
+}
+
   export async function POST() {
     try {
-        const post = await client.fetch<{title: string, headline: string, slug: string, date: string}>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`)
-        if (!post) throw new Error("No post found");
-        const { title, headline, slug, date } = post
-        const caption = await generateCaption({ title, headline });
-        const media = await generateImage({ message: caption.message });
-        const filename = `${slug}.png`
-        const imageUrl = await saveAdToBlob(media, filename)
-
-        return NextResponse.json({ caption: caption.message, hashtags: caption.hashtags, imageUrl, meta: { title, headline, slug, date } })
+        const result = await generateWeeklyAd()
+        return NextResponse.json({ ok: true, ...result })
     } catch(err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 })
     }
