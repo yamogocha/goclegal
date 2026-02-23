@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = generateWeeklyAd()
+    const result = await generateWeeklyAd()
     return NextResponse.json({ ok: true, ...result });
   } catch (err: any) {
     return NextResponse.json(

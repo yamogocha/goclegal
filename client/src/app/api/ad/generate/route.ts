@@ -219,7 +219,8 @@ export async function generateWeeklyAd() {
   const igUserId = process.env.IG_USER_ID!;
   const accessToken = process.env.FB_ACCESS_TOKEN!; // page/user token with publish perms
 
-  const creationId = await igCreateImageContainer({ igUserId, accessToken, imageUrl, caption: igCaption });                  
+  const creationId = await igCreateImageContainer({ igUserId, accessToken, imageUrl, caption: igCaption });  
+  await igWaitForContainer({ creationId, accessToken })                
   const postId = await igPublish({ igUserId, accessToken, creationId });
 
   return { postId, imageUrl, caption: message, hashtags }
