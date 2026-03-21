@@ -391,7 +391,7 @@ async function youtubeUploadVideo({ videoBuffer, title, description }: {
       "Content-Type": "video/mp4",
       "Content-Length": String(videoBuffer.byteLength),
     },
-    body: videoBuffer,
+    body: new Uint8Array(videoBuffer),
   });
 
   const uploadData = await uploadRes.json();
