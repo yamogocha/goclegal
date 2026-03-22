@@ -8,10 +8,10 @@ import fs from "fs";
 import os from "os";
 import { put } from "@vercel/blob";
 import ffmpeg from "fluent-ffmpeg";
-import { execSync } from "child_process";
+import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 
-ffmpeg.setFfmpegPath(execSync("which ffmpeg").toString().trim());
+ffmpeg.setFfmpegPath(ffmpegPath!);
 
 export const runtime = "nodejs";
 
@@ -200,20 +200,6 @@ function buildInstagramCaption(message: string, hashtags: string[]) {
   return `${message}\n\n${tags}`.trim();
 }
 
-async function igCreateImageContainer({ igUserId, accessToken, imageUrl, caption }:{
-  igUserId: string; accessToken: string; imageUrl: string; caption: string;
-}) {
-  const url = `https://graph.facebook.com/v20.0/${igUserId}/media`;
-  const form = new URLSearchParams();
-  form.set("image_url", imageUrl);
-  form.set("caption", caption);
-  form.set("access_token", accessToken);
-
-  const res = await fetch(url, { method: "POST", body: form });
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data.id as string;
-}
 
 async function igCreateReelContainer(opts: {
   igUserId: string;
@@ -444,7 +430,7 @@ export async function POST(req: Request) {
   const { searchParams } = new URL(req.url);
   const preview = searchParams.get("preview") === "true";
   try {
-      const result = await generateWeeklyAd({ preview: false })
+      const result = await generateWeeklyAd({ preview })
       return NextResponse.json({ ok: true, ...result })
   } catch(err: any) {
       console.error("[ad/generate] error:", err);
