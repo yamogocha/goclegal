@@ -145,11 +145,12 @@ async function generateVideo({ imageBuffer }: { imageBuffer: Buffer }) {
   return renderWithFfmpeg(imageBuffer);
 }
 
-// YouTube: 1920x1080 — blurred bg + sharp 1080x1080 image centered
+// YouTube Shorts: 1080x1920 vertical — blurred bg + sharp 1080x1080 centered top
 async function generateYouTubeVideo({ imageBuffer }: { imageBuffer: Buffer }) {
   const blurredBg = await sharp(imageBuffer)
-    .resize(1920, 1080, { fit: "cover" })
+    .resize(1080, 1920, { fit: "cover" })
     .blur(20)
+    .modulate({ brightness: 0.4 }) // ← darken to 40%
     .png()
     .toBuffer();
 
@@ -158,8 +159,9 @@ async function generateYouTubeVideo({ imageBuffer }: { imageBuffer: Buffer }) {
     .png()
     .toBuffer();
 
+  // Center the square vertically: (1920 - 1080) / 2 = 420
   const finalFrame = await sharp(blurredBg)
-    .composite([{ input: squareLayer, top: 0, left: 420 }])
+    .composite([{ input: squareLayer, top: 420, left: 0 }])
     .png()
     .toBuffer();
 
@@ -419,7 +421,7 @@ export async function generateWeeklyAd({ preview = false }: { preview?: boolean 
   });
 
   // 5) upload widescreen video to YouTube
-  const youtubeDescription = `${message}\n\n${hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`;
+  const youtubeDescription = `${message}\n\n#Shorts\n\n${hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`;
   const youtubeVideoId = await youtubeUploadVideo({ videoBuffer: youtubeVideoBuffer, title, description: youtubeDescription });
 
   return { postId, gbpMediaName, youtubeVideoId, imageUrl, videoUrl, caption: message, hashtags }
