@@ -8,10 +8,7 @@ import fs from "fs";
 import os from "os";
 import { put } from "@vercel/blob";
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
-
-ffmpeg.setFfmpegPath(ffmpegPath!);
 
 export const runtime = "nodejs";
 
@@ -99,6 +96,8 @@ async function generateImage({ message }: { message: string }) {
 
 // Shared ffmpeg renderer: loops image, adds silent audio, outputs H.264 MP4
 async function renderWithFfmpeg(imageBuffer: Buffer): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  ffmpeg.setFfmpegPath(require("ffmpeg-static"));
   const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const tmpDir = os.tmpdir();
   const imgPath = path.join(tmpDir, `ad-img-${id}.png`);
