@@ -5,8 +5,13 @@ import { NextResponse } from "next/server";
 import path from "path";
 import { z } from "zod";
 import fs from "fs";
+import os from "os";
 import { put } from "@vercel/blob";
-import Creatomate from "creatomate";
+import ffmpeg from "fluent-ffmpeg";
+import { execSync } from "child_process";
+import sharp from "sharp";
+
+ffmpeg.setFfmpegPath(execSync("which ffmpeg").toString().trim());
 
 export const runtime = "nodejs";
 
@@ -51,9 +56,7 @@ async function generateCaption(params: { title: string, headline: string }): Pro
   return CreativeSchema.parse(parsed);
 }
 
-// Generates the background image only — message text is intentionally omitted
-// so Creatomate can animate it on top in generateVideo()
-async function generateImage() {
+async function generateImage({ message }: { message: string }) {
   const templatePath = path.join(process.cwd(), "public", "ad-template.jpeg");
   const attorneyPath = path.join(process.cwd(), "public", "attorney.png");
   const logoPath = path.join(process.cwd(), "public", "white-logo.png");
@@ -73,14 +76,17 @@ async function generateImage() {
   - Keep the CTA button exactly the same.
   - Keep the white logo EXACTLY the same. Do NOT redraw it, do NOT restyle it, do NOT change its edges. It must match the template.
   - Keep the overall layout/spacing/positioning exactly identical to the template.
-  - Clear the large message text area completely — replace it with the same solid background color (#00305b). No text, no placeholder.
 
-  ONLY make this one change:
-  1) Update ONLY the attorney’s CLOTHING to a different professional outfit for this week.
+  Make ONLY these two changes:
+  1) Replace the large message text with: "${message}"
+  - Use the EXACT same font style, size, weight, color, and position as the existing message text in the template.
+  - Do not reformat or reposition the text block.
+
+  2) Update ONLY the attorney’s CLOTHING to a different professional outfit for this week.
   - The attorney’s face must remain IDENTICAL to the template (same identity, facial features, skin tone, expression).
   - Do not change the attorney’s hair, eyes, head shape, age, or ethnicity.
   - Do not change pose, crop, or placement.
-  - Change clothing only (suit/blazer/shirt/tie), professional neutral colors.
+  - Change clothing only. Alternate between: a suit/blazer with shirt and tie, or a professional plain-color sweater worn over a shirt and tie. Use neutral, professional colors.
 
   Output: a clean 1:1 image. Do not add anything new. Do not overlay new elements.
   `;
@@ -91,127 +97,74 @@ async function generateImage() {
   return Buffer.from(b64, "base64")
 }
 
-// Renders a 15-second MP4: background image + message text fading in line by line
-async function generateVideo({ imageUrl, message }: { imageUrl: string; message: string }) {
-  const creatomate = new Creatomate.Client(process.env.CREATOMATE_API_KEY!);
+// Shared ffmpeg renderer: loops image, adds silent audio, outputs H.264 MP4
+async function renderWithFfmpeg(imageBuffer: Buffer): Promise<Buffer> {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const tmpDir = os.tmpdir();
+  const imgPath = path.join(tmpDir, `ad-img-${id}.png`);
+  const silentPath = path.join(tmpDir, `ad-silent-${id}.mp3`);
+  const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
 
-  const renders = await creatomate.render({
-    source: {
-      outputFormat: "mp4",
-      width: 1080,
-      height: 1080,
-      duration: 15,
-      frameRate: 30,
-      elements: [
-        {
-          type: "image",
-          source: imageUrl,
-          width: "100%",
-          height: "100%",
-          fit: "cover",
-        },
-        {
-          type: "text",
-          text: message,
-          width: "72%",
-          height: "30%",
-          xAlignment: "50%",
-          yAlignment: "42%",
-          fontSize: "5.5 vmin",
-          fontWeight: "700",
-          fillColor: "#ffffff",
-          animations: [
-            {
-              type: "text-slide",
-              scope: "line",
-              splitBy: "line",
-              direction: "up",
-              fade: true,
-              easing: "quadratic-out",
-              duration: 0.6,
-              start: 0.5,
-            },
-          ],
-        },
-      ],
-    },
-  });
+  fs.writeFileSync(imgPath, imageBuffer);
 
-  const videoUrl = renders[0].url;
-  if (!videoUrl) throw new Error("No video URL returned from Creatomate.");
+  // Download silent audio
+  const silentRes = await fetch(process.env.SILENT_AUDIO_URL!);
+  fs.writeFileSync(silentPath, Buffer.from(await silentRes.arrayBuffer()));
 
-  const res = await fetch(videoUrl);
-  return Buffer.from(await res.arrayBuffer());
+  try {
+    const stderrLines: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(imgPath).inputOptions(["-loop 1"])
+        .input(silentPath)
+        .outputOptions([
+          "-map 0:v", "-map 1:a",
+          "-c:v libx264", "-preset fast", "-crf 23",
+          "-c:a aac", "-b:a 128k",
+          "-t 15", "-r 30", "-pix_fmt yuv420p",
+          "-movflags +faststart",
+          "-shortest",
+        ])
+        .output(outPath)
+        .on("stderr", (line) => { stderrLines.push(line); console.error("[ffmpeg]", line); })
+        .on("end", () => resolve())
+        .on("error", (err) =>
+          reject(new Error(`ffmpeg error: ${err.message}\n${stderrLines.join("\n")}`))
+        )
+        .run();
+    });
+    return fs.readFileSync(outPath);
+  } finally {
+    for (const f of [imgPath, silentPath, outPath]) {
+      try { fs.unlinkSync(f); } catch {}
+    }
+  }
 }
 
-// Renders a 1920x1080 MP4 for YouTube:
-// - blurred square image fills the background
-// - sharp square image centered on top
-// - message text fades in line by line over the sharp image
-async function generateYouTubeVideo({ imageUrl, message }: { imageUrl: string; message: string }) {
-  const creatomate = new Creatomate.Client(process.env.CREATOMATE_API_KEY!);
+// Instagram: 1080x1080 — image already has text baked in by OpenAI
+async function generateVideo({ imageBuffer }: { imageBuffer: Buffer }) {
+  return renderWithFfmpeg(imageBuffer);
+}
 
-  const renders = await creatomate.render({
-    source: {
-      outputFormat: "mp4",
-      width: 1920,
-      height: 1080,
-      duration: 15,
-      frameRate: 30,
-      elements: [
-        // Layer 1: blurred + darkened background
-        {
-          type: "image",
-          source: imageUrl,
-          width: "100%",
-          height: "100%",
-          fit: "cover",
-          blur: 24,
-          brightness: -0.15,
-        },
-        // Layer 2: sharp square image centered
-        {
-          type: "image",
-          source: imageUrl,
-          width: "56.25%", // 1080 / 1920
-          height: "100%",
-          xAlignment: "50%",
-          yAlignment: "50%",
-          fit: "cover",
-        },
-        // Layer 3: animated text over the sharp square
-        {
-          type: "text",
-          text: message,
-          width: "38%",
-          height: "30%",
-          xAlignment: "50%",
-          yAlignment: "42%",
-          fontSize: "5.5 vmin",
-          fontWeight: "700",
-          fillColor: "#ffffff",
-          animations: [
-            {
-              type: "text-slide",
-              scope: "line",
-              splitBy: "line",
-              direction: "up",
-              fade: true,
-              easing: "quadratic-out",
-              duration: 0.6,
-              start: 0.5,
-            },
-          ],
-        },
-      ],
-    },
-  });
+// YouTube: 1920x1080 — blurred bg + sharp 1080x1080 image centered
+async function generateYouTubeVideo({ imageBuffer }: { imageBuffer: Buffer }) {
+  const blurredBg = await sharp(imageBuffer)
+    .resize(1920, 1080, { fit: "cover" })
+    .blur(20)
+    .png()
+    .toBuffer();
 
-  const ytVideoUrl = renders[0].url;
-  if (!ytVideoUrl) throw new Error("No YouTube video URL returned from Creatomate.");
+  const squareLayer = await sharp(imageBuffer)
+    .resize(1080, 1080)
+    .png()
+    .toBuffer();
 
-  const res = await fetch(ytVideoUrl);
-  return Buffer.from(await res.arrayBuffer());
+  const finalFrame = await sharp(blurredBg)
+    .composite([{ input: squareLayer, top: 0, left: 420 }])
+    .png()
+    .toBuffer();
+
+  return renderWithFfmpeg(finalFrame);
 }
 
 async function saveAdToBlob(buffer: Buffer, filename: string) {
@@ -294,7 +247,7 @@ async function igWaitForContainer(opts: {
   while (true) {
     const url =
       `https://graph.facebook.com/v20.0/${opts.creationId}` +
-      `?fields=status_code` +
+      `?fields=status_code,status` +
       `&access_token=${opts.accessToken}`;
 
     const res = await fetch(url);
@@ -304,7 +257,7 @@ async function igWaitForContainer(opts: {
     const status = data.status_code as string;
 
     if (status === "FINISHED") return;
-    if (status === "ERROR") throw new Error(`Container processing ERROR: ${JSON.stringify(data)}`);
+    if (status === "ERROR") throw new Error(`Container processing ERROR: ${JSON.stringify(data)} | detail: ${JSON.stringify(data.status)}`);
 
     if (Date.now() - started > timeoutMs) {
       throw new Error(`Timed out waiting for container. Last status: ${status}`);
@@ -442,23 +395,28 @@ async function gbpUploadMedia({ accountId, locationId, imageUrl }: {
   return data.name as string;
 }
 
-export async function generateWeeklyAd() {
+export async function generateWeeklyAd({ preview = false }: { preview?: boolean } = {}) {
   const post = await client.fetch<{title: string, headline: string, slug: string, date: string}>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`)
   if (!post) throw new Error("No post found");
   const { title, headline, slug } = post
   const { message, hashtags } = await generateCaption({ title, headline });
   const igCaption = buildInstagramCaption(message, hashtags);
 
-  // 1) generate background image (no message text)
-  const imageBuffer = await generateImage();
+  // 1) generate image with message text baked in by OpenAI
+  const imageBuffer = await generateImage({ message });
   const imageUrl = await saveAdToBlob(imageBuffer, `${slug}.png`);
 
   // 2) generate square video (1080x1080) for Instagram Reel
-  const videoBuffer = await generateVideo({ imageUrl, message });
+  const videoBuffer = await generateVideo({ imageBuffer });
   const videoUrl = await saveReelToBlob(videoBuffer, `${slug}.mp4`);
 
   // 2b) generate widescreen video (1920x1080) for YouTube
-  const youtubeVideoBuffer = await generateYouTubeVideo({ imageUrl, message });
+  const youtubeVideoBuffer = await generateYouTubeVideo({ imageBuffer });
+  const youtubeVideoUrl = await saveReelToBlob(youtubeVideoBuffer, `${slug}-yt.mp4`);
+
+  if (preview) {
+    return { preview: true, imageUrl, videoUrl, youtubeVideoUrl, caption: igCaption }
+  }
 
   // 3) publish to Instagram as Reel
   const igUserId = process.env.IG_USER_ID!;
@@ -482,11 +440,14 @@ export async function generateWeeklyAd() {
   return { postId, gbpMediaName, youtubeVideoId, imageUrl, videoUrl, caption: message, hashtags }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const preview = searchParams.get("preview") === "true";
   try {
-      const result = await generateWeeklyAd()
+      const result = await generateWeeklyAd({ preview: false })
       return NextResponse.json({ ok: true, ...result })
   } catch(err: any) {
-      return NextResponse.json({ error: err.message }, { status: 500 })
+      console.error("[ad/generate] error:", err);
+      return NextResponse.json({ error: err?.message || String(err), stack: err?.stack }, { status: 500 })
   }
 }
