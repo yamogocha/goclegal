@@ -17,8 +17,8 @@ type RecentPost = {
     slug: string
     date?: string
 }
-export function getRecentPosts(limit: 12): Promise<RecentPost[]> {
-    const query = `*[_type == "post" | order(date desc)[0...$limit]{title, "slug": slug.current, date}]`
+export function getRecentPosts(limit: number): Promise<RecentPost[]> {
+    const query = `*[_type == "post"] | order(date desc)[0...$limit]{title, "slug": slug.current, date}`
     return client.fetch(query, { limit })
 }
 
