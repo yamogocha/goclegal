@@ -1,5 +1,4 @@
 import { openai } from "@/lib/openai";
-import { toFile } from "openai";
 import { client } from "@/sanity/client";
 import { NextResponse } from "next/server";
 import path from "path";
@@ -9,6 +8,7 @@ import os from "os";
 import { put } from "@vercel/blob";
 import ffmpeg from "fluent-ffmpeg";
 import sharp from "sharp";
+import { toFile } from "openai";
 
 export const runtime = "nodejs";
 
@@ -53,19 +53,17 @@ async function generateCaption(params: { title: string, headline: string }): Pro
   return CreativeSchema.parse(parsed);
 }
 
-async function generateImage({ message }: { message: string }) {
-  const templatePath = path.join(process.cwd(), "public", "ad-template.jpeg");
-  const attorneyPath = path.join(process.cwd(), "public", "attorney.png");
-  const logoPath = path.join(process.cwd(), "public", "white-logo.png");
+async function generateImage({ message, template = "instagram"  }: { message: string, template?: "instagram" | "youtube" }) {
+  const templateName = template === "instagram" ? "instagram-ad.jpeg" : "youtube-short.jpeg";
+  const templatePath = path.join(process.cwd(), "public", templateName);
+  const isYoutube = template === "youtube";
 
   const images = await Promise.all([
     toFile(fs.createReadStream(templatePath), null, { type: "image/jpeg" }),
-    toFile(fs.createReadStream(attorneyPath), null, { type: "image/png" }),
-    toFile(fs.createReadStream(logoPath), null, { type: "image/png" }),
   ]);
 
   const imgPrompt = `
-  Edit the PROVIDED Instagram square ad template image.
+  Edit the PROVIDED ${isYoutube ? "YouTube Shorts vertical (9:16)" : "Instagram square"} ad template image.
 
   NON-NEGOTIABLE (must be pixel-faithful):
   - Keep the background exactly the same (pattern, shapes, texture, gradients). Keep primary color #00305b.
@@ -85,17 +83,26 @@ async function generateImage({ message }: { message: string }) {
   - Do not change pose, crop, or placement.
   - Change clothing only. Alternate between: a suit/blazer with shirt and tie, or a professional plain-color sweater worn over a shirt and tie. Use neutral, professional colors.
 
-  Output: a clean 1:1 image. Do not add anything new. Do not overlay new elements.
+  Output: a clean ${isYoutube ? "9:16 vertical" : "1:1"} image. Do not add anything new. Do not overlay new elements.
   `;
 
-  const img = await openai.images.edit({ model: "gpt-image-1.5", image: images, prompt: imgPrompt, size: "1024x1024", input_fidelity: "high" });
+  const size = isYoutube ? "1024x1536" : "1024x1024";
+
+  const img = await openai.images.edit({
+    model: "gpt-image-1.5",
+    image: images,
+    prompt: imgPrompt,
+    size: size as any,
+    input_fidelity: "high",
+  });
+
   const b64 = img.data?.[0]?.b64_json;
   if (!b64) throw new Error("No image returned from image model.");
   return Buffer.from(b64, "base64")
 }
 
 // Shared ffmpeg renderer: loops image, adds silent audio, outputs H.264 MP4
-async function renderWithFfmpeg(imageBuffer: Buffer): Promise<Buffer> {
+async function renderWithFfmpeg(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   ffmpeg.setFfmpegPath(require("ffmpeg-static"));
   const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -104,7 +111,12 @@ async function renderWithFfmpeg(imageBuffer: Buffer): Promise<Buffer> {
   const silentPath = path.join(tmpDir, `ad-silent-${id}.mp3`);
   const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
 
-  fs.writeFileSync(imgPath, imageBuffer);
+  // Resize image to exact output dimensions first
+  const resized = await sharp(imageBuffer)
+    .resize(width, height, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+  fs.writeFileSync(imgPath, resized);
 
   // Download silent audio
   const silentRes = await fetch(process.env.SILENT_AUDIO_URL!);
@@ -142,30 +154,13 @@ async function renderWithFfmpeg(imageBuffer: Buffer): Promise<Buffer> {
 
 // Instagram: 1080x1080 — image already has text baked in by OpenAI
 async function generateVideo({ imageBuffer }: { imageBuffer: Buffer }) {
-  return renderWithFfmpeg(imageBuffer);
+  return renderWithFfmpeg(imageBuffer, 1080, 1080);
 }
 
 // YouTube Shorts: 1080x1920 vertical — blurred bg + sharp 1080x1080 centered top
-async function generateYouTubeVideo({ imageBuffer }: { imageBuffer: Buffer }) {
-  const blurredBg = await sharp(imageBuffer)
-    .resize(1080, 1920, { fit: "cover" })
-    .blur(20)
-    .modulate({ brightness: 0.4 }) // ← darken to 40%
-    .png()
-    .toBuffer();
-
-  const squareLayer = await sharp(imageBuffer)
-    .resize(1080, 1080)
-    .png()
-    .toBuffer();
-
-  // Center the square vertically: (1920 - 1080) / 2 = 420
-  const finalFrame = await sharp(blurredBg)
-    .composite([{ input: squareLayer, top: 420, left: 0 }])
-    .png()
-    .toBuffer();
-
-  return renderWithFfmpeg(finalFrame);
+async function generateYouTubeVideo({ message }: { message: string }) {
+  const ytImageBuffer = await generateImage({ message, template: "youtube" });
+  return renderWithFfmpeg(ytImageBuffer, 1080, 1920);
 }
 
 async function saveAdToBlob(buffer: Buffer, filename: string) {
@@ -406,7 +401,7 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
   const videoUrl = await saveReelToBlob(videoBuffer, `${slug}.mp4`);
 
   // 2b) generate widescreen video (1920x1080) for YouTube
-  const youtubeVideoBuffer = await generateYouTubeVideo({ imageBuffer });
+  const youtubeVideoBuffer = await generateYouTubeVideo({ message });
   const youtubeVideoUrl = await saveReelToBlob(youtubeVideoBuffer, `${slug}-yt.mp4`);
 
   if (preview) {
