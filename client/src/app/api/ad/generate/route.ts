@@ -53,8 +53,14 @@ async function generateCaption(params: { title: string, headline: string }): Pro
   return CreativeSchema.parse(parsed);
 }
 
-async function generateImage({ message, template = "instagram"  }: { message: string, template?: "instagram" | "youtube" }) {
-  const templateName = template === "instagram" ? "instagram-ad.jpeg" : "youtube-short.jpeg";
+function getWeekOfMonth(date: Date = new Date()): 1 | 2 | 3 | 4 {
+  const week = Math.ceil(date.getDate() / 7);
+  return Math.min(week, 4) as 1 | 2 | 3 | 4;
+}
+
+async function generateImage({ message, template = "instagram", weekNumber }: { message: string, template?: "instagram" | "youtube", weekNumber?: 1 | 2 | 3 | 4 }) {
+  const week = weekNumber ?? getWeekOfMonth();
+  const templateName = template === "instagram" ? `instagram-ad-${week}.jpeg` : `youtube-short-${week}.jpeg`;
   const templatePath = path.join(process.cwd(), "public", templateName);
   const isYoutube = template === "youtube";
 
@@ -158,8 +164,8 @@ async function generateVideo({ imageBuffer }: { imageBuffer: Buffer }) {
 }
 
 // YouTube Shorts: 1080x1920 vertical — blurred bg + sharp 1080x1080 centered top
-async function generateYouTubeVideo({ message }: { message: string }) {
-  const ytImageBuffer = await generateImage({ message, template: "youtube" });
+async function generateYouTubeVideo({ message, weekNumber }: { message: string, weekNumber?: 1 | 2 | 3 | 4 }) {
+  const ytImageBuffer = await generateImage({ message, template: "youtube", weekNumber });
   return renderWithFfmpeg(ytImageBuffer, 1080, 1920);
 }
 
@@ -392,8 +398,10 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
   const { message, hashtags } = await generateCaption({ title, headline });
   const igCaption = buildInstagramCaption(message, hashtags);
 
+  const weekNumber = getWeekOfMonth();
+
   // 1) generate image with message text baked in by OpenAI
-  const imageBuffer = await generateImage({ message });
+  const imageBuffer = await generateImage({ message, weekNumber });
   const imageUrl = await saveAdToBlob(imageBuffer, `${slug}.png`);
 
   // 2) generate square video (1080x1080) for Instagram Reel
@@ -401,7 +409,7 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
   const videoUrl = await saveReelToBlob(videoBuffer, `${slug}.mp4`);
 
   // 2b) generate widescreen video (1920x1080) for YouTube
-  const youtubeVideoBuffer = await generateYouTubeVideo({ message });
+  const youtubeVideoBuffer = await generateYouTubeVideo({ message, weekNumber });
   const youtubeVideoUrl = await saveReelToBlob(youtubeVideoBuffer, `${slug}-yt.mp4`);
 
   if (preview) {
