@@ -61,7 +61,43 @@ export const weeklyPostSchema = {
     ]
 }
 
-export function postRespInstructions(recentTopicHints: { title: string, slug: string }[]) { 
+// Brand + competitive research document injected into the search mix
+export const GOC_LEGAL_BRAND_CONTEXT = `
+FIRM OVERVIEW — GOC Legal, P.C. (Oakland, CA · goclegal.com · (510) 846-0928)
+Attorney: Greg O'Connell — former Alameda County prosecutor turned personal injury attorney, 20+ years experience. His DA background is the firm's single most unique differentiator in the Oakland market.
+Structure: Boutique single-attorney firm. Every client works directly with Greg.
+Practice areas: Auto accidents, bicycle accidents, trucking, construction, slip & fall, wrongful death.
+Awards: Super Lawyers, National Trial Lawyers Top 100, Multi-Million Dollar Advocates Forum.
+
+TOP CASE RESULTS:
+- $3,000,000 — premises liability, hazardous staircase
+- $500,000 — pedestrian, driver failed to yield (full policy limits)
+- $265,000 — hit-and-run bicycle (Greg partnered with police to track driver)
+- $230,000 — slip & fall, 100-year-old client, insurer tried to blame her age
+- $128,000 — parking lot fall, inadequate lighting, elbow surgery
+- Multiple $100,000 policy-limit wins: rear-end, freeway, spine aggravation, hand injury, hotel premises
+- $7,500 offered → $100,000 recovered (two separate cases — strongest ad data point)
+
+KEY CLIENT PAIN POINTS TO INFORM TOPIC SELECTION:
+- Lowball insurance offers (the $7,500→$100K gap is the #1 hook)
+- Medical bill spiral while liability is unresolved
+- California's 2-year statute of limitations (unknown to most victims)
+- Partial fault fear (CA comparative negligence — partial fault doesn't disqualify a claim)
+- Recorded statements to adjusters (victims don't know they can refuse)
+- Slip & fall self-blame and shame
+- Preexisting condition fear (victims assume prior injury voids claim — GOC has wins on this)
+- Evidence decay in slip & fall (surveillance deleted in 30–72 hrs)
+- Wrongful death: grief meets paperwork; justice vs. money framing
+
+COMPETITOR DIFFERENTIATORS TO INFORM CONTENT ANGLES:
+- GJEL, Barnes Firm: volume firms, paralegal-heavy, no named founding attorney handling cases personally
+- Heinrich Law: former insurance defense attorney (insurer side), GOC = DA side (builds prosecutorial case)
+- GOC's unique triple: (1) single attorney handles every case personally, (2) Alameda County DA background, (3) documented case-by-case results with real dollar amounts
+
+TONE FOR ALL CONTENT: Professional, reassuring, educational. No legal advice. Summarize and educate only.
+`;
+
+export function postRespInstructions(recentTopicHints: { title: string, slug: string }[]) {
     return "Write a weekly SEO blog post for GOC Legal, a California personal injury law firm. " +
     "Generate a concise title (max 5 words), generate a headline (max 12 words). " +
     "Select ONE topic based on either (1) recent California personal injury–related news or (2) trending personal injury search questions, researched via the web_search tool. " +
@@ -71,12 +107,21 @@ export function postRespInstructions(recentTopicHints: { title: string, slug: st
     "https://www.goclegal.com/auto-accidents, https://www.goclegal.com/slip-and-fall-injuries, https://www.goclegal.com/trucking-accidents, https://www.goclegal.com/bicycle-accidents, https://www.goclegal.com/construction-site-accidents, https://www.goclegal.com/traumatic-brain-injury, https://www.goclegal.com/wrongful-death. " +
     "Summarize and educate only—do not reproduce articles or include legal citations. " +
     "Return valid JSON that exactly matches the weekly_post schema." +
-    "First propose 6–10 candidate topics. " +
-    "Then choose ONE topic that does not overlap the recent posts list provided. " +
-    "Return candidateTopics and chosenTopic in the JSON." +
-    "Recent posts (do not repeat these topics): " +
+    // stronger topic diversity rules
+    "First propose 6–10 candidate topics, spanning DIFFERENT practice areas and subject categories. " +
+    "Then choose ONE topic following these strict rules:\n" +
+    "  1. The chosen topic must NOT overlap with any recent post title or slug — not even as a reworded or narrower version of the same subject.\n" +
+    "  2. The chosen topic must be in a DIFFERENT CATEGORY from the last 3 recent posts. " +
+    "     Categories include: e-bike/bicycle, auto accidents, trucking, slip & fall, construction, wrongful death, brain injury, insurance tactics, legal process, and seasonal safety. " +
+    "     If the last 3 posts all fall in the same category (e.g. e-bike/bicycle), do NOT pick anything in that category this week — choose a completely different practice area or subject.\n" +
+    "  3. Rotate across the full range of GOC Legal's practice areas over time.\n" +
+    // inject brand context as a research input
+    "Use the following GOC Legal firm research to inform topic selection and content angles — prioritize topics that connect to the firm's documented client pain points, case results, and competitive differentiators:\n" +
+    GOC_LEGAL_BRAND_CONTEXT + "\n" +
+    "Return candidateTopics and chosenTopic in the JSON.\n" +
+    "Recent posts (do not repeat these topics or their categories): " +
     JSON.stringify(recentTopicHints) +
-    "Topic selection rule: chosenTopic must be meaningfully different from every recent title/slug (not just reworded)."
+    "\nTopic selection rule: chosenTopic must be meaningfully different from every recent title/slug AND must be in a different category from the last 3 recent posts."
 }
 
 export const postRespInput =
