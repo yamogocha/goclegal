@@ -118,11 +118,17 @@ async function renderWithFfmpeg(imageBuffer: Buffer, width: number, height: numb
   const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
 
   // Resize image to exact output dimensions first
+  const isVertical = height > width; // YouTube Shorts = true, Instagram = false
+
   const resized = await sharp(imageBuffer)
-    .resize(width, height, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+    .resize(width, height, {
+      fit: isVertical ? "contain" : "fill",  // contain = no stretch, fill = Instagram stays as-is
+      background: { r: 0, g: 48, b: 91, alpha: 1 }, // #00305b
+      kernel: sharp.kernel.lanczos3,
+    })
     .png()
     .toBuffer();
-  fs.writeFileSync(imgPath, resized);
+    fs.writeFileSync(imgPath, resized);
 
   // Download silent audio
   const silentRes = await fetch(process.env.SILENT_AUDIO_URL!);
