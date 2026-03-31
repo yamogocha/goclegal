@@ -60,12 +60,12 @@ function getWeekOfMonth(date: Date = new Date()): 1 | 2 | 3 | 4 {
 
 async function generateImage({ message, template = "instagram", weekNumber }: { message: string, template?: "instagram" | "youtube", weekNumber?: 1 | 2 | 3 | 4 }) {
   const week = weekNumber ?? getWeekOfMonth();
-  const templateName = template === "instagram" ? `instagram-ad-${week}.jpeg` : `youtube-short-${week}.jpeg`;
+  const templateName = template === "instagram" ? `instagram-ad-${week}.png` : `youtube-short-${week}.png`;
   const templatePath = path.join(process.cwd(), "public", templateName);
   const isYoutube = template === "youtube";
 
   const images = await Promise.all([
-    toFile(fs.createReadStream(templatePath), null, { type: "image/jpeg" }),
+    toFile(fs.createReadStream(templatePath), null, { type: "image/png" }),
   ]);
 
   const imgPrompt = `
@@ -181,7 +181,7 @@ async function saveAdToBlob(buffer: Buffer, filename: string) {
 
   const blob = await put(pathname, buffer, {
     access: "public", // required today
-    contentType: "image/jpeg", // or image/jpeg
+    contentType: "image/png", // or image/png
     token: process.env.BLOB_READ_WRITE_TOKEN,
     addRandomSuffix: true, // avoids collisions
   });
