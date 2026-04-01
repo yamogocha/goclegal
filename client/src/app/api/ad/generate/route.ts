@@ -203,11 +203,29 @@ async function saveReelToBlob(videoBuffer: Buffer, filename: string) {
   return blob.url; // public URL Meta can fetch
 }
 
+async function fbCreatePagePost({ pageId, accessToken, videoUrl, caption }: {
+  pageId: string;
+  accessToken: string;
+  videoUrl: string;
+  caption: string;
+}) {
+  const url = `https://graph.facebook.com/v24.0/${pageId}/videos`;
+  const form = new URLSearchParams();
+  form.set("file_url", videoUrl);
+  form.set("description", caption);
+  form.set("published", "true");
+  form.set("access_token", accessToken);
+
+  const res = await fetch(url, { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`FB page post failed: ${JSON.stringify(data)}`);
+  return data.id as string;
+}
+
 function buildInstagramCaption(message: string, hashtags: string[]) {
   const tags = hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ");
   return `${message}\n\n${tags}`.trim();
 }
-
 
 async function igCreateReelContainer(opts: {
   igUserId: string;
@@ -425,9 +443,13 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
   // Instagram
   const igUserId = process.env.IG_USER_ID!;
   const accessToken = process.env.FB_ACCESS_TOKEN!;
+  const pageId = process.env.FB_PAGE_ID!;
   const creationId = await igCreateReelContainer({ igUserId, accessToken, videoUrl, caption: igCaption });
   await igWaitForContainer({ creationId, accessToken });
   const postId = await igPublish({ igUserId, accessToken, creationId });
+
+  // Facebook Page
+  const fbPostId = await fbCreatePagePost({ pageId, accessToken, videoUrl, caption: igCaption });
 
   // YouTube
     const youtubeDescription = `${message}\n\n#Shorts\n\n${hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`;
@@ -449,7 +471,7 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
     console.error("[ad] GBP upload FAILED:", err.message);
   }
 
-  return { postId, imageUrl, videoUrl, youtubeVideoUrl, caption: message, hashtags }
+  return { postId, fbPostId, youtubeVideoId, imageUrl, videoUrl, youtubeVideoUrl, caption: message, hashtags }
 }
 
 export async function POST(req: Request) {
