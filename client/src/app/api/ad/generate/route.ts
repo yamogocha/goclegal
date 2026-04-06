@@ -83,11 +83,13 @@ async function generateImage({ message, template = "instagram", weekNumber }: { 
   - Use the EXACT same font style, size, weight, color, and position as the existing message text in the template.
   - Do not reformat or reposition the text block.
 
-  2) Update ONLY the attorney’s CLOTHING to a different professional outfit for this week.
-  - The attorney’s face must remain IDENTICAL to the template (same identity, facial features, skin tone, expression).
-  - Do not change the attorney’s hair, eyes, head shape, age, or ethnicity.
+  2) Update ONLY the attorney's CLOTHING to a different professional outfit for this week.
+  - The attorney's face must remain IDENTICAL to the template (same identity, facial features, skin tone, expression).
+  - Do not change the attorney's hair, eyes, head shape, age, or ethnicity.
   - Do not change pose, crop, or placement.
-  - Change clothing only. Alternate between: a suit/blazer with shirt and tie, or a professional plain-color sweater worn over a shirt and tie. Use neutral, professional colors.
+  - CRITICAL: The person's face and head must be pixel-identical to the input template. Do not redraw, reimagine, or alter the face in any way whatsoever.
+  - Change clothing ONLY. Nothing above the collar changes.
+  - Alternate between: a suit/blazer with shirt and tie, or a professional plain-color sweater worn over a shirt and tie. Use neutral, professional colors.
 
   Output: a clean ${isYoutube ? "9:16 vertical" : "1:1"} image. Do not add anything new. Do not overlay new elements.
   `;
@@ -100,6 +102,7 @@ async function generateImage({ message, template = "instagram", weekNumber }: { 
     prompt: imgPrompt,
     size: size as any,
     input_fidelity: "high",
+    quality: "high",
   });
 
   const b64 = img.data?.[0]?.b64_json;
