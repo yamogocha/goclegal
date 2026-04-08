@@ -84,7 +84,7 @@ export default function FooterComponent(footerQuery: FooterType) {
                         <Link key={index} href={`/${slug}`} className="font-montserrat text-[16px] lg:text-[18px] hover:text-[#00305b] underline">{label}</Link>
                     ))}
                 </div>
-                <div className="basis-full text-[22px] font-medium pt-12 lg:pt-30">{copyright}</div>
+                <div className="basis-full text-[22px] font-medium pt-12 lg:pt-30">{`©${new Date().getFullYear()} ${copyright}`}</div>
             </MotionWrapper>
         </div>
     )
