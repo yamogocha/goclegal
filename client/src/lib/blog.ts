@@ -4,6 +4,7 @@ import { createClient } from "next-sanity";
 import { ResponseOutputItem } from 'openai/resources/responses/responses.mjs'
 import { client } from "@/sanity/client";
 
+
 export const serverClient = createClient({
     projectId: process.env.SANITY_PROJECT_ID!,
     dataset: process.env.SANITY_DATASET!,
@@ -69,3 +70,4 @@ export function toPortatbleTextBlock(block: Block) {
         children: [{ _type: "span", _key: crypto.randomUUID(), text, marks: hasLink ? [markKey] :[] }]
     }]
 }
+
