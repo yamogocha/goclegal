@@ -44,8 +44,8 @@ export async function generateCaption(params: { title: string, headline: string 
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch(err: any) {
-      throw new Error(`Invalid JSON: ${err.message}`);
+  } catch (err: unknown) {
+      throw new Error(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}`);
   }
   return CreativeSchema.parse(parsed);
 }
@@ -91,13 +91,13 @@ export async function generateImage({ message, template = "instagram", weekNumbe
   Output: a clean ${isYoutube ? "9:16 vertical" : "1:1"} image. Do not add anything new. Do not overlay new elements.
   `;
 
-  const size = isYoutube ? "1024x1536" : "1024x1024";
+  const size: "1024x1024" | "1024x1536" = isYoutube ? "1024x1536" : "1024x1024";
 
   const img = await openai.images.edit({
     model: "gpt-image-1.5",
     image: images,
     prompt: imgPrompt,
-    size: size as any,
+    size,
     input_fidelity: "high",
     quality: "high",
   });
@@ -206,3 +206,4 @@ export async function renderWithFfmpeg(imageBuffer: Buffer, width: number, heigh
     const tags = hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ");
     return `${message}\n\n${tags}`.trim();
   }
+  

@@ -2,6 +2,8 @@
 import { client } from "@/sanity/client";
 import { NextResponse } from "next/server";
 import { generateVideo, generateYouTubeVideo, saveAdToBlob, saveReelToBlob, buildInstagramCaption, generateImage, getWeekOfMonth, generateCaption } from "@/lib/ads";
+import { getGoogleAccessToken } from "@/lib/oauth";
+
 export const runtime = "nodejs";
 
 
@@ -72,28 +74,12 @@ async function igPublish({ igUserId, accessToken, creationId }:{
   return data.id as string;
 }
 
-async function youtubeGetAccessToken() {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: process.env.YOUTUBE_REFRESH_TOKEN!,
-      client_id: process.env.GBP_CLIENT_ID!,
-      client_secret: process.env.GBP_CLIENT_SECRET!,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`YouTube token refresh failed: ${JSON.stringify(data)}`);
-  return data.access_token as string;
-}
-
 async function youtubeUploadVideo({ videoBuffer, title, description }: {
   videoBuffer: Buffer;
   title: string;
   description: string;
 }) {
-  const accessToken = await youtubeGetAccessToken();
+  const accessToken = await getGoogleAccessToken();
 
   // Step 1: initiate resumable upload session
   const initRes = await fetch(
@@ -143,29 +129,12 @@ async function youtubeUploadVideo({ videoBuffer, title, description }: {
   return uploadData.id as string; // YouTube video ID
 }
 
-async function gbpRefreshAccessToken() {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: process.env.GBP_REFRESH_TOKEN!,
-      client_id: process.env.GBP_CLIENT_ID!,
-      client_secret: process.env.GBP_CLIENT_SECRET!,
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) throw new Error(`GBP token refresh failed: ${JSON.stringify(data)}`);
-  return data.access_token as string;
-}
-
 async function gbpUploadMedia({ accountId, locationId, imageUrl }: {
   accountId: string;
   locationId: string;
   imageUrl: string;
 }) {
-  const accessToken = await gbpRefreshAccessToken();
+  const accessToken = await getGoogleAccessToken();
   const url = `https://mybusiness.googleapis.com/v4/${accountId}/${locationId}/media`;
 
   const res = await fetch(url, {
@@ -183,7 +152,7 @@ async function gbpUploadMedia({ accountId, locationId, imageUrl }: {
 
   const text = await res.text(); // ← read as text first
 
-  let data: any;
+  let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
@@ -191,7 +160,15 @@ async function gbpUploadMedia({ accountId, locationId, imageUrl }: {
   }
 
   if (!res.ok) throw new Error(`GBP upload failed: ${JSON.stringify(data)}`);
-  return data.name as string;
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("name" in data) ||
+    typeof (data as { name: unknown }).name !== "string"
+  ) {
+    throw new Error("GBP upload response missing name");
+  }
+  return (data as { name: string }).name;
 }
 
 export async function generateWeeklyAd({ preview = false, dryRun = false }: { preview?: boolean, dryRun?: boolean } = {}) {
@@ -242,8 +219,8 @@ export async function generateWeeklyAd({ preview = false, dryRun = false }: { pr
       imageUrl,
     });
     console.log("[ad] GBP mediaName:", gbpMediaName);
-  } catch (err: any) {
-    console.error("[ad] GBP upload FAILED:", err.message);
+  } catch (err: unknown) {
+    console.error("[ad] GBP upload FAILED:", err instanceof Error ? err.message : String(err));
   }
 
   return { postId, youtubeVideoId, imageUrl, videoUrl, youtubeVideoUrl, caption: message, hashtags }
@@ -257,8 +234,10 @@ export async function POST(req: Request) {
   try {
       const result = await generateWeeklyAd({ preview, dryRun })
       return NextResponse.json({ ok: true, ...result })
-  } catch(err: any) {
+  } catch (err: unknown) {
       console.error("[ad/generate] error:", err);
-      return NextResponse.json({ error: err?.message || String(err), stack: err?.stack }, { status: 500 })
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      return NextResponse.json({ error: message, stack }, { status: 500 })
   }
 }
