@@ -8,8 +8,8 @@ export const oauth2Client = new OAuth2Client(
 
 export function getAuthUrl() {
   return oauth2Client.generateAuthUrl({
-    access_type: "offline", // 🔥 REQUIRED for refresh token
-    prompt: "consent",      // 🔥 FORCE refresh token
+    access_type: "offline", // REQUIRED for refresh token
+    prompt: "consent",      // FORCE refresh token
     scope: [
       "https://www.googleapis.com/auth/adwords",
       "https://www.googleapis.com/auth/youtube.upload",
@@ -26,4 +26,15 @@ export async function getGoogleAccessToken() {
     const { token } = await oauth2Client.getAccessToken();
   
     return token;
+  }
+
+
+  export function verifyCronAuth(req: Request) {
+    const auth = req.headers.get("authorization");
+  
+    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+  
+    return null;
   }

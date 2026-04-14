@@ -1,21 +1,3 @@
 {
-    "crons": [
-      {
-        "path": "/api/cron/weekly-blog",
-        "schedule": "0 16 * * 1"
-      },
-      {
-        "path": "/api/cron/weekly-ad",
-        "schedule": "0 17 * * 1"
-      },
-      {
-        "path": "/api/cron/budget",
-        "schedule": "*/15 * * * *"
-      },
-      {
-        "path": "/api/cron/optimize",
-        "schedule": "0 */6 * * *"
-      }
-    ]
   }
   

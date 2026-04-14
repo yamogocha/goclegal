@@ -112,7 +112,7 @@ export async function controlBudgetAdvanced() {
 
   console.log("[budget]", { spend, pacing, peak });
 
-  // 🔴 HARD STOP (safety)
+  // HARD STOP (safety)
   if (spend >= DAILY_BUDGET * 1.1) {
     for (const id of campaignIds) {
       await setCampaignStatus(id, "PAUSED");
@@ -121,7 +121,7 @@ export async function controlBudgetAdvanced() {
     return;
   }
 
-  // 🟡 NEAR LIMIT → aggressive slow down
+  // NEAR LIMIT → aggressive slow down
   if (spend >= DAILY_BUDGET * 0.85) {
     for (const id of campaignIds) {
       await adjustCampaignBids(id, 0.5); // -50%
@@ -130,7 +130,7 @@ export async function controlBudgetAdvanced() {
     return;
   }
 
-  // 🧠 PACING LOGIC
+  // PACING LOGIC
   if (pacing.action === "slow_down") {
     for (const id of campaignIds) {
       await adjustCampaignBids(id, 0.7); // -30%
@@ -145,7 +145,7 @@ export async function controlBudgetAdvanced() {
     console.log("[budget] pacing speed up");
   }
 
-  // ⏰ OFF HOURS → reduce but don't kill
+  // OFF HOURS → reduce but don't kill
   if (!peak) {
     for (const id of campaignIds) {
       await adjustCampaignBids(id, 0.6);
@@ -153,7 +153,7 @@ export async function controlBudgetAdvanced() {
     console.log("[budget] off hours reduction");
   }
 
-  // 🟢 PEAK HOURS → boost mobile
+  // PEAK HOURS → boost mobile
   if (peak) {
     for (const id of campaignIds) {
       await adjustCampaignBids(id, 1.15);
@@ -161,7 +161,7 @@ export async function controlBudgetAdvanced() {
     console.log("[budget] peak boost");
   }
 
-  // 🟢 Ensure campaigns enabled
+  // Ensure campaigns enabled
   for (const id of campaignIds) {
     await setCampaignStatus(id, "ENABLED");
   }
@@ -171,7 +171,7 @@ export { controlBudgetAdvanced as controlBudget };
 
 let aiCallCount = 0;
 
-const MAX_AI_CALLS = 5; // 🔥 adjust as needed
+const MAX_AI_CALLS = 5; // adjust as needed
 
 export function canMakeAICall() {
   return aiCallCount < MAX_AI_CALLS;

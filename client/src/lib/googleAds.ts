@@ -3,7 +3,7 @@ import "server-only";
 import { GoogleAdsApi, type services } from "google-ads-api";
 import { GOC_LEGAL_BRAND_CONTEXT, openai } from "@/lib/openai";
 import { z } from "zod";
-import { canMakeAICall, trackAICall } from "./budgetMonitor";
+import { canMakeAICall, resetAICallCount, trackAICall } from "./budgetMonitor";
 
 
 const client = new GoogleAdsApi({
@@ -509,5 +509,19 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return res;
 }
 
+export async function manageGoogleAds() {
+  try {
+    resetAICallCount(); // reset at start
+    await optimizeAds(); // fix bad ads
+    await runSearchTermMining();      // Add winners
+    await runNegativeKeywordCleanup(); // Remove waste
+
+    return Response.json({ ok: true });
+  } catch (err: unknown) {
+    console.error(err);
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
 
 

@@ -1,23 +1,15 @@
 import { resetAICallCount } from "@/lib/budgetMonitor";
-import { optimizeAds, runSearchTermMining, runNegativeKeywordCleanup } from "@/lib/googleAds";
+import { optimizeAds, runSearchTermMining, runNegativeKeywordCleanup, manageGoogleAds } from "@/lib/googleAds";
+import { verifyCronAuth } from "@/lib/oauth";
 
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const unauthorized = verifyCronAuth(req);
+  if (unauthorized) return unauthorized;
 
-  try {
-    resetAICallCount(); // 🔥 reset at start
-    await optimizeAds(); // fix bad ads
-    await runSearchTermMining();      // Add winners
-    await runNegativeKeywordCleanup(); // Remove waste
-
-    return Response.json({ ok: true });
-  } catch (err: unknown) {
-    console.error(err);
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: message }, { status: 500 });
-  }
+  await manageGoogleAds()
 }
 
 export async function POST(req: Request) {
@@ -45,7 +37,5 @@ export async function POST(req: Request) {
       ok: false,
       error: message
     }, { status: 500 });
-  }
-  
-  
+  } 
 }
