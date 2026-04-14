@@ -1,0 +1,38 @@
+name: Cron Jobs
+
+on:
+  schedule:
+    # Weekly blog (Mon 16:00 UTC)
+    - cron: "0 16 * * 1"
+
+    # Weekly ad (Mon 17:00 UTC)
+    - cron: "0 17 * * 1"
+
+    # Budget (every 15 min)
+    - cron: "*/15 * * * *"
+
+    # Optimize (every 6 hours)
+    - cron: "0 */6 * * *"
+
+  workflow_dispatch: # allows manual trigger
+
+jobs:
+  run-crons:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call weekly blog
+        if: github.event.schedule == '0 16 * * 1'
+        run: npx tsx scripts/weeklyBlog.ts
+
+      - name: Call weekly ad
+        if: github.event.schedule == '0 17 * * 1'
+        run: npx tsx scripts/weeklyAd.ts
+
+      - name: Call budget
+        if: github.event.schedule == '*/15 * * * *'
+        run: npx tsx scripts/budget.ts
+
+      - name: Call Google Ads
+        if: github.event.schedule == '0 */6 * * *'
+        run: npx tsx scripts/googleAds.ts
