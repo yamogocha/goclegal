@@ -8,11 +8,11 @@ on:
     # Weekly ad (Mon 17:00 UTC)
     - cron: "0 17 * * 1"
 
-    # Budget (every 15 min)
-    - cron: "*/15 * * * *"
+    # Budget (every 4 hours)
+    - cron: "0 */4 * * *"
 
-    # Optimize (every 6 hours)
-    - cron: "0 */6 * * *"
+    # Optimize (every 2 days)
+    - cron: "0 18 */2 * *"
 
   workflow_dispatch: # allows manual trigger
 
@@ -30,9 +30,9 @@ jobs:
         run: npx tsx scripts/weeklyAd.ts
 
       - name: Call budget
-        if: github.event.schedule == '*/15 * * * *'
+        if: github.event.schedule == '0 */4 * * *'
         run: npx tsx scripts/budget.ts
 
       - name: Call Google Ads
-        if: github.event.schedule == '0 */6 * * *'
+        if: github.event.schedule == '0 18 */2 * *'
         run: npx tsx scripts/googleAds.ts

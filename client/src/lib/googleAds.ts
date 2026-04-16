@@ -6,14 +6,14 @@ import { z } from "zod";
 import { canMakeAICall, resetAICallCount, trackAICall } from "./budgetMonitor";
 
 
-const client = new GoogleAdsApi({
+export const googleAdsClient = new GoogleAdsApi({
   client_id: process.env.GOOGLE_CLIENT_ID!,
   client_secret: process.env.GOOGLE_CLIENT_SECRET!,
   developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN!,
 });
 
 export function getCustomer() {
-  return client.Customer({
+  return googleAdsClient.Customer({
     customer_id: process.env.GOOGLE_ADS_CUSTOMER_ID!,
     login_customer_id: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID!,
     refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
@@ -35,17 +35,114 @@ async function getLowPerformingAssets() {
       metrics.cost_micros
     FROM ad_group_ad
     WHERE
-      metrics.impressions > 100
+      metrics.impressions > 50
   `;
 
   const rows = await customer.query(query);
 
-  return rows.filter(r => {
+  const DAILY_BUDGET = 25;
+  const TARGET_CPA = DAILY_BUDGET * 2; // ~50
+
+  const results: Array<
+    services.IGoogleAdsRow & {
+      _score: number;
+      _action: "ignore" | "optimize" | "pause";
+      _signals: string[];
+    }
+  > = [];
+
+  for (const r of rows) {
     const m = r.metrics;
-    if (m == null || m.cost_micros == null) return false;
-    const cost = m.cost_micros / 1_000_000;
-    return cost > 100 && (m.conversions ?? 0) === 0;
-  });
+    if (!m) continue;
+
+    const cost = (m.cost_micros ?? 0) / 1_000_000;
+    const conversions = m.conversions ?? 0;
+    const clicks = m.clicks ?? 0;
+    const impressions = m.impressions ?? 0;
+
+    const cpa = conversions > 0 ? cost / conversions : cost;
+    const ctr = impressions > 0 ? clicks / impressions : 0;
+    const cvr = clicks > 0 ? conversions / clicks : 0;
+
+    let score = 0;
+    const signals: string[] = [];
+
+    // BAD
+    if (cost > 30 && conversions === 0) {
+      score += 3;
+      signals.push("spent_no_conversion");
+    }
+
+    if (conversions > 0 && cpa > TARGET_CPA * 1.5) {
+      score += 3;
+      signals.push("very_high_cpa");
+    }
+
+    if (conversions > 0 && cpa > TARGET_CPA) {
+      score += 2;
+      signals.push("high_cpa");
+    }
+
+    if (clicks >= 5 && cvr < 0.1) {
+      score += 2;
+      signals.push("low_cvr");
+    }
+
+    if (ctr < 0.02 && impressions > 200) {
+      score += 1;
+      signals.push("low_ctr");
+    }
+
+    // GOOD
+    if (conversions >= 2) {
+      score -= 2;
+      signals.push("has_volume");
+    }
+
+    if (cpa > 0 && cpa < TARGET_CPA * 0.8) {
+      score -= 2;
+      signals.push("good_cpa");
+    }
+
+    if (cvr > 0.2 && clicks >= 5) {
+      score -= 1;
+      signals.push("strong_cvr");
+    }
+
+    // LEARNING
+    if (clicks < 5 || cost < 20) {
+      score -= 2;
+      signals.push("learning_phase");
+    }
+
+    let action: "ignore" | "optimize" | "pause" = "ignore";
+
+    if (score >= 4) action = "pause";
+    else if (score >= 2) action = "optimize";
+
+    console.log("AD SCORE:", {
+      adId: r.ad_group_ad?.ad?.id,
+      score,
+      action,
+      cost,
+      clicks,
+      conversions,
+      cpa,
+      signals,
+    });
+
+    if (action !== "ignore") {
+      // return ORIGINAL row, just attach metadata
+      results.push({
+        ...r,
+        _score: score,
+        _action: action,
+        _signals: signals,
+      });
+    }
+  }
+
+  return results;
 }
 
 function extractTopKeyword(ad: services.IGoogleAdsRow): string {
@@ -117,20 +214,6 @@ type OptimizeAdsDryRunRow = {
   newAssets: RsaAssets | null;
 };
 
-type SearchTermMiningDryRunRow = {
-  action: "add_keyword";
-  term: string;
-  adGroupId: string;
-  reasoning: string;
-};
-
-type NegativeKeywordDryRunRow = {
-  action: "add_negative";
-  term: string;
-  campaignId: string;
-  reasoning: string;
-};
-
 async function updateAdAssets(adId: number, assets: { headlines: string[], descriptions: string[] }) {
   const customer = getCustomer();
 
@@ -146,7 +229,6 @@ async function updateAdAssets(adId: number, assets: { headlines: string[], descr
     },
   ]);
 }
-
 
 export async function optimizeAds({ dryRun = false } = {}) {
   const lowAds = await getLowPerformingAssets();
@@ -184,58 +266,142 @@ export async function optimizeAds({ dryRun = false } = {}) {
 
 
 
-type SearchTermWinnerRow = {
-  search_term_view: { search_term: string };
-  metrics: {
-    clicks: number;
-    conversions: number;
-    cost_micros: number;
-  };
-  ad_group: { id: string };
-};
 
-function rowToSearchTermWinner(r: services.IGoogleAdsRow): SearchTermWinnerRow | null {
-  const term = r.search_term_view?.search_term;
-  const adGroupId = r.ad_group?.id;
-  const m = r.metrics;
-  if (term == null || adGroupId == null || m == null) return null;
-  const conversions = m.conversions ?? 0;
-  if (conversions < 1) return null;
-  return {
-    search_term_view: { search_term: term },
-    metrics: {
-      clicks: m.clicks ?? 0,
-      conversions,
-      cost_micros: m.cost_micros ?? 0,
-    },
-    ad_group: { id: String(adGroupId) },
-  };
+
+const processedTerms = new Set<string>();
+function getKey(campaignId: string, term: string) {
+  return `${campaignId}:${term.toLowerCase()}`;
 }
 
-async function getSearchTermWinners(): Promise<SearchTermWinnerRow[]> {
+type ScoredSearchTerm = {
+  term: string;
+  adGroupId: string;
+  campaignId: string;
+  clicks: number;
+  conversions: number;
+  cost: number;
+  cpa: number;
+  score: number;
+  signals: string[];
+};
+async function getSearchTermWinners(): Promise<ScoredSearchTerm[]> {
   const customer = getCustomer();
 
   const query = `
     SELECT
       search_term_view.search_term,
       ad_group.id,
+      campaign.id,
       metrics.clicks,
       metrics.conversions,
-      metrics.cost_micros
+      metrics.cost_micros,
+      metrics.impressions
     FROM search_term_view
     WHERE
-      metrics.impressions > 50
-      AND segments.date DURING LAST_30_DAYS
+      segments.date DURING LAST_30_DAYS
   `;
 
   const rows = await customer.query(query);
 
-  const out: SearchTermWinnerRow[] = [];
+  const DAILY_BUDGET = 25;
+  const TARGET_CPA = DAILY_BUDGET * 2; // ~50
+
+  const scored: ScoredSearchTerm[] = [];
+
   for (const r of rows) {
-    const mapped = rowToSearchTermWinner(r);
-    if (mapped) out.push(mapped);
+    const term = r.search_term_view?.search_term;
+    const adGroupId = r.ad_group?.id;
+    const m = r.metrics;
+
+    const campaignId = r.campaign?.id;
+    if (!term || !adGroupId || !campaignId || !m) continue;
+
+    const clicks = m.clicks ?? 0;
+    const conversions = m.conversions ?? 0;
+    const cost = (m.cost_micros ?? 0) / 1_000_000;
+    const impressions = m.impressions ?? 0;
+
+    if (clicks < 2 && impressions < 10) continue; // noise filter
+
+    const cpa = conversions > 0 ? cost / conversions : cost;
+    const ctr = impressions > 0 ? clicks / impressions : 0;
+    const cvr = clicks > 0 ? conversions / clicks : 0;
+
+    let score = 0;
+    const signals: string[] = [];
+
+    // -------------------------
+    // GOOD SIGNALS
+    // -------------------------
+
+    if (conversions >= 1) {
+      score += 3;
+      signals.push("has_conversion");
+    }
+
+    if (cpa > 0 && cpa < TARGET_CPA) {
+      score += 2;
+      signals.push("good_cpa");
+    }
+
+    if (cvr > 0.2 && clicks >= 5) {
+      score += 2;
+      signals.push("strong_cvr");
+    }
+
+    if (ctr > 0.03) {
+      score += 1;
+      signals.push("high_ctr");
+    }
+
+    // -------------------------
+    // BAD SIGNALS
+    // -------------------------
+
+    if (clicks >= 5 && conversions === 0 && cost > 20) {
+      score -= 2;
+      signals.push("wasted_spend");
+    }
+
+    if (cpa > TARGET_CPA * 1.5) {
+      score -= 2;
+      signals.push("very_high_cpa");
+    }
+
+    // -------------------------
+    // LEARNING BOOST
+    // -------------------------
+
+    if (clicks < 5) {
+      score += 1; // allow exploration
+      signals.push("low_data_boost");
+    }
+
+    console.log("TERM SCORE:", {
+      term,
+      score,
+      clicks,
+      conversions,
+      cost,
+      cpa,
+      signals,
+    });
+
+    scored.push({
+      term,
+      adGroupId: String(adGroupId),
+      campaignId: String(campaignId),
+      clicks,
+      conversions,
+      cost,
+      cpa,
+      score,
+      signals,
+    });
   }
-  return out;
+
+  // HIGH ROI: prioritize best terms first
+  return scored.sort((a, b) => b.score - a.score);
 }
 
 async function addExactMatchKeyword(params: {
@@ -258,81 +424,130 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
+type SearchTermMiningDryRunRow = {
+  action: "add_keyword";
+  term: string;
+  adGroupId: string;
+  reasoning: string;
+};
 export async function runSearchTermMining({ dryRun = false } = {}) {
-  const winners = await getSearchTermWinners();
-  const terms = winners.map(r => r.search_term_view.search_term);
+  const terms = await getSearchTermWinners();
 
-  const batches = chunk(terms, 20);
-  const results: SearchTermMiningDryRunRow[] = [];
+  console.log("ALL TERMS:", terms.length);
+  console.log("TOP TERMS:", terms.slice(0, 5));
 
-  for (const batch of batches) {
-    if (!canMakeAICall()) {
-      console.log("[AI] stopping loop early");
-      break;
+  const results: (SearchTermMiningDryRunRow | NegativeKeywordDryRunRow)[] = [];
+
+  const MAX_ACTIONS = 5;
+
+  const candidates = terms
+    .filter(t => t.score >= 2)
+    .slice(0, MAX_ACTIONS);
+
+  if (candidates.length === 0) return results;
+
+  const batchTerms = candidates.map(c => c.term);
+
+  let classifications: Classification[] = [];
+
+  if (canMakeAICall()) {
+    classifications = await classifyWithCacheBatch(batchTerms);
+  }
+
+  for (const row of candidates) {
+    const { term, campaignId } = row;
+
+    if (!campaignId) {
+      console.log("[SKIP - missing campaignId]", term);
+      continue;
     }
 
-    const classifications = await classifyWithCacheBatch(batch);
+    const key = getKey(campaignId, term);
 
-    for (const row of winners) {
-      const term = row.search_term_view.search_term;
+    let action: "add_keyword" | "add_negative" | "ignore" = "ignore";
+    let reasoning = "fallback";
 
-      const c = classifications.find(x => x.term === term);
-      if (!c || c.action !== "add_keyword") continue;
+    const c = classifications.find(x => x.term === term);
 
+    if (c) {
+      action = c.action;
+      reasoning = c.reasoning;
+    } else {
+      // fallback logic
+      if (row.conversions >= 1 && row.cpa < 60) {
+        action = "add_keyword";
+        reasoning = "fallback: good performer";
+      } else if (row.clicks >= 2 && row.conversions === 0 && row.cost > 20) {
+        action = "add_negative";
+        reasoning = "fallback: wasted spend";
+      }
+    }
+
+    console.log("DECISION:", { term, action, reasoning });
+
+    // mark processed EARLY
+    processedTerms.add(key);
+
+    // -------------------------
+    // APPLY ACTION
+    // -------------------------
+
+    if (action === "add_keyword") {
       const payload: SearchTermMiningDryRunRow = {
         action: "add_keyword",
         term,
-        adGroupId: row.ad_group.id,
-        reasoning: c.reasoning,
+        adGroupId: row.adGroupId,
+        reasoning,
       };
 
       if (dryRun) {
         results.push(payload);
+      } else {
+        await addExactMatchKeyword({
+          adGroupId: row.adGroupId,
+          keyword: term,
+        });
+      }
+    }
+
+    if (action === "add_negative") {
+      if (await negativeKeywordExists(campaignId, term)) {
+        console.log("[SKIP DUP NEGATIVE - mining]", term);
         continue;
       }
 
-      await addExactMatchKeyword({
-        adGroupId: row.ad_group.id,
-        keyword: term,
-      });
+      const payload: NegativeKeywordDryRunRow = {
+        action: "add_negative",
+        term,
+        campaignId,
+        reasoning,
+      };
 
-      console.log("[AI keyword added]", term);
+      if (dryRun) {
+        results.push(payload);
+      } else {
+        await addNegativeKeyword({
+          campaignId,
+          keyword: term,
+        });
+      }
     }
   }
+
   return results;
 }
 
 
-
-type SearchTermWasteRow = {
-  search_term_view: { search_term: string };
-  metrics: {
-    clicks: number;
-    conversions: number;
-    cost_micros: number;
-  };
-  campaign: { id: string };
+type ScoredWasteTerm = {
+  term: string;
+  campaignId: string;
+  clicks: number;
+  conversions: number;
+  cost: number;
+  cpa: number;
+  score: number;
 };
-
-function rowToSearchTermWaste(r: services.IGoogleAdsRow): SearchTermWasteRow | null {
-  const term = r.search_term_view?.search_term;
-  const campaignId = r.campaign?.id;
-  const m = r.metrics;
-  if (term == null || campaignId == null || m == null) return null;
-  const conversions = m.conversions ?? 0;
-  if (conversions !== 0) return null;
-  return {
-    search_term_view: { search_term: term },
-    metrics: {
-      clicks: m.clicks ?? 0,
-      conversions,
-      cost_micros: m.cost_micros ?? 0,
-    },
-    campaign: { id: String(campaignId) },
-  };
-}
-
-async function getWasteSearchTerms(): Promise<SearchTermWasteRow[]> {
+async function getWasteSearchTerms(): Promise<ScoredWasteTerm[]> {
   const customer = getCustomer();
 
   const query = `
@@ -341,21 +556,55 @@ async function getWasteSearchTerms(): Promise<SearchTermWasteRow[]> {
       campaign.id,
       metrics.clicks,
       metrics.conversions,
-      metrics.cost_micros
+      metrics.cost_micros,
+      metrics.impressions
     FROM search_term_view
     WHERE
       segments.date DURING LAST_30_DAYS
-      AND metrics.clicks > 8
   `;
 
   const rows = await customer.query(query);
 
-  const out: SearchTermWasteRow[] = [];
+  const scored: ScoredWasteTerm[] = [];
+
   for (const r of rows) {
-    const mapped = rowToSearchTermWaste(r);
-    if (mapped) out.push(mapped);
+    const term = r.search_term_view?.search_term;
+    const campaignId = r.campaign?.id;
+    const m = r.metrics;
+
+    if (!term || !campaignId || !m) continue;
+
+    const clicks = m.clicks ?? 0;
+    const conversions = m.conversions ?? 0;
+    const cost = (m.cost_micros ?? 0) / 1_000_000;
+
+    if (clicks < 2) continue; // light noise filter
+
+    const cpa = conversions > 0 ? cost / conversions : cost;
+
+    let score = 0;
+
+    // strong waste signals
+    if (conversions === 0 && cost > 20) score += 3;
+    if (conversions === 0 && clicks >= 5) score += 2;
+    if (cpa > 80) score += 2;
+
+    if (score === 0) continue;
+
+    scored.push({
+      term,
+      campaignId: String(campaignId),
+      clicks,
+      conversions,
+      cost,
+      cpa,
+      score,
+    });
   }
-  return out;
+
+  console.log("WASTE SCORED:", scored);
+
+  return scored.sort((a, b) => b.score - a.score);
 }
 
 async function addNegativeKeyword(params: {
@@ -376,48 +625,84 @@ async function addNegativeKeyword(params: {
   ]);
 }
 
+type NegativeKeywordDryRunRow = {
+  action: "add_negative";
+  term: string;
+  campaignId: string;
+  reasoning: string;
+};
 export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
   const waste = await getWasteSearchTerms();
-  const terms = waste.map(r => r.search_term_view.search_term);
 
-  const batches = chunk(terms, 20);
+  console.log("WASTE TERMS:", waste.length);
+
   const results: NegativeKeywordDryRunRow[] = [];
 
-  for (const batch of batches) {
-    if (!canMakeAICall()) {
-      console.log("[AI] stopping loop early");
-      break;
+  const MAX_NEGATIVES = 3;
+
+  const candidates = waste
+    .filter(w => w.score >= 3)
+    .slice(0, MAX_NEGATIVES);
+
+  for (const row of candidates) {
+    const { term, campaignId } = row;
+
+    const key = getKey(campaignId, term);
+
+    // skip if already handled in mining
+    if (processedTerms.has(key)) {
+      console.log("[SKIP - handled in mining]", term);
+      continue;
     }
 
-    const classifications = await classifyWithCacheBatch(batch);
+    // dedup against Google Ads
+    if (await negativeKeywordExists(campaignId, term)) {
+      console.log("[SKIP DUP NEGATIVE - cleanup]", term);
+      continue;
+    }
 
-    for (const row of waste) {
-      const term = row.search_term_view.search_term;
+    const payload: NegativeKeywordDryRunRow = {
+      action: "add_negative",
+      term,
+      campaignId,
+      reasoning: "cleanup: high waste score",
+    };
 
-      const c = classifications.find(x => x.term === term);
-      if (!c || c.action !== "add_negative") continue;
-
-      const payload: NegativeKeywordDryRunRow = {
-        action: "add_negative",
-        term,
-        campaignId: row.campaign.id,
-        reasoning: c.reasoning,
-      };
-
-      if (dryRun) {
-        results.push(payload);
-        continue;
-      }
-
+    if (dryRun) {
+      results.push(payload);
+    } else {
       await addNegativeKeyword({
-        campaignId: row.campaign.id,
+        campaignId,
         keyword: term,
       });
-
-      console.log("[AI negative added]", term);
     }
   }
+
   return results;
+}
+
+
+async function negativeKeywordExists(
+  campaignId: string,
+  term: string
+): Promise<boolean> {
+  const customer = getCustomer();
+
+  const query = `
+    SELECT
+      campaign_criterion.keyword.text
+    FROM campaign_criterion
+    WHERE
+      campaign.id = ${campaignId}
+      AND campaign_criterion.negative = TRUE
+  `;
+
+  const rows = await customer.query(query);
+
+  return rows.some((r: services.IGoogleAdsRow) => {
+    const existing = r.campaign_criterion?.keyword?.text?.toLowerCase();
+    return existing === term.toLowerCase();
+  });
 }
 
 
@@ -445,7 +730,7 @@ async function classifyBatch(terms: string[]): Promise<Classification[]> {
     return [];
   }
 
-  trackAICall(); // 🔥 track BEFORE calling
+  trackAICall(); //  track BEFORE calling
 
   const prompt = `
 ${GOC_LEGAL_BRAND_CONTEXT}
@@ -499,14 +784,6 @@ async function classifyWithCacheBatch(terms: string[]) {
   }
 
   return results;
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const res: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    res.push(arr.slice(i, i + size));
-  }
-  return res;
 }
 
 export async function manageGoogleAds() {
