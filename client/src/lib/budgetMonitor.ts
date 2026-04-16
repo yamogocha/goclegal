@@ -2,9 +2,25 @@ import type { resources, services } from "google-ads-api";
 import { getCustomer } from "./googleAds";
 
 const LOOKBACK = "LAST_30_DAYS";
-const MIN_COST = 10; // ignore weak data
-const TARGET_HOURS = 6; // how many hours to keep
+const MIN_COST = 5;
+const TARGET_HOURS = 6;
 
+// Only allow real Google Ads devices
+const DEVICE = {
+  DESKTOP: "0",
+  MOBILE: "1",
+  TABLET: "2",
+};
+
+const VALID_DEVICES = new Set([
+  DEVICE.DESKTOP,
+  DEVICE.MOBILE,
+  DEVICE.TABLET,
+]);
+
+// -----------------------------
+// Types
+// -----------------------------
 type HourPerf = {
   hour: number;
   cost: number;
@@ -17,10 +33,13 @@ type DevicePerf = {
   conversions: number;
 };
 
+// -----------------------------
+// Fetch performance
+// -----------------------------
 async function getPerformance() {
   const customer = getCustomer();
 
-  const query = `
+  const rows = await customer.query(`
     SELECT
       segments.hour,
       segments.device,
@@ -28,20 +47,23 @@ async function getPerformance() {
       metrics.conversions
     FROM campaign
     WHERE segments.date DURING ${LOOKBACK}
-  `;
-
-  const rows = await customer.query(query);
+  `);
 
   const hourMap = new Map<number, HourPerf>();
   const deviceMap = new Map<string, DevicePerf>();
 
   for (const r of rows) {
     const hour = r.segments?.hour ?? 0;
-    const device = String(r.segments?.device ?? "UNKNOWN");
+
+    const rawDevice = String(r.segments?.device ?? DEVICE.DESKTOP);
+    const device = VALID_DEVICES.has(rawDevice)
+      ? rawDevice
+      : DEVICE.DESKTOP;
+
     const cost = (r.metrics?.cost_micros ?? 0) / 1_000_000;
     const conversions = r.metrics?.conversions ?? 0;
 
-    // Hour aggregation
+    // Hours
     if (!hourMap.has(hour)) {
       hourMap.set(hour, { hour, cost: 0, conversions: 0 });
     }
@@ -49,7 +71,7 @@ async function getPerformance() {
     h.cost += cost;
     h.conversions += conversions;
 
-    // Device aggregation
+    // Devices
     if (!deviceMap.has(device)) {
       deviceMap.set(device, { device, cost: 0, conversions: 0 });
     }
@@ -64,7 +86,9 @@ async function getPerformance() {
   };
 }
 
-//Rank & select winners
+// -----------------------------
+// Select top hours
+// -----------------------------
 function selectTopHours(hours: HourPerf[]) {
   return hours
     .filter(h => h.cost >= MIN_COST)
@@ -74,10 +98,59 @@ function selectTopHours(hours: HourPerf[]) {
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, TARGET_HOURS)
-    .map(h => h.hour);
+    .map(h => h.hour)
+    .sort((a, b) => a - b);
 }
 
-function selectDeviceModifiers(devices: DevicePerf[]): Record<string, number> {
+// -----------------------------
+// Expand hours (±1 smoothing)
+// -----------------------------
+function expandHours(hours: number[]) {
+  const set = new Set<number>();
+
+  for (const h of hours) {
+    set.add(h);
+
+    if (h > 0) set.add(h - 1);
+    if (h < 23) set.add(h + 1);
+  }
+
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+// -----------------------------
+// Merge to blocks
+// -----------------------------
+function buildHourBlocks(hours: number[]) {
+  const blocks: Array<{ start: number; end: number }> = [];
+  if (!hours.length) return blocks;
+
+  let start = hours[0];
+  let prev = hours[0];
+
+  for (let i = 1; i < hours.length; i++) {
+    const curr = hours[i];
+
+    if (curr === prev + 1) {
+      prev = curr;
+    } else {
+      blocks.push({ start, end: prev + 1 });
+      start = curr;
+      prev = curr;
+    }
+  }
+
+  blocks.push({ start, end: prev + 1 });
+  return blocks;
+}
+
+// Device modifiers (robust)
+function selectDeviceModifiers(devices: DevicePerf[]) {
+  const modifiers: Record<string, number> = {};
+
+  // Always bias mobile
+  modifiers[DEVICE.MOBILE] = 1.25;
+
   const ranked = devices
     .filter(d => d.cost >= MIN_COST)
     .map(d => ({
@@ -86,19 +159,21 @@ function selectDeviceModifiers(devices: DevicePerf[]): Record<string, number> {
     }))
     .sort((a, b) => b.score - a.score);
 
-  if (ranked.length === 0) return {};
+  if (ranked.length > 0) {
+    const best = ranked[0]?.device;
+    const worst = ranked[ranked.length - 1]?.device;
 
-  const best = ranked[0]?.device;
-  const second = ranked[1]?.device;
+    if (best && best !== DEVICE.MOBILE) {
+      modifiers[best] = 1.15;
+    }
 
-  const modifiers: Record<string, number> = {};
+    if (worst) {
+      modifiers[worst] = 0.7;
+    }
+  }
 
-  if (best) modifiers[best] = 1.25;     // +25%
-  if (second) modifiers[second] = 1.1;  // +10%
-
-  // Penalize worst
-  const worst = ranked[ranked.length - 1]?.device;
-  if (worst) modifiers[worst] = 0.7; // -30%
+  // Always suppress tablet
+  modifiers[DEVICE.TABLET] = 0.7;
 
   return modifiers;
 }
@@ -118,90 +193,119 @@ async function getCampaignIds(): Promise<string[]> {
     .map(String);
 }
 
-// Apply Ad Schedule (Dayparting)
-async function updateAdSchedule(
+async function removeExistingSchedules(campaignIds: string[], dryRun: boolean) {
+  const customer = getCustomer();
+
+  const rows = await customer.query(`
+    SELECT campaign_criterion.resource_name
+    FROM campaign_criterion
+    WHERE campaign.id IN (${campaignIds.join(",")})
+      AND campaign_criterion.type = 'AD_SCHEDULE'
+  `);
+
+  const resourceNames = rows
+    .map((r: services.IGoogleAdsRow) => r.campaign_criterion?.resource_name)
+    .filter((name): name is string => Boolean(name));
+
+  if (!resourceNames.length) return;
+
+  console.log("[cleanup] removing schedules:", resourceNames.length);
+
+  if (dryRun) return;
+
+  await customer.campaignCriteria.remove(resourceNames);
+}
+
+async function applySchedules(
   campaignIds: string[],
-  hours: number[],
+  blocks: { start: number; end: number }[],
   dryRun: boolean
 ) {
   const customer = getCustomer();
 
-  // Remove existing schedules (simplified approach)
-  // In production: fetch & diff instead of wipe
-  console.log("[schedule] setting hours:", hours);
+  const days = [
+    "MONDAY",
+    "TUESDAY",
+    "WEDNESDAY",
+    "THURSDAY",
+    "FRIDAY",
+    "SATURDAY",
+    "SUNDAY",
+  ] as const;
 
-  if (dryRun) return;
-
-  const operations: resources.ICampaignCriterion[] = [];
+  const creates: resources.ICampaignCriterion[] = [];
 
   for (const id of campaignIds) {
-    for (const hour of hours) {
-      operations.push({
-        campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
-        ad_schedule: {
-          day_of_week: "MONDAY", // simplify: apply to all days below
-          start_hour: hour,
-          end_hour: hour + 1,
-        },
-      });
+    for (const day of days) {
+      for (const b of blocks) {
+        creates.push({
+          campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
+          ad_schedule: {
+            day_of_week: day,
+            start_hour: b.start,
+            end_hour: b.end,
+          },
+        });
+      }
     }
   }
 
-  if (operations.length > 0) {
-    await customer.campaignCriteria.create(operations);
-  }
+  console.log("[apply] schedule ops:", creates.length);
+
+  if (dryRun || !creates.length) return;
+
+  await customer.campaignCriteria.create(creates);
 }
 
-// Apply Device Modifiers
-async function updateDeviceModifiers(
+// Upsert device modifiers
+async function upsertDeviceModifiers(
   campaignIds: string[],
   modifiers: Record<string, number>,
   dryRun: boolean
 ) {
   const customer = getCustomer();
 
-  console.log("[devices] modifiers:", modifiers);
-
-  if (dryRun) return;
-
-  const ops: resources.ICampaignCriterion[] = [];
+  const updates: resources.ICampaignCriterion[] = [];
 
   for (const id of campaignIds) {
     for (const [device, bid] of Object.entries(modifiers)) {
-      ops.push({
-        campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
-        device: {
-          type: Number(device),
-        },
+      updates.push({
+        resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaignCriteria/${id}~${device}`,
         bid_modifier: bid,
       });
     }
   }
 
-  if (ops.length > 0) {
-    await customer.campaignCriteria.create(ops);
-  }
+  console.log("[apply] device modifiers:", modifiers);
+
+  if (dryRun || !updates.length) return;
+
+  await customer.campaignCriteria.update(updates);
 }
 
-
 export async function weeklyAdsOptimizer({ dryRun = false } = {}) {
-  console.log("=== Weekly Ads Optimizer ===");
+  console.log("=== Ads Weekly Tune (Stable v2) ===");
 
   const { hours, devices } = await getPerformance();
 
-  const topHours = selectTopHours(hours);
+  const baseHours = selectTopHours(hours);
+  const expandedHours = expandHours(baseHours);
+  const blocks = buildHourBlocks(expandedHours);
   const deviceModifiers = selectDeviceModifiers(devices);
 
-  console.log("[result] topHours:", topHours);
-  console.log("[result] deviceModifiers:", deviceModifiers);
+  console.log("[baseHours]:", baseHours);
+  console.log("[expandedHours]:", expandedHours);
+  console.log("[blocks]:", blocks);
+  console.log("[deviceModifiers]:", deviceModifiers);
 
   const campaignIds = await getCampaignIds();
-  if (campaignIds.length === 0) return;
+  if (!campaignIds.length) return;
 
-  await updateAdSchedule(campaignIds, topHours, dryRun);
-  await updateDeviceModifiers(campaignIds, deviceModifiers, dryRun);
+  await removeExistingSchedules(campaignIds, dryRun);
+  await applySchedules(campaignIds, blocks, dryRun);
+  await upsertDeviceModifiers(campaignIds, deviceModifiers, dryRun);
 
-  console.log("=== Optimization Complete ===");
+  console.log("=== Done ===");
 }
 
 
