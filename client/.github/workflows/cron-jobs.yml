@@ -11,8 +11,11 @@ on:
     # Budget (every 4 hours)
     - cron: "0 */4 * * *"
 
-    # Optimize (every 2 days)
+    # Google Ads (every 2 days)
     - cron: "0 18 */2 * *"
+
+    # Weekly Google Ads tune (Mon 15:00 UTC)
+    - cron: "0 15 * * 1"
 
   workflow_dispatch: # allows manual trigger
 
@@ -36,3 +39,7 @@ jobs:
       - name: Call Google Ads
         if: github.event.schedule == '0 18 */2 * *'
         run: npx tsx scripts/googleAds.ts
+
+       - name: Call Google Ads tune
+        if: github.event.schedule == '0 15 * * 1'
+        run: npx tsx scripts/weeklyGoogleAdsTune.ts
