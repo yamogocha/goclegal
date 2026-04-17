@@ -22,24 +22,27 @@ on:
 jobs:
   run-crons:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
 
     steps:
       - name: Call weekly blog
         if: github.event.schedule == '0 16 * * 1'
-        run: npx tsx scripts/weeklyBlog.ts
+        run: npx tsx ../scripts/weeklyBlog.ts
 
       - name: Call weekly ad
         if: github.event.schedule == '0 17 * * 1'
-        run: npx tsx scripts/weeklyAd.ts
+        run: npx tsx ../scripts/weeklyAd.ts
 
       - name: Call budget
         if: github.event.schedule == '0 */4 * * *'
-        run: npx tsx scripts/budget.ts
+        run: npx tsx ../scripts/budget.ts
 
       - name: Call Google Ads
         if: github.event.schedule == '0 18 */2 * *'
-        run: npx tsx scripts/googleAds.ts
+        run: npx tsx ../scripts/googleAds.ts
 
       - name: Call Google Ads tune
         if: github.event.schedule == '0 15 * * 1'
-        run: npx tsx scripts/weeklyGoogleAdsTune.ts
+        run: npx tsx ../scripts/weeklyGoogleAdsTune.ts

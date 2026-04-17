@@ -1,6 +1,6 @@
-import { controlBudgetAdvanced } from "../client/src/lib/budgetMonitor";
+import { controlBudget } from "../client/src/lib/budgetMonitor";
 
-controlBudgetAdvanced()
+controlBudget()
   .then(() => {
     console.log("✅ Budget job completed");
     process.exit(0);
