@@ -17,7 +17,7 @@ on:
     # Weekly Google Ads tune (Mon 15:00 UTC)
     - cron: "0 15 * * 1"
 
-  workflow_dispatch: # allows manual trigger
+  workflow_dispatch:
 
 jobs:
   run-crons:
@@ -40,6 +40,6 @@ jobs:
         if: github.event.schedule == '0 18 */2 * *'
         run: npx tsx scripts/googleAds.ts
 
-       - name: Call Google Ads tune
+      - name: Call Google Ads tune
         if: github.event.schedule == '0 15 * * 1'
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
