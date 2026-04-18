@@ -1,21 +1,33 @@
+// client/src/app/api/cron/weeklyBlog/route.ts
 
 import { verifyCronAuth } from "@/lib/oauth";
 import { generateWeeklyBlog } from "@/lib/weeklyBlog";
-import { NextResponse } from "next/server"
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  const unauthorized = verifyCronAuth(req);
+  if (unauthorized) return unauthorized;
 
 
+  try {
+    const result = await generateWeeklyBlog();
 
+    return Response.json({
+      ok: true,
+      result,
+    });
+  } catch (err: unknown) {
+    console.error("[WEEKLY BLOG ERROR]", err);
 
-export async function GET(req: Request) {
-    const unauthorized = verifyCronAuth(req);
-    if (unauthorized) return unauthorized;
+    const message = err instanceof Error ? err.message : String(err);
 
-    // secure the endpoint
-    const auth = req.headers.get("authorization")
-    const expected = `Bearer ${process.env.CRON_SECRET}`
-    if (!process.env.CRON_SECRET || auth !== expected) {
-        return NextResponse.json({ error: "Unauthorized"}, { status: 401 })
-    }
-
-    await generateWeeklyBlog()
+    return Response.json(
+      {
+        ok: false,
+        error: message,
+      },
+      { status: 500 }
+    );
+  }
 }

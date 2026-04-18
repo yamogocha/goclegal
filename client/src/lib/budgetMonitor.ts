@@ -1,3 +1,4 @@
+import "server-only";
 import type { resources, services } from "google-ads-api";
 import { getCustomer } from "./googleAds";
 

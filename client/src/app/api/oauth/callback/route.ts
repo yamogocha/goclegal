@@ -1,6 +1,6 @@
 import { oauth2Client } from "@/lib/oauth";
 
-
+export const runtime = "nodejs";
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");

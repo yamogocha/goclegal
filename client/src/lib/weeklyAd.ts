@@ -1,3 +1,4 @@
+import "server-only";
 import os from "os";
 import { put } from "@vercel/blob";
 import ffmpeg from "fluent-ffmpeg";

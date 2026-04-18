@@ -1,3 +1,5 @@
+import "server-only";
+
 import { extractImageBase64, serverClient, Block, toPortatbleTextBlock, slugify, getRecentPosts } from "@/lib/blog";
 import { imageRespInput, openai, postRespInput, postRespInstructions, weeklyPostSchema } from "@/lib/openai";
 import { NextResponse } from "next/server";
