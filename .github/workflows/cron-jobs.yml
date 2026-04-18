@@ -2,20 +2,11 @@ name: Cron Jobs
 
 on:
   schedule:
-    # Weekly blog (Mon 16:00 UTC)
-    - cron: "0 16 * * 1"
-
-    # Weekly ad (Mon 17:00 UTC)
-    - cron: "0 17 * * 1"
-
-    # Budget (every 4 hours)
-    - cron: "0 */4 * * *"
-
-    # Google Ads (every 2 days)
-    - cron: "0 18 */2 * *"
-
-    # Weekly Google Ads tune (Mon 15:00 UTC)
-    - cron: "0 15 * * 1"
+    - cron: "0 16 * * 1"   # Weekly blog
+    - cron: "0 17 * * 1"   # Weekly ad
+    - cron: "0 */4 * * *"  # Budget
+    - cron: "0 18 */2 * *" # Google Ads
+    - cron: "0 15 * * 1"   # Weekly Google Ads tune
 
   workflow_dispatch:
 
@@ -24,29 +15,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # REQUIRED: pull your repo into the runner
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Debug (keep this until everything is stable)
-      - name: Debug paths
-        run: |
-          echo "PWD:"
-          pwd
-          echo "Root contents:"
-          ls -la
-          echo "Client contents:"
-          ls -la client || echo "NO CLIENT DIR"
-          echo "Scripts contents:"
-          ls -la scripts || echo "NO SCRIPTS DIR"
-
-      # Install deps where package.json exists
-      - name: Install dependencies
+      - name: Install deps
         working-directory: client
         run: npm install
 
       # ----------------------------
-      # CRON EXECUTION
+      # CRON TASKS
       # ----------------------------
 
       - name: Weekly blog
@@ -58,13 +34,13 @@ jobs:
         run: npx tsx scripts/weeklyAd.ts
 
       - name: Budget
-        if: github.event.schedule == '0 */4 * * *'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */4 * * *'
         run: npx tsx scripts/budget.ts
 
       - name: Google Ads
-        if: github.event.schedule == '0 18 */2 * *'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 18 */2 * *'
         run: npx tsx scripts/googleAds.ts
 
       - name: Weekly Google Ads tune
-        if: github.event.schedule == '0 15 * * 1'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 15 * * 1'
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
