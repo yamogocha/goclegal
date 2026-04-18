@@ -22,27 +22,49 @@ on:
 jobs:
   run-crons:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: client
 
     steps:
-      - name: Call weekly blog
+      # REQUIRED: pull your repo into the runner
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Debug (keep this until everything is stable)
+      - name: Debug paths
+        run: |
+          echo "PWD:"
+          pwd
+          echo "Root contents:"
+          ls -la
+          echo "Client contents:"
+          ls -la client || echo "NO CLIENT DIR"
+          echo "Scripts contents:"
+          ls -la scripts || echo "NO SCRIPTS DIR"
+
+      # Install deps where package.json exists
+      - name: Install dependencies
+        working-directory: client
+        run: npm install
+
+      # ----------------------------
+      # CRON EXECUTION
+      # ----------------------------
+
+      - name: Weekly blog
         if: github.event.schedule == '0 16 * * 1'
-        run: npx tsx ../scripts/weeklyBlog.ts
+        run: npx tsx scripts/weeklyBlog.ts
 
-      - name: Call weekly ad
+      - name: Weekly ad
         if: github.event.schedule == '0 17 * * 1'
-        run: npx tsx ../scripts/weeklyAd.ts
+        run: npx tsx scripts/weeklyAd.ts
 
-      - name: Call budget
+      - name: Budget
         if: github.event.schedule == '0 */4 * * *'
-        run: npx tsx ../scripts/budget.ts
+        run: npx tsx scripts/budget.ts
 
-      - name: Call Google Ads
+      - name: Google Ads
         if: github.event.schedule == '0 18 */2 * *'
-        run: npx tsx ../scripts/googleAds.ts
+        run: npx tsx scripts/googleAds.ts
 
-      - name: Call Google Ads tune
+      - name: Weekly Google Ads tune
         if: github.event.schedule == '0 15 * * 1'
-        run: npx tsx ../scripts/weeklyGoogleAdsTune.ts
+        run: npx tsx scripts/weeklyGoogleAdsTune.ts
