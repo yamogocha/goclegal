@@ -10,6 +10,12 @@ export async function POST(req: Request) {
   const unauthorized = verifyCronAuth(req);
   if (unauthorized) return unauthorized;
 
+  const auth = req.headers.get("authorization");
+
+console.log("AUTH HEADER:", auth);
+console.log("EXPECTED:", `Bearer ${process.env.CRON_SECRET}`);
+console.log("MATCH:", auth === `Bearer ${process.env.CRON_SECRET}`);
+
   // Parse query params
   const { searchParams } = new URL(req.url);
   const dryRun = searchParams.get("dryRun") === "true";
