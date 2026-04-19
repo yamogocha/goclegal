@@ -1,7 +1,7 @@
 name: Cron Jobs
 
 env:
-  BASE_URL: https://goclegal.com
+  BASE_URL: https://www.goclegal.com
   CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
 on:
