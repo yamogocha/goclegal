@@ -2,8 +2,7 @@
 
 import { resetAICallCount } from "@/lib/budgetMonitor";
 import {
-  optimizeAds,
-  runSearchTermMining,
+  runGoogleAdsEngine,
   runNegativeKeywordCleanup,
 } from "@/lib/googleAds";
 import { verifyCronAuth } from "@/lib/oauth";
@@ -20,15 +19,13 @@ export async function POST(req: Request) {
   resetAICallCount();
 
   try {
-    const optimizeAdsResult = await optimizeAds({ dryRun });
-    const searchTermResult = await runSearchTermMining({ dryRun });
+    const runGoogleAdsResult = await runGoogleAdsEngine({ dryRun });
     const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
 
     return Response.json({
       ok: true,
       dryRun,
-      optimizeAdsResult,
-      searchTermResult,
+      runGoogleAdsResult,
       negativeKeywordResult,
     });
   } catch (err: unknown) {

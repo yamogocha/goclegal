@@ -20,6 +20,77 @@ export function getCustomer() {
   });
 }
 
+// ai generation helper
+const unifiedDecisionSchema = z.array(
+  z.object({
+    term: z.string(),
+    action: z.enum(["add_keyword", "add_negative", "optimize_ad", "ignore"]),
+    keywords: z.array(z.string()).optional(),
+    headlines: z.array(z.string()).optional(),
+    descriptions: z.array(z.string()).optional(),
+    reasoning: z.string(),
+  })
+);
+
+type UnifiedDecision = z.infer<typeof unifiedDecisionSchema>[number];
+
+async function decideSearchTermsAndAds(terms: string[]): Promise<UnifiedDecision[]> {
+  if (!canMakeAICall()) {
+    console.log("[AI] limit reached → skip unified decision");
+    return [];
+  }
+
+  trackAICall();
+
+  const prompt = `
+${GOC_LEGAL_BRAND_CONTEXT}
+
+You are optimizing Google Ads for a personal injury law firm.
+
+For each search term:
+
+1. Decide ONE action:
+- add_keyword → high intent, generate 2–3 keywords
+- add_negative → irrelevant/waste
+- optimize_ad → generate new RSA assets
+- ignore
+
+2. If add_keyword:
+- generate 2–3 keywords
+- each must be:
+  - 2–5 words
+  - under 30 characters
+  - high intent (hire-ready)
+
+3. If optimize_ad:
+- generate:
+  - 10–15 headlines (max 30 chars)
+  - 3–4 descriptions (max 90 chars)
+
+TERMS:
+${terms.map((t, i) => `${i + 1}. ${t}`).join("\n")}
+
+Return JSON:
+[
+  {
+    "term": "...",
+    "action": "...",
+    "keywords": [],
+    "headlines": [],
+    "descriptions": [],
+    "reasoning": "..."
+  }
+]
+`;
+
+  const res = await openai.responses.create({
+    model: "gpt-5",
+    input: prompt,
+  });
+
+  return unifiedDecisionSchema.parse(JSON.parse(res.output_text));
+}
+
 // Fetch Low-Performance Assets
 async function getLowPerformingAssets() {
   const customer = getCustomer();
@@ -152,69 +223,6 @@ function extractTopKeyword(ad: services.IGoogleAdsRow): string {
   );
 }
 
-
-const rsaAssetsSchema = z.object({
-  headlines: z.array(z.string()),
-  descriptions: z.array(z.string()),
-});
-// Deep Search Asset Generator
-async function generateRSAAssets(params: {
-  keyword: string;
-  location: string;
-}) {
-
-  if (!canMakeAICall()) {
-    console.log("[AI] limit reached → skip RSA generation");
-    return null;
-  }
-
-  trackAICall();
-
-  const prompt = `
-${GOC_LEGAL_BRAND_CONTEXT}
-
-TASK:
-Generate HIGH-CONVERSION Google Ads RSA assets.
-
-INPUT:
-Keyword: ${params.keyword}
-Location: ${params.location}
-
-REQUIREMENTS:
-- Headlines: 10–15 (max 30 chars each)
-- Descriptions: 3–4 (max 90 chars each)
-- Focus on HIGH INTENT (hire-ready users)
-- Include emotional triggers:
-  - lowball insurance
-  - urgency (2-year statute)
-  - DA background credibility
-- NO legal advice
-
-Return JSON:
-{
-  "headlines": string[],
-  "descriptions": string[]
-}
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5",
-    input: prompt,
-  });
-
-  
-  return rsaAssetsSchema.parse(JSON.parse(res.output_text));
-}
-
-type RsaAssets = z.infer<typeof rsaAssetsSchema>;
-
-type OptimizeAdsDryRunRow = {
-  adId: number;
-  keyword: string;
-  newAssets: RsaAssets | null;
-};
-
-
 async function updateAdAssets(params: {
   adGroupId: string;
   adId: number;
@@ -250,55 +258,28 @@ async function updateAdAssets(params: {
   console.log("Replaced ad:", { adGroupId, adId });
 }
 
-export async function optimizeAds({ dryRun = false } = {}) {
-  const lowAds = await getLowPerformingAssets();
+async function negativeKeywordExists(
+  campaignId: string,
+  term: string
+): Promise<boolean> {
+  const customer = getCustomer();
 
-  const results: OptimizeAdsDryRunRow[] = [];
+  const query = `
+    SELECT
+      campaign_criterion.keyword.text
+    FROM campaign_criterion
+    WHERE
+      campaign.id = ${campaignId}
+      AND campaign_criterion.negative = TRUE
+  `;
 
-  for (const ad of lowAds) {
-    const adId = ad.ad_group_ad?.ad?.id;
-    if (adId == null) continue;
+  const rows = await customer.query(query);
 
-    const keyword = extractTopKeyword(ad);
-
-    const newAssets = await generateRSAAssets({
-      keyword,
-      location: "Oakland, CA",
-    });
-
-    const payload = {
-      adId,
-      keyword,
-      newAssets,
-    };
-
-    if (dryRun) {
-      results.push(payload);
-      continue;
-    }
-
-    if (newAssets) {
-      const adGroupId = ad.ad_group_ad?.ad_group;
-    
-      if (!adGroupId) {
-        console.log("[SKIP - missing adGroupId]", adId);
-        continue;
-      }
-    
-      const parsedAdGroupId = String(adGroupId).split("/").pop()!;
-    
-      await updateAdAssets({
-        adGroupId: parsedAdGroupId,
-        adId,
-        assets: newAssets,
-      });
-    }
-  }
-  return results;
+  return rows.some((r: services.IGoogleAdsRow) => {
+    const existing = r.campaign_criterion?.keyword?.text?.toLowerCase();
+    return existing === term.toLowerCase();
+  });
 }
-
-
-
 
 
 const processedTerms = new Set<string>();
@@ -457,107 +438,104 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
-type SearchTermMiningDryRunRow = {
-  action: "add_keyword";
-  term: string;
-  adGroupId: string;
-  reasoning: string;
-};
-export async function runSearchTermMining({ dryRun = false } = {}) {
-  const terms = await getSearchTermWinners();
+export async function runGoogleAdsEngine({ dryRun = false } = {}) {
+  resetAICallCount();
 
-  console.log("ALL TERMS:", terms.length);
-  console.log("TOP TERMS:", terms.slice(0, 5));
+  const addedKeywords = new Set<string>();
+  const results: any[] = [];
 
-  const results: (SearchTermMiningDryRunRow | NegativeKeywordDryRunRow)[] = [];
+  // -------------------------
+  // 1. FETCH DATA
+  // -------------------------
+  const [terms, lowAds] = await Promise.all([
+    getSearchTermWinners(),
+    getLowPerformingAssets(),
+  ]);
 
-  const MAX_ACTIONS = 5;
+  const MAX_TERMS = 5;
+  const MAX_ADS = 5;
 
-  const candidates = terms
+  const termCandidates = terms
     .filter(t => t.score >= 2)
-    .slice(0, MAX_ACTIONS);
+    .slice(0, MAX_TERMS);
 
-  if (candidates.length === 0) return results;
+  const adItems = lowAds
+    .map((ad) => {
+      const adId = ad.ad_group_ad?.ad?.id;
+      const adGroupId = ad.ad_group_ad?.ad_group;
 
-  const batchTerms = candidates.map(c => c.term);
+      if (!adId || !adGroupId) return null;
 
-  let classifications: Classification[] = [];
+      return {
+        ad,
+        adId,
+        adGroupId: String(adGroupId).split("/").pop()!,
+        keyword: extractTopKeyword(ad),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_ADS) as {
+    ad: any;
+    adId: number;
+    adGroupId: string;
+    keyword: string;
+  }[];
 
-  if (canMakeAICall()) {
-    classifications = await classifyWithCacheBatch(batchTerms);
+  if (termCandidates.length === 0 && adItems.length === 0) {
+    return results;
   }
 
-  for (const row of candidates) {
-    const { term, campaignId } = row;
+  // -------------------------
+  // 2. BUILD AI INPUT
+  // -------------------------
+  const inputTerms = [
+    ...termCandidates.map(t => t.term),
+    ...adItems.map(a => a.keyword),
+  ];
 
-    if (!campaignId) {
-      console.log("[SKIP - missing campaignId]", term);
-      continue;
-    }
+  const decisions = await decideSearchTermsAndAds(inputTerms);
+
+  const decisionMap = new Map(decisions.map(d => [d.term, d]));
+
+  // -------------------------
+  // 3. APPLY SEARCH TERM ACTIONS
+  // -------------------------
+  for (const row of termCandidates) {
+    const { term, campaignId, adGroupId } = row;
+
+    if (!campaignId) continue;
+
+    const d = decisionMap.get(term);
+    if (!d) continue;
+
+    console.log("TERM DECISION:", d);
 
     const key = getKey(campaignId, term);
-
-    let action: "add_keyword" | "add_negative" | "ignore" = "ignore";
-    let reasoning = "fallback";
-
-    const c = classifications.find(x => x.term === term);
-
-    if (c) {
-      action = c.action;
-      reasoning = c.reasoning;
-    } else {
-      // fallback logic
-      if (row.conversions >= 1 && row.cpa < 60) {
-        action = "add_keyword";
-        reasoning = "fallback: good performer";
-      } else if (row.clicks >= 2 && row.conversions === 0 && row.cost > 20) {
-        action = "add_negative";
-        reasoning = "fallback: wasted spend";
-      }
-    }
-
-    console.log("DECISION:", { term, action, reasoning });
-
-    // mark processed EARLY
     processedTerms.add(key);
 
-    // -------------------------
-    // APPLY ACTION
-    // -------------------------
+    // KEYWORDS
+    if (d.action === "add_keyword" && d.keywords) {
+      for (const kw of d.keywords) {
+        if (addedKeywords.has(kw)) continue;
+        addedKeywords.add(kw);
 
-    if (action === "add_keyword") {
-      const payload: SearchTermMiningDryRunRow = {
-        action: "add_keyword",
-        term,
-        adGroupId: row.adGroupId,
-        reasoning,
-      };
-
-      if (dryRun) {
-        results.push(payload);
-      } else {
-        await addExactMatchKeyword({
-          adGroupId: row.adGroupId,
-          keyword: term,
-        });
+        if (dryRun) {
+          results.push({ action: "add_keyword", term: kw });
+        } else {
+          await addExactMatchKeyword({
+            adGroupId,
+            keyword: kw,
+          });
+        }
       }
     }
 
-    if (action === "add_negative") {
-      if (await negativeKeywordExists(campaignId, term)) {
-        console.log("[SKIP DUP NEGATIVE - mining]", term);
-        continue;
-      }
-
-      const payload: NegativeKeywordDryRunRow = {
-        action: "add_negative",
-        term,
-        campaignId,
-        reasoning,
-      };
+    // NEGATIVES
+    if (d.action === "add_negative") {
+      if (await negativeKeywordExists(campaignId, term)) continue;
 
       if (dryRun) {
-        results.push(payload);
+        results.push({ action: "add_negative", term });
       } else {
         await addNegativeKeyword({
           campaignId,
@@ -567,8 +545,55 @@ export async function runSearchTermMining({ dryRun = false } = {}) {
     }
   }
 
+  // -------------------------
+  // 4. APPLY AD OPTIMIZATION
+  // -------------------------
+  for (const item of adItems) {
+    const { adId, adGroupId, keyword } = item;
+
+    const d = decisionMap.get(keyword);
+    if (!d) continue;
+
+    console.log("AD DECISION:", d);
+
+    if (
+      d.action !== "optimize_ad" ||
+      !d.headlines ||
+      !d.descriptions
+    ) {
+      continue;
+    }
+
+    const newAssets = {
+      headlines: d.headlines,
+      descriptions: d.descriptions,
+    };
+
+    if (dryRun) {
+      results.push({
+        action: "optimize_ad",
+        adId,
+        keyword,
+      });
+      continue;
+    }
+
+    try {
+      await updateAdAssets({
+        adGroupId,
+        adId,
+        assets: newAssets,
+      });
+
+      console.log("[UPDATED AD]", { adId, keyword });
+    } catch (err) {
+      console.error("[UPDATE AD FAILED]", adId, err);
+    }
+  }
+
   return results;
 }
+
 
 
 type ScoredWasteTerm = {
@@ -674,7 +699,7 @@ export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
   const MAX_NEGATIVES = 3;
 
   const candidates = waste
-    .filter(w => w.score >= 3)
+    .filter(w => w.score >= 4) // 🔥 stricter than before
     .slice(0, MAX_NEGATIVES);
 
   for (const row of candidates) {
@@ -682,13 +707,13 @@ export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
 
     const key = getKey(campaignId, term);
 
-    // skip if already handled in mining
+    // ✅ skip anything already processed by AI layer
     if (processedTerms.has(key)) {
-      console.log("[SKIP - handled in mining]", term);
+      console.log("[SKIP - handled by AI]", term);
       continue;
     }
 
-    // dedup against Google Ads
+    // ✅ dedup against Google Ads
     if (await negativeKeywordExists(campaignId, term)) {
       console.log("[SKIP DUP NEGATIVE - cleanup]", term);
       continue;
@@ -698,7 +723,7 @@ export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
       action: "add_negative",
       term,
       campaignId,
-      reasoning: "cleanup: high waste score",
+      reasoning: "cleanup: extreme waste fallback",
     };
 
     if (dryRun) {
@@ -713,125 +738,4 @@ export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
 
   return results;
 }
-
-
-async function negativeKeywordExists(
-  campaignId: string,
-  term: string
-): Promise<boolean> {
-  const customer = getCustomer();
-
-  const query = `
-    SELECT
-      campaign_criterion.keyword.text
-    FROM campaign_criterion
-    WHERE
-      campaign.id = ${campaignId}
-      AND campaign_criterion.negative = TRUE
-  `;
-
-  const rows = await customer.query(query);
-
-  return rows.some((r: services.IGoogleAdsRow) => {
-    const existing = r.campaign_criterion?.keyword?.text?.toLowerCase();
-    return existing === term.toLowerCase();
-  });
-}
-
-
-// ai Keyword Filterexpor
-const classificationSchema = z.array(
-  z.object({
-    term: z.string(),
-    category: z.enum(["high_intent", "medium_intent", "low_intent", "irrelevant"]),
-    action: z.enum(["add_keyword", "add_negative", "ignore"]),
-    reasoning: z.string(),
-  }),
-);
-type Classification = {
-  term: string;
-  category: "high_intent" | "medium_intent" | "low_intent" | "irrelevant";
-  action: "add_keyword" | "add_negative" | "ignore";
-  reasoning: string;
-};
-
-async function classifyBatch(terms: string[]): Promise<Classification[]> {
-  if (terms.length === 0) return [];
-
-  if (!canMakeAICall()) {
-    console.log("[AI] limit reached → skipping batch");
-    return [];
-  }
-
-  trackAICall(); //  track BEFORE calling
-
-  const prompt = `
-${GOC_LEGAL_BRAND_CONTEXT}
-
-Classify each search term for a personal injury law firm.
-
-TERMS:
-${terms.map((t, i) => `${i + 1}. ${t}`).join("\n")}
-
-Return STRICT JSON:
-[
-  {
-    "term": "...",
-    "category": "high_intent | medium_intent | low_intent | irrelevant",
-    "action": "add_keyword | add_negative | ignore",
-    "reasoning": "short explanation"
-  }
-]
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5-mini",
-    input: prompt,
-  });
-
-  return classificationSchema.parse(JSON.parse(res.output_text));
-}
-
-// cache per term globally
-const classificationCache = new Map<string, Classification>();
-
-async function classifyWithCacheBatch(terms: string[]) {
-  const uncached: string[] = [];
-  const results: Classification[] = [];
-
-  for (const term of terms) {
-    if (classificationCache.has(term)) {
-      results.push(classificationCache.get(term)!);
-    } else {
-      uncached.push(term);
-    }
-  }
-
-  if (uncached.length > 0) {
-    const fresh = await classifyBatch(uncached);
-
-    for (const item of fresh) {
-      classificationCache.set(item.term, item);
-      results.push(item);
-    }
-  }
-
-  return results;
-}
-
-export async function manageGoogleAds() {
-  try {
-    resetAICallCount(); // reset at start
-    await optimizeAds(); // fix bad ads
-    await runSearchTermMining();      // Add winners
-    await runNegativeKeywordCleanup(); // Remove waste
-
-    return Response.json({ ok: true });
-  } catch (err: unknown) {
-    console.error(err);
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: message }, { status: 500 });
-  }
-}
-
 
