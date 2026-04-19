@@ -424,16 +424,33 @@ async function addExactMatchKeyword(params: {
   adGroupId: string;
   keyword: string;
 }) {
-  const customer = getCustomer();
+  const cleaned = params.keyword
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .trim();
 
-  const text = `[${params.keyword}]`; // exact match
+  const words = cleaned.split(/\s+/);
+
+  // 🚫 FINAL SAFETY NET (cannot be bypassed)
+  if (
+    words.length < 2 ||
+    words.length > 4 ||
+    cleaned.length > 30 ||
+    /^(how|what|when|why|should|can)\b/.test(cleaned) ||
+    /\bto\b/.test(cleaned)
+  ) {
+    console.log("[BLOCKED BEFORE GOOGLE]", cleaned);
+    return;
+  }
+
+  const customer = getCustomer();
 
   await customer.adGroupCriteria.create([
     {
       ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${params.adGroupId}`,
       status: "ENABLED",
       keyword: {
-        text,
+        text: `[${cleaned}]`,
         match_type: "EXACT",
       },
     },
@@ -705,6 +722,19 @@ async function addNegativeKeyword(params: {
   campaignId: string;
   keyword: string;
 }) {
+  const cleaned = params.keyword
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .trim();
+
+  const words = cleaned.split(/\s+/);
+
+  // 🚫 block only extreme cases
+  if (words.length > 12 || cleaned.length > 120) {
+    console.log("[BLOCKED NEGATIVE TOO LONG]", cleaned);
+    return;
+  }
+
   const customer = getCustomer();
 
   await customer.campaignCriteria.create([
@@ -712,7 +742,7 @@ async function addNegativeKeyword(params: {
       campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${params.campaignId}`,
       negative: true,
       keyword: {
-        text: params.keyword,
+        text: cleaned,
         match_type: "PHRASE",
       },
     },
