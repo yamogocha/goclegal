@@ -34,7 +34,15 @@ export async function POST(req: Request) {
   } catch (err: unknown) {
     console.error("[GOOGLE ADS ERROR]", err);
 
-    const message = err instanceof Error ? err.message : String(err);
+    let message: string;
+
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === "object" && err !== null) {
+      message = JSON.stringify(err, null, 2);
+    } else {
+      message = String(err);
+    }
 
     return Response.json(
       {
