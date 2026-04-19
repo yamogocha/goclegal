@@ -424,6 +424,10 @@ async function addExactMatchKeyword(params: {
   adGroupId: string;
   keyword: string;
 }) {
+  if (params.keyword.includes("how to handle")) {
+    throw new Error("TRAP: RAW TERM REACHED KEYWORD CREATION");
+  }
+  
   const cleaned = params.keyword
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
