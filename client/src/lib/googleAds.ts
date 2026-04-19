@@ -214,20 +214,40 @@ type OptimizeAdsDryRunRow = {
   newAssets: RsaAssets | null;
 };
 
-async function updateAdAssets(adId: number, assets: { headlines: string[], descriptions: string[] }) {
+
+async function updateAdAssets(params: {
+  adGroupId: string;
+  adId: number;
+  assets: { headlines: string[]; descriptions: string[] };
+}) {
   const customer = getCustomer();
 
-  await customer.adGroupAds.update([
+  const { adGroupId, adId, assets } = params;
+
+  // 1. Create NEW ad (valid operation)
+  await customer.adGroupAds.create([
     {
-      resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adId}`,
+      ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+      status: "ENABLED",
       ad: {
         responsive_search_ad: {
-          headlines: assets.headlines.map((h: string) => ({ text: h })),
-          descriptions: assets.descriptions.map((d: string) => ({ text: d })),
+          headlines: assets.headlines.map((h) => ({ text: h })),
+          descriptions: assets.descriptions.map((d) => ({ text: d })),
         },
+        final_urls: ["https://www.goclegal.com"],
       },
     },
   ]);
+
+  // 2. Pause OLD ad (allowed)
+  await customer.adGroupAds.update([
+    {
+      resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adGroupId}~${adId}`,
+      status: "PAUSED",
+    },
+  ]);
+
+  console.log("Replaced ad:", { adGroupId, adId });
 }
 
 export async function optimizeAds({ dryRun = false } = {}) {
@@ -258,7 +278,20 @@ export async function optimizeAds({ dryRun = false } = {}) {
     }
 
     if (newAssets) {
-      await updateAdAssets(adId, newAssets);
+      const adGroupId = ad.ad_group_ad?.ad_group;
+    
+      if (!adGroupId) {
+        console.log("[SKIP - missing adGroupId]", adId);
+        continue;
+      }
+    
+      const parsedAdGroupId = String(adGroupId).split("/").pop()!;
+    
+      await updateAdAssets({
+        adGroupId: parsedAdGroupId,
+        adId,
+        assets: newAssets,
+      });
     }
   }
   return results;
