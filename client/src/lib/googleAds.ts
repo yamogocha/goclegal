@@ -512,24 +512,41 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     // KEYWORDS
     if (d.action === "add_keyword" && d.keywords) {
       for (const kw of d.keywords) {
-
-         const cleaned = kw
-        .toLowerCase()
-        .replace(/[^\w\s]/g, "")
-        .trim();
-
-      const wordCount = cleaned.split(/\s+/).length;
-
-      if (wordCount < 2 || wordCount > 4 || cleaned.length > 30) {
-        console.log("[SKIP INVALID KEYWORD]", kw);
-        continue;
-      }
-
-      if (addedKeywords.has(cleaned)) continue;
-      addedKeywords.add(cleaned);
-
+        const cleaned = kw
+          .toLowerCase()
+          .replace(/[^\w\s]/g, "")
+          .trim();
+      
+        const words = cleaned.split(/\s+/);
+      
+        // HARD BLOCK: reject if resembles sentence
+        if (words.length > 4) {
+          console.log("[BLOCK LONG KEYWORD]", kw);
+          continue;
+        }
+      
+        if (cleaned.length > 30) {
+          console.log("[BLOCK LONG TEXT]", kw);
+          continue;
+        }
+      
+        // HARD BLOCK: reject question phrases EVEN IF SHORT
+        if (/^(how|what|when|why|should|can)\b/.test(cleaned)) {
+          console.log("[BLOCK QUESTION KEYWORD]", kw);
+          continue;
+        }
+      
+        // HARD BLOCK: reject if contains "to" pattern (sentence indicator)
+        if (/\bto\b/.test(cleaned) && words.length >= 4) {
+          console.log("[BLOCK SENTENCE-LIKE]", kw);
+          continue;
+        }
+      
+        if (addedKeywords.has(cleaned)) continue;
+        addedKeywords.add(cleaned);
+      
         if (dryRun) {
-          results.push({ action: "add_keyword", term: kw });
+          results.push({ action: "add_keyword", term: cleaned });
         } else {
           await addExactMatchKeyword({
             adGroupId,
