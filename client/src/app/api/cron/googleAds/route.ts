@@ -3,7 +3,7 @@
 import { resetAICallCount } from "@/lib/budgetMonitor";
 import {
   runGoogleAdsEngine,
-  runNegativeKeywordCleanup,
+  // runNegativeKeywordCleanup,
 } from "@/lib/googleAds";
 import { verifyCronAuth } from "@/lib/oauth";
 
@@ -20,13 +20,13 @@ export async function POST(req: Request) {
 
   try {
     const runGoogleAdsResult = await runGoogleAdsEngine({ dryRun });
-    const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
+    // const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
 
     return Response.json({
       ok: true,
       dryRun,
       runGoogleAdsResult,
-      negativeKeywordResult,
+      // negativeKeywordResult,
     });
   } catch (err: unknown) {
     console.error("[GOOGLE ADS ERROR]", err);
