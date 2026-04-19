@@ -56,11 +56,13 @@ For each search term:
 - ignore
 
 2. If add_keyword:
-- generate 2–3 keywords
-- each must be:
-  - 2–5 words
-  - under 30 characters
-  - high intent (hire-ready)
+- generate EXACTLY 2 keywords
+- each keyword MUST:
+  - be 2–4 words ONLY
+  - be under 30 characters
+  - NOT be a sentence
+  - NOT start with: how, what, when, why, should, can
+  - MUST look like a Google Ads keyword (short phrase)
 
 3. If optimize_ad:
 - generate:
@@ -84,7 +86,7 @@ Return JSON:
 `;
 
   const res = await openai.responses.create({
-    model: "gpt-5",
+    model: "gpt-5-mini",
     input: prompt,
   });
 
@@ -516,8 +518,21 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     // KEYWORDS
     if (d.action === "add_keyword" && d.keywords) {
       for (const kw of d.keywords) {
-        if (addedKeywords.has(kw)) continue;
-        addedKeywords.add(kw);
+
+         const cleaned = kw
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .trim();
+
+      const wordCount = cleaned.split(/\s+/).length;
+
+      if (wordCount < 2 || wordCount > 5 || cleaned.length > 30) {
+        console.log("[SKIP INVALID KEYWORD]", kw);
+        continue;
+      }
+
+      if (addedKeywords.has(cleaned)) continue;
+      addedKeywords.add(cleaned);
 
         if (dryRun) {
           results.push({ action: "add_keyword", term: kw });
