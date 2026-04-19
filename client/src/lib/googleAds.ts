@@ -446,9 +446,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   const addedKeywords = new Set<string>();
   const results: any[] = [];
 
-  // -------------------------
-  // 1. FETCH DATA
-  // -------------------------
+  // FETCH DATA
   const [terms, lowAds] = await Promise.all([
     getSearchTermWinners(),
     getLowPerformingAssets(),
@@ -487,9 +485,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     return results;
   }
 
-  // -------------------------
-  // 2. BUILD AI INPUT
-  // -------------------------
+  // BUILD AI INPUT
   const inputTerms = [
     ...termCandidates.map(t => t.term),
     ...adItems.map(a => a.keyword),
@@ -499,9 +495,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
 
   const decisionMap = new Map(decisions.map(d => [d.term, d]));
 
-  // -------------------------
-  // 3. APPLY SEARCH TERM ACTIONS
-  // -------------------------
+  // APPLY SEARCH TERM ACTIONS
   for (const row of termCandidates) {
     const { term, campaignId, adGroupId } = row;
 
@@ -526,7 +520,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
 
       const wordCount = cleaned.split(/\s+/).length;
 
-      if (wordCount < 2 || wordCount > 5 || cleaned.length > 30) {
+      if (wordCount < 2 || wordCount > 4 || cleaned.length > 30) {
         console.log("[SKIP INVALID KEYWORD]", kw);
         continue;
       }
@@ -539,7 +533,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
         } else {
           await addExactMatchKeyword({
             adGroupId,
-            keyword: kw,
+            keyword: cleaned,
           });
         }
       }
@@ -560,9 +554,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     }
   }
 
-  // -------------------------
-  // 4. APPLY AD OPTIMIZATION
-  // -------------------------
+  // APPLY AD OPTIMIZATION
   for (const item of adItems) {
     const { adId, adGroupId, keyword } = item;
 
