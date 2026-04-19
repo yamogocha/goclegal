@@ -446,7 +446,9 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   const addedKeywords = new Set<string>();
   const results: any[] = [];
 
+  // -------------------------
   // FETCH DATA
+  // -------------------------
   const [terms, lowAds] = await Promise.all([
     getSearchTermWinners(),
     getLowPerformingAssets(),
@@ -485,21 +487,23 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     return results;
   }
 
-  // BUILD AI INPUT
+  // -------------------------
+  // AI DECISION
+  // -------------------------
   const inputTerms = [
     ...termCandidates.map(t => t.term),
     ...adItems.map(a => a.keyword),
   ];
 
   const decisions = await decideSearchTermsAndAds(inputTerms);
-
   const decisionMap = new Map(decisions.map(d => [d.term, d]));
 
+  // -------------------------
   // APPLY SEARCH TERM ACTIONS
+  // -------------------------
   for (const row of termCandidates) {
     const { term, campaignId, adGroupId } = row;
-
-    if (!campaignId) continue;
+    if (!campaignId || !adGroupId) continue;
 
     const d = decisionMap.get(term);
     if (!d) continue;
@@ -509,42 +513,33 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     const key = getKey(campaignId, term);
     processedTerms.add(key);
 
-    // KEYWORDS
+    // -------------------------
+    // KEYWORDS (SAFE)
+    // -------------------------
     if (d.action === "add_keyword" && d.keywords) {
-      for (const kw of d.keywords) {
-        const cleaned = kw
+      for (const raw of d.keywords) {
+        const cleaned = raw
           .toLowerCase()
           .replace(/[^\w\s]/g, "")
           .trim();
-      
+
         const words = cleaned.split(/\s+/);
-      
-        // HARD BLOCK: reject if resembles sentence
-        if (words.length > 4) {
-          console.log("[BLOCK LONG KEYWORD]", kw);
+
+        // 🚫 HARD BLOCKS (bulletproof)
+        if (
+          words.length < 2 ||
+          words.length > 4 ||
+          cleaned.length > 30 ||
+          /^(how|what|when|why|should|can)\b/.test(cleaned) ||
+          /\bto\b/.test(cleaned) // sentence indicator
+        ) {
+          console.log("[SKIP INVALID KEYWORD]", raw);
           continue;
         }
-      
-        if (cleaned.length > 30) {
-          console.log("[BLOCK LONG TEXT]", kw);
-          continue;
-        }
-      
-        // HARD BLOCK: reject question phrases EVEN IF SHORT
-        if (/^(how|what|when|why|should|can)\b/.test(cleaned)) {
-          console.log("[BLOCK QUESTION KEYWORD]", kw);
-          continue;
-        }
-      
-        // HARD BLOCK: reject if contains "to" pattern (sentence indicator)
-        if (/\bto\b/.test(cleaned) && words.length >= 4) {
-          console.log("[BLOCK SENTENCE-LIKE]", kw);
-          continue;
-        }
-      
+
         if (addedKeywords.has(cleaned)) continue;
         addedKeywords.add(cleaned);
-      
+
         if (dryRun) {
           results.push({ action: "add_keyword", term: cleaned });
         } else {
@@ -556,22 +551,39 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
       }
     }
 
-    // NEGATIVES
+    // -------------------------
+    // NEGATIVES (SAFE)
+    // -------------------------
     if (d.action === "add_negative") {
-      if (await negativeKeywordExists(campaignId, term)) continue;
+      const cleaned = term
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .trim();
 
-      if (dryRun) {
-        results.push({ action: "add_negative", term });
-      } else {
-        await addNegativeKeyword({
-          campaignId,
-          keyword: term,
-        });
-      }
+    const words = cleaned.split(/\s+/);
+
+    // 🚫 only block extreme cases (not normal long phrases)
+    if (words.length > 12 || cleaned.length > 120) {
+      console.log("[SKIP EXTREME NEGATIVE]", term);
+      continue;
+    }
+
+    if (await negativeKeywordExists(campaignId, cleaned)) continue;
+
+    if (dryRun) {
+      results.push({ action: "add_negative", term: cleaned });
+    } else {
+      await addNegativeKeyword({
+        campaignId,
+        keyword: cleaned,
+      });
+    }
     }
   }
 
+  // -------------------------
   // APPLY AD OPTIMIZATION
+  // -------------------------
   for (const item of adItems) {
     const { adId, adGroupId, keyword } = item;
 
