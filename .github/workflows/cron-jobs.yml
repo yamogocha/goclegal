@@ -6,45 +6,75 @@ env:
 
 on:
   schedule:
-    - cron: "0 16 * * 1"   # Weekly blog
-    - cron: "0 17 * * 1"   # Weekly ad
-    - cron: "0 */4 * * *"  # Budget
-    - cron: "0 18 */2 * *" # Google Ads
-    - cron: "0 15 * * 1"   # Weekly Google Ads tune
+    # All cron times are in UTC (GitHub Actions standard)
+
+    - cron: "0 16 * * 1"   # Weekly blog → Monday 9:00 AM PST
+    - cron: "0 17 * * 1"   # Weekly ad → Monday 10:00 AM PST
+    - cron: "0 */4 * * *"  # Budget → Every 4 hours
+    - cron: "0 15 * * 1"   # Weekly Google Ads tune → Monday 8:00 AM PST
+
+    # Google Ads main job intentionally NOT scheduled for now
+    # so you can iterate safely via manual trigger
 
   workflow_dispatch:
+    inputs:
+      job:
+        description: "Run a specific job manually"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - blog
+          - ad
+          - budget
+          - googleAds
+          - weeklyGoogleAdsTune
 
 jobs:
   run-crons:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: client
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: Install deps
-        working-directory: client
         run: npm install
 
       # ----------------------------
-      # CRON TASKS
+      # CRON TASKS (SCHEDULED)
       # ----------------------------
 
       - name: Weekly blog
-        if: github.event.schedule == '0 16 * * 1'
+        if: github.event.schedule == '0 16 * * 1' || github.event.inputs.job == 'blog' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyBlog.ts
 
       - name: Weekly ad
-        if: github.event.schedule == '0 17 * * 1'
+        if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyAd.ts
 
       - name: Budget
-        if: github.event.schedule == '0 */4 * * *'
+        if: github.event.schedule == '0 */4 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
         run: npx tsx scripts/budget.ts
 
-      - name: Google Ads
-        working-directory: client
-        run: npx tsx scripts/googleAds.ts
-
       - name: Weekly Google Ads tune
-        if: github.event.schedule == '0 15 * * 1'
+        if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'weeklyGoogleAdsTune' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
+
+      # ----------------------------
+      # GOOGLE ADS (MANUAL ONLY FOR NOW)
+      # ----------------------------
+
+      - name: Google Ads (manual / iteration)
+        if: github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'googleAds' || github.event.inputs.job == 'all')
+        run: npx tsx scripts/googleAds.ts
