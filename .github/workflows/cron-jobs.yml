@@ -41,7 +41,6 @@ jobs:
         run: npx tsx scripts/budget.ts
 
       - name: Google Ads
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 18 */2 * *'
         run: npx tsx scripts/googleAds.ts
 
       - name: Weekly Google Ads tune
