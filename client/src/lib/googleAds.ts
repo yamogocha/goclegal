@@ -543,28 +543,43 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
 
     processedTerms.add(getKey(campaignId, term));
 
-    // -------------------------
     // ADD KEYWORDS
-    // -------------------------
     if (d.action === "add_keyword" && d.keywords?.length) {
       for (const raw of d.keywords) {
         const cleaned = normalize(raw);
-
-        if (!isValidKeyword(cleaned)) {
-          console.log("[INVALID KEYWORD BLOCKED]", raw);
+    
+        const words = cleaned.split(/\s+/);
+    
+        const isInvalid =
+          words.length > 4 ||
+          cleaned.length > 30 ||
+          /^(how|what|when|why|should|can)\b/.test(cleaned) ||
+          /\bto\b/.test(cleaned);
+    
+        if (isInvalid) {
+          console.log("[BLOCKED KEYWORD - FINAL]", cleaned);
           continue;
         }
-
+    
         if (addedKeywords.has(cleaned)) continue;
         addedKeywords.add(cleaned);
-
+    
         if (dryRun) {
           results.push({ action: "add_keyword", term: cleaned });
         } else {
-          await addExactMatchKeyword({
-            adGroupId,
-            keyword: cleaned,
-          });
+          // 👇 INLINE create — NO separate function
+          const customer = getCustomer();
+    
+          await customer.adGroupCriteria.create([
+            {
+              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+              status: "ENABLED",
+              keyword: {
+                text: `[${cleaned}]`,
+                match_type: "EXACT",
+              },
+            },
+          ]);
         }
       }
     }
