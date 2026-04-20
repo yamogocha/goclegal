@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import "server-only";
 
 import { GoogleAdsApi, type services } from "google-ads-api";
@@ -541,7 +541,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
       continue;
     }
 
-    console.log("DECISION USED:", term, d.action);
+      console.log("DECISION USED:", term, d!.action);
 
     processedTerms.add(getKey(campaignId, term));
 
