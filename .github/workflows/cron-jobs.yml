@@ -1,7 +1,7 @@
 name: Cron Jobs
 
 env:
-  BASE_URL: https://www.goclegal.com
+  BASE_URL: https://goclegal-ionq5rsxn-yamogochas-projects.vercel.app
   CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
 on:
