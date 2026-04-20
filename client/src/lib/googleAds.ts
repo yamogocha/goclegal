@@ -572,16 +572,17 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
         } else {
           const customer = getCustomer();
     
-          await customer.adGroupCriteria.create([
-            {
-              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
-              status: "ENABLED",
-              keyword: {
-                text: `[${cleaned}]`,
-                match_type: "EXACT",
-              },
-            },
-          ]);
+          throw new Error("STOP: BEFORE GOOGLE CREATE");
+          // await customer.adGroupCriteria.create([
+          //   {
+          //     ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+          //     status: "ENABLED",
+          //     keyword: {
+          //       text: `[${cleaned}]`,
+          //       match_type: "EXACT",
+          //     },
+          //   },
+          // ]);
         }
       }
     }
