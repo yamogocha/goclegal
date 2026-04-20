@@ -1,44 +1,37 @@
 // scripts/budget.ts
-export {};
-const BASE_URL = process.env.BASE_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-if (!BASE_URL) {
-  console.error("Missing BASE_URL");
-  process.exit(1);
-}
-
-if (!CRON_SECRET) {
-  console.error("Missing CRON_SECRET");
-  process.exit(1);
-}
+import { controlBudget } from "../src/lib/budgetMonitor";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
 
-  const url = `${BASE_URL}/api/cron/budget?dryRun=${dryRun}`;
+  console.log("[BUDGET] Starting job");
+  console.log("[BUDGET] dryRun:", dryRun);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CRON_SECRET}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const start = Date.now();
 
-  const text = await res.text();
+  try {
+    const result = await controlBudget({ dryRun });
 
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} - ${text}`);
+    console.log("[BUDGET] Success");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          dryRun,
+          durationMs: Date.now() - start,
+          result,
+        },
+        null,
+        2
+      )
+    );
+
+    process.exit(0);
+  } catch (err) {
+    console.error("[BUDGET ERROR]", err);
+
+    process.exit(1);
   }
-
-  console.log("Budget job completed");
-  console.log(text);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Budget job failed", err);
-    process.exit(1);
-  });
+main();
