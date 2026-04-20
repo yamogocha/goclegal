@@ -546,8 +546,8 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     processedTerms.add(getKey(campaignId, term));
 
     // ADD KEYWORDS
-    if (d.action === "add_keyword" && d.keywords?.length) {
-      for (const raw of d.keywords) {
+    if (d!.action === "add_keyword" && d!.keywords?.length) {
+      for (const raw of d!.keywords!) {
         const cleaned = normalize(raw);
     
         const words = cleaned.split(/\s+/);
@@ -589,7 +589,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     // -------------------------
     // ADD NEGATIVES
     // -------------------------
-    if (d.action === "add_negative") {
+    if (d!.action === "add_negative") {
       const cleaned = normalize(term);
 
       if (await negativeKeywordExists(campaignId, cleaned)) {
@@ -618,9 +618,9 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     if (!d) continue;
 
     if (
-      d.action !== "optimize_ad" ||
-      !d.headlines ||
-      !d.descriptions
+      d!.action !== "optimize_ad" ||
+      !d!.headlines ||
+      !d!.descriptions
     ) continue;
 
     if (dryRun) {
@@ -636,8 +636,8 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
         adGroupId: item.adGroupId,
         adId: item.adId,
         assets: {
-          headlines: d.headlines,
-          descriptions: d.descriptions,
+          headlines: d!.headlines!,
+          descriptions: d!.descriptions!,
         },
       });
 
