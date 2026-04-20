@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   throw new Error("ROUTE HARD STOP");
   const unauthorized = verifyCronAuth(req);
-  if (unauthorized) return unauthorized;
+if (unauthorized instanceof Response) return unauthorized;
 
   const { searchParams } = new URL(req.url);
   const dryRun = searchParams.get("dryRun") === "true";
