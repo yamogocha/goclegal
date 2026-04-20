@@ -457,18 +457,82 @@ async function addExactMatchKeyword(params: {
 }
 
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
-  console.log("ENGINE V1");
+  console.log("ENGINE V3");
 
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+  const isValidKeyword = (kw: string) => {
+    const words = kw.split(/\s+/);
+    return (
+      words.length >= 2 &&
+      words.length <= 4 &&
+      kw.length <= 30 &&
+      !/^(how|what|when|why|should|can)\b/.test(kw) &&
+      !/\bto\b/.test(kw)
+    );
+  };
+
+  const results: any[] = [];
+
+  // -------------------------
+  // FETCH
+  // -------------------------
   const terms = await getSearchTermWinners();
   const termCandidates = terms.slice(0, 3);
 
+  // -------------------------
+  // AI
+  // -------------------------
   const decisions = await decideSearchTermsAndAds(
     termCandidates.map(t => t.term)
   );
 
   console.log("DECISIONS:", decisions);
 
-  return decisions;
+  // -------------------------
+  // EXECUTION (NO API CALLS)
+  // -------------------------
+  for (const d of decisions) {
+    const originalTerm = d.term;
+    const normalizedTerm = normalize(originalTerm);
+
+    console.log("----");
+    console.log("PROCESSING TERM:", originalTerm);
+    console.log("ACTION:", d.action);
+
+    // -------------------------
+    // KEYWORDS
+    // -------------------------
+    if (d.action === "add_keyword" && d.keywords) {
+      for (const kw of d.keywords) {
+        const cleaned = normalize(kw);
+
+        console.log("KEYWORD RAW:", kw);
+        console.log("KEYWORD CLEANED:", cleaned);
+
+        if (!isValidKeyword(cleaned)) {
+          console.log("🚫 BLOCKED KEYWORD:", cleaned);
+        } else {
+          console.log("✅ VALID KEYWORD (WOULD CREATE):", cleaned);
+        }
+      }
+    }
+
+    // -------------------------
+    // NEGATIVES
+    // -------------------------
+    if (d.action === "add_negative") {
+      console.log("NEGATIVE TERM (WOULD ADD):", normalizedTerm);
+    }
+
+    results.push({
+      term: originalTerm,
+      action: d.action,
+    });
+  }
+
+  return results;
 }
 
 
