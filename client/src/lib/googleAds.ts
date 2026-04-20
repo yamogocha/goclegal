@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 
 import { GoogleAdsApi, type services } from "google-ads-api";
