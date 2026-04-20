@@ -38,5 +38,5 @@ export async function getGoogleAccessToken() {
       return new Response("Unauthorized", { status: 401 });
     }
   
-    return;
+    return null;
   }
