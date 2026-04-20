@@ -1,56 +1,52 @@
 // client/src/app/api/cron/googleAds/route.ts
 
-// import { resetAICallCount } from "@/lib/budgetMonitor";
-// import {
-//   runGoogleAdsEngine,
-//   runNegativeKeywordCleanup,
-// } from "@/lib/googleAds";
-// import { verifyCronAuth } from "@/lib/oauth";
+import { resetAICallCount } from "@/lib/budgetMonitor";
+import {
+  runGoogleAdsEngine,
+  // runNegativeKeywordCleanup,
+} from "@/lib/googleAds";
+import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
 
-export async function POST() {
-  return Response.json({
-    ok: true,
-    version: "v2-clean-engine-TEST",
-  });
-  // const unauthorized = verifyCronAuth(req);
-  // if (unauthorized) return unauthorized;
+export async function POST(req: Request) {
+  const unauthorized = verifyCronAuth(req);
+  if (unauthorized) return unauthorized;
 
-  // const { searchParams } = new URL(req.url);
-  // const dryRun = searchParams.get("dryRun") === "true";
+  const { searchParams } = new URL(req.url);
+  const dryRun = searchParams.get("dryRun") === "true";
 
-  // resetAICallCount();
+  resetAICallCount();
 
-  // try {
-  //   const runGoogleAdsResult = await runGoogleAdsEngine({ dryRun });
-  //   // const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
+  try {
+    const runGoogleAdsResult = await runGoogleAdsEngine({ dryRun });
+    // const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
 
-  //   return Response.json({
-  //     ok: true,
-  //     dryRun,
-  //     runGoogleAdsResult,
-  //     // negativeKeywordResult,
-  //   });
-  // } catch (err: unknown) {
-  //   console.error("[GOOGLE ADS ERROR]", err);
+    return Response.json({
+      ok: true,
+      dryRun,
+      runGoogleAdsResult,
+      // negativeKeywordResult,
+    });
+  } catch (err: unknown) {
+    console.error("[GOOGLE ADS ERROR]", err);
 
-  //   let message: string;
+    let message: string;
 
-  //   if (err instanceof Error) {
-  //     message = err.message;
-  //   } else if (typeof err === "object" && err !== null) {
-  //     message = JSON.stringify(err, null, 2);
-  //   } else {
-  //     message = String(err);
-  //   }
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === "object" && err !== null) {
+      message = JSON.stringify(err, null, 2);
+    } else {
+      message = String(err);
+    }
 
-  //   return Response.json(
-  //     {
-  //       ok: false,
-  //       error: message,
-  //     },
-  //     { status: 500 }
-  //   );
-  // }
+    return Response.json(
+      {
+        ok: false,
+        error: message,
+      },
+      { status: 500 }
+    );
+  }
 }
