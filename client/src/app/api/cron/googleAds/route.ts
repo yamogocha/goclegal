@@ -10,6 +10,7 @@ import { verifyCronAuth } from "@/lib/oauth";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  console.log("GOOGLE ADS ROUTE VERSION: v2-clean-engine");
   const unauthorized = verifyCronAuth(req);
   if (unauthorized) return unauthorized;
 
