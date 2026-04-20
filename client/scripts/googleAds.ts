@@ -1,44 +1,43 @@
 // scripts/googleAds.ts
-export {};
-const BASE_URL = process.env.BASE_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-if (!BASE_URL) {
-  console.error("Missing BASE_URL");
-  process.exit(1);
-}
-
-if (!CRON_SECRET) {
-  console.error("Missing CRON_SECRET");
-  process.exit(1);
-}
+import { resetAICallCount } from "../src/lib/budgetMonitor";
+import { runKeywordExpansion } from "../src/lib/googleAds";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
 
-  const url = `${BASE_URL}/api/cron/googleAds?dryRun=${dryRun}`;
+  console.log("[GOOGLE ADS] Starting job");
+  console.log("[GOOGLE ADS] dryRun:", dryRun);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CRON_SECRET}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const start = Date.now();
 
-  const text = await res.text();
+  try {
+    // important: reset per run
+    resetAICallCount();
 
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} - ${text}`);
+    const result = await runKeywordExpansion({ dryRun });
+
+    console.log("[GOOGLE ADS] Success");
+
+    console.log("::group::Google Ads Result");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          dryRun,
+          durationMs: Date.now() - start,
+          result,
+        },
+        null,
+        2
+      )
+    );
+    console.log("::endgroup::");
+
+    process.exit(0);
+  } catch (err) {
+    console.error("[GOOGLE ADS ERROR]", err);
+    process.exit(1);
   }
-
-  console.log("Google Ads job completed");
-  console.log(text);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Google Ads job failed", err);
-    process.exit(1);
-  });
+main();
