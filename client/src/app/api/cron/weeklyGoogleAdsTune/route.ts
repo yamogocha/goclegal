@@ -1,6 +1,5 @@
-// client/src/app/api/cron/weeklyAdsOptimizer/route.ts
-
-import { weeklyAdsOptimizer } from "@/lib/budgetMonitor";
+// client/src/app/api/cron/weeklyGoogleAdsTune/route.ts
+import { weeklyGoogleAdsTune } from "@/lib/budgetMonitor";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
@@ -13,23 +12,14 @@ export async function POST(req: Request) {
   const dryRun = searchParams.get("dryRun") === "true";
 
   try {
-    const result = await weeklyAdsOptimizer({ dryRun });
+    await weeklyGoogleAdsTune({ dryRun });
 
-    return Response.json({
-      ok: true,
-      dryRun,
-      result,
-    });
-  } catch (err: unknown) {
+    return Response.json({ ok: true });
+  } catch (err) {
     console.error("[WEEKLY ADS OPTIMIZER ERROR]", err);
 
-    const message = err instanceof Error ? err.message : String(err);
-
     return Response.json(
-      {
-        ok: false,
-        error: message,
-      },
+      { ok: false, error: String(err) },
       { status: 500 }
     );
   }

@@ -1,44 +1,38 @@
-// scripts/weeklyAdsOptimizer.ts
-export {};
-const BASE_URL = process.env.BASE_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-if (!BASE_URL) {
-  console.error("Missing BASE_URL");
-  process.exit(1);
-}
-
-if (!CRON_SECRET) {
-  console.error("Missing CRON_SECRET");
-  process.exit(1);
-}
+// scripts/weeklyGoogleAdsTune.ts
+import { weeklyGoogleAdsTune } from "../src/lib/budgetMonitor";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
 
-  const url = `${BASE_URL}/api/cron/weeklyAdsOptimizer?dryRun=${dryRun}`;
+  console.log("[WEEKLY ADS OPTIMIZER] Starting job");
+  console.log("[WEEKLY ADS OPTIMIZER] dryRun:", dryRun);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CRON_SECRET}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const start = Date.now();
 
-  const text = await res.text();
+  try {
+    await weeklyGoogleAdsTune({ dryRun });
 
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} - ${text}`);
+    console.log("[WEEKLY ADS OPTIMIZER] Success");
+
+    console.log("::group::Weekly Ads Optimizer Result");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          dryRun,
+          durationMs: Date.now() - start
+        },
+        null,
+        2
+      )
+    );
+    console.log("::endgroup::");
+
+    process.exit(0);
+  } catch (err) {
+    console.error("[WEEKLY ADS OPTIMIZER ERROR]", err);
+    process.exit(1);
   }
-
-  console.log("Weekly Ads Optimizer completed");
-  console.log(text);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Weekly Ads Optimizer failed", err);
-    process.exit(1);
-  });
+main();

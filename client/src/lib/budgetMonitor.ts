@@ -284,7 +284,7 @@ async function upsertDeviceModifiers(
   await customer.campaignCriteria.update(updates);
 }
 
-export async function weeklyAdsOptimizer({ dryRun = false } = {}) {
+export async function weeklyGoogleAdsTune({ dryRun = false } = {}) {
   console.log("=== Ads Weekly Tune (Stable v2) ===");
 
   const { hours, devices } = await getPerformance();
