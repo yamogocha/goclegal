@@ -456,7 +456,21 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
-async function decideWithAI(terms: string[]) {
+type AIAction =
+  | "add_keyword"
+  | "add_negative"
+  | "swap_to_negative"
+  | "optimize_ad"
+  | "ignore";
+
+type AIDecision = {
+  term: string;
+  action: AIAction;
+  keywords?: string[];
+  headlines?: string[];
+  descriptions?: string[];
+};
+async function decideWithAI(terms: string[]): Promise<AIDecision[]> {
   const prompt = `
 You are a Google Ads optimization engine.
 
@@ -468,13 +482,6 @@ For each term, choose ONE action:
 - swap_to_negative
 - optimize_ad
 - ignore
-
-Rules:
-- High intent → add_keyword
-- Irrelevant → add_negative
-- Misleading traffic → swap_to_negative
-- Weak commercial intent → ignore
-- If term is usable but ad sucks → optimize_ad
 
 Return format:
 [
@@ -494,7 +501,18 @@ Return format:
   });
 
   try {
-    return JSON.parse(res.output_text || "[]");
+    const parsed = JSON.parse(res.output_text || "[]");
+
+    if (!Array.isArray(parsed)) return [];
+
+    // 🔒 Runtime guard (VERY important)
+    return parsed.filter((item): item is AIDecision => {
+      return (
+        item &&
+        typeof item.term === "string" &&
+        typeof item.action === "string"
+      );
+    });
   } catch {
     console.error("[AI PARSE ERROR]");
     return [];
@@ -504,7 +522,7 @@ Return format:
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   resetAICallCount();
 
-  const results: any[] = [];
+  const results: Array<Record<string, unknown>> = [];
   const addedKeywords = new Set<string>();
 
   const normalize = (s: string) =>
@@ -522,7 +540,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   };
 
   // -------------------------
-  // FETCH DATA
+  // FETCH
   // -------------------------
   const [terms, lowAds] = await Promise.all([
     getSearchTermWinners(),
@@ -530,35 +548,44 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   ]);
 
   const termCandidates = terms
-    .filter(t => t.score >= 2)
+    .filter((t: any) => t.score >= 2)
     .slice(0, 10);
 
-  const adCandidates = lowAds.slice(0, 5).map(ad => ({
-    adId: ad.ad_group_ad?.ad?.id,
-    adGroupId: String(ad.ad_group_ad?.ad_group || "").split("/").pop(),
-    keyword: extractTopKeyword(ad),
-  })).filter(Boolean);
+  const adCandidates = lowAds
+    .slice(0, 5)
+    .map((ad: any) => ({
+      adId: ad.ad_group_ad?.ad?.id as number | undefined,
+      adGroupId: String(ad.ad_group_ad?.ad_group || "")
+        .split("/")
+        .pop(),
+      keyword: extractTopKeyword(ad),
+    }))
+    .filter(
+      (a): a is { adId: number; adGroupId: string; keyword: string } =>
+        !!a.adId && !!a.adGroupId && !!a.keyword
+    );
 
   if (!termCandidates.length && !adCandidates.length) {
     return results;
   }
 
   // -------------------------
-  // SINGLE AI CALL INPUT
+  // AI INPUT
   // -------------------------
   const aiInput = [
-    ...termCandidates.map(t => t.term),
+    ...termCandidates.map((t: any) => t.term),
     ...adCandidates.map(a => a.keyword),
   ].map(normalize);
 
   const decisions = await decideWithAI(aiInput);
 
-  const decisionMap = new Map(
-    decisions.map(d => [normalize(d.term), d])
+  // ✅ FIXED: typed Map (no implicit any)
+  const decisionMap = new Map<string, AIDecision>(
+    decisions.map((d: AIDecision) => [normalize(d.term), d])
   );
 
   // -------------------------
-  // PROCESS SEARCH TERMS
+  // PROCESS TERMS
   // -------------------------
   for (const row of termCandidates) {
     const term = normalize(row.term);
@@ -566,7 +593,6 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
 
     if (!d) continue;
 
-    // ADD KEYWORDS
     if (d.action === "add_keyword") {
       for (const kw of d.keywords || []) {
         const cleaned = normalize(kw);
@@ -587,22 +613,9 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
       }
     }
 
-    // ADD NEGATIVE
-    if (d.action === "add_negative") {
+    if (d.action === "add_negative" || d.action === "swap_to_negative") {
       if (dryRun) {
-        results.push({ action: "add_negative", keyword: term });
-      } else {
-        await addNegativeKeyword({
-          campaignId: row.campaignId,
-          keyword: term,
-        });
-      }
-    }
-
-    // SWAP → NEGATIVE
-    if (d.action === "swap_to_negative") {
-      if (dryRun) {
-        results.push({ action: "swap_to_negative", keyword: term });
+        results.push({ action: d.action, keyword: term });
       } else {
         await addNegativeKeyword({
           campaignId: row.campaignId,
@@ -613,7 +626,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   }
 
   // -------------------------
-  // OPTIMIZE ADS
+  // ADS
   // -------------------------
   for (const ad of adCandidates) {
     const key = normalize(ad.keyword);
@@ -630,8 +643,8 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
       adGroupId: ad.adGroupId,
       adId: ad.adId,
       assets: {
-        headlines: d.headlines || [],
-        descriptions: d.descriptions || [],
+        headlines: d.headlines ?? [],
+        descriptions: d.descriptions ?? [],
       },
     });
   }
