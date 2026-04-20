@@ -424,10 +424,7 @@ async function addExactMatchKeyword(params: {
   adGroupId: string;
   keyword: string;
 }) {
-  if (params.keyword.includes("how to handle")) {
-    throw new Error("TRAP: RAW TERM REACHED KEYWORD CREATION");
-  }
-
+  console.log("KEYWORD CREATE CALLED:", params.keyword);
   const cleaned = params.keyword
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
@@ -435,15 +432,14 @@ async function addExactMatchKeyword(params: {
 
   const words = cleaned.split(/\s+/);
 
-  // 🚫 FINAL SAFETY NET (cannot be bypassed)
+  // 🚫 ABSOLUTE BLOCK (cannot fail)
   if (
-    words.length < 2 ||
     words.length > 4 ||
     cleaned.length > 30 ||
     /^(how|what|when|why|should|can)\b/.test(cleaned) ||
     /\bto\b/.test(cleaned)
   ) {
-    console.log("[BLOCKED BEFORE GOOGLE]", cleaned);
+    console.log("[HARD BLOCK KEYWORD]", cleaned);
     return;
   }
 
