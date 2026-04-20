@@ -456,8 +456,56 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
+async function decideWithAI(terms: string[]) {
+  const prompt = `
+You are a Google Ads optimization engine.
+
+ONLY return JSON.
+
+For each term, choose ONE action:
+- add_keyword
+- add_negative
+- swap_to_negative
+- optimize_ad
+- ignore
+
+Rules:
+- High intent → add_keyword
+- Irrelevant → add_negative
+- Misleading traffic → swap_to_negative
+- Weak commercial intent → ignore
+- If term is usable but ad sucks → optimize_ad
+
+Return format:
+[
+  {
+    "term": "string",
+    "action": "add_keyword | add_negative | swap_to_negative | optimize_ad | ignore",
+    "keywords": ["optional"],
+    "headlines": ["optional"],
+    "descriptions": ["optional"]
+  }
+]
+`;
+
+  const res = await openai.responses.create({
+    model: "gpt-5",
+    input: `${GOC_LEGAL_BRAND_CONTEXT}\n\nTERMS:\n${terms.join("\n")}\n\n${prompt}`,
+  });
+
+  try {
+    return JSON.parse(res.output_text || "[]");
+  } catch {
+    console.error("[AI PARSE ERROR]");
+    return [];
+  }
+}
+
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
-  console.log("ENGINE V3");
+  resetAICallCount();
+
+  const results: any[] = [];
+  const addedKeywords = new Set<string>();
 
   const normalize = (s: string) =>
     s.toLowerCase().replace(/[^\w\s]/g, "").trim();
@@ -473,62 +521,118 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     );
   };
 
-  const results: any[] = [];
+  // -------------------------
+  // FETCH DATA
+  // -------------------------
+  const [terms, lowAds] = await Promise.all([
+    getSearchTermWinners(),
+    getLowPerformingAssets(),
+  ]);
+
+  const termCandidates = terms
+    .filter(t => t.score >= 2)
+    .slice(0, 10);
+
+  const adCandidates = lowAds.slice(0, 5).map(ad => ({
+    adId: ad.ad_group_ad?.ad?.id,
+    adGroupId: String(ad.ad_group_ad?.ad_group || "").split("/").pop(),
+    keyword: extractTopKeyword(ad),
+  })).filter(Boolean);
+
+  if (!termCandidates.length && !adCandidates.length) {
+    return results;
+  }
 
   // -------------------------
-  // FETCH
+  // SINGLE AI CALL INPUT
   // -------------------------
-  const terms = await getSearchTermWinners();
-  const termCandidates = terms.slice(0, 3);
+  const aiInput = [
+    ...termCandidates.map(t => t.term),
+    ...adCandidates.map(a => a.keyword),
+  ].map(normalize);
 
-  // -------------------------
-  // AI
-  // -------------------------
-  const decisions = await decideSearchTermsAndAds(
-    termCandidates.map(t => t.term)
+  const decisions = await decideWithAI(aiInput);
+
+  const decisionMap = new Map(
+    decisions.map(d => [normalize(d.term), d])
   );
 
-  console.log("DECISIONS:", decisions);
-
   // -------------------------
-  // EXECUTION (NO API CALLS)
+  // PROCESS SEARCH TERMS
   // -------------------------
-  for (const d of decisions) {
-    const originalTerm = d.term;
-    const normalizedTerm = normalize(originalTerm);
+  for (const row of termCandidates) {
+    const term = normalize(row.term);
+    const d = decisionMap.get(term);
 
-    console.log("----");
-    console.log("PROCESSING TERM:", originalTerm);
-    console.log("ACTION:", d.action);
+    if (!d) continue;
 
-    // -------------------------
-    // KEYWORDS
-    // -------------------------
-    if (d.action === "add_keyword" && d.keywords) {
-      for (const kw of d.keywords) {
+    // ADD KEYWORDS
+    if (d.action === "add_keyword") {
+      for (const kw of d.keywords || []) {
         const cleaned = normalize(kw);
 
-        console.log("KEYWORD RAW:", kw);
-        console.log("KEYWORD CLEANED:", cleaned);
+        if (!isValidKeyword(cleaned)) continue;
+        if (addedKeywords.has(cleaned)) continue;
 
-        if (!isValidKeyword(cleaned)) {
-          console.log("🚫 BLOCKED KEYWORD:", cleaned);
+        addedKeywords.add(cleaned);
+
+        if (dryRun) {
+          results.push({ action: "add_keyword", keyword: cleaned });
         } else {
-          console.log("✅ VALID KEYWORD (WOULD CREATE):", cleaned);
+          await addExactMatchKeyword({
+            adGroupId: row.adGroupId,
+            keyword: cleaned,
+          });
         }
       }
     }
 
-    // -------------------------
-    // NEGATIVES
-    // -------------------------
+    // ADD NEGATIVE
     if (d.action === "add_negative") {
-      console.log("NEGATIVE TERM (WOULD ADD):", normalizedTerm);
+      if (dryRun) {
+        results.push({ action: "add_negative", keyword: term });
+      } else {
+        await addNegativeKeyword({
+          campaignId: row.campaignId,
+          keyword: term,
+        });
+      }
     }
 
-    results.push({
-      term: originalTerm,
-      action: d.action,
+    // SWAP → NEGATIVE
+    if (d.action === "swap_to_negative") {
+      if (dryRun) {
+        results.push({ action: "swap_to_negative", keyword: term });
+      } else {
+        await addNegativeKeyword({
+          campaignId: row.campaignId,
+          keyword: term,
+        });
+      }
+    }
+  }
+
+  // -------------------------
+  // OPTIMIZE ADS
+  // -------------------------
+  for (const ad of adCandidates) {
+    const key = normalize(ad.keyword);
+    const d = decisionMap.get(key);
+
+    if (!d || d.action !== "optimize_ad") continue;
+
+    if (dryRun) {
+      results.push({ action: "optimize_ad", adId: ad.adId });
+      continue;
+    }
+
+    await updateAdAssets({
+      adGroupId: ad.adGroupId,
+      adId: ad.adId,
+      assets: {
+        headlines: d.headlines || [],
+        descriptions: d.descriptions || [],
+      },
     });
   }
 
