@@ -21,76 +21,60 @@ export function getCustomer() {
 }
 
 // ai generation helper
-const unifiedDecisionSchema = z.array(
-  z.object({
-    term: z.string(),
-    action: z.enum(["add_keyword", "add_negative", "optimize_ad", "ignore"]),
-    keywords: z.array(z.string()).optional(),
-    headlines: z.array(z.string()).optional(),
-    descriptions: z.array(z.string()).optional(),
-    reasoning: z.string(),
-  })
-);
-
-type UnifiedDecision = z.infer<typeof unifiedDecisionSchema>[number];
-
-async function decideSearchTermsAndAds(terms: string[]): Promise<UnifiedDecision[]> {
-  if (!canMakeAICall()) {
-    console.log("[AI] limit reached → skip unified decision");
-    return [];
-  }
-
-  trackAICall();
-
+async function decideKeywords(
+  terms: string[]
+): Promise<KeywordDecision[]> {
   const prompt = `
-${GOC_LEGAL_BRAND_CONTEXT}
+You are a Google Ads keyword expansion engine for a personal injury law firm.
 
-You are optimizing Google Ads for a personal injury law firm.
+Only return JSON.
 
-For each search term:
+Goal:
+Generate high-intent keywords likely to convert into legal cases.
 
-1. Decide ONE action:
-- add_keyword → high intent, generate 2–3 keywords
-- add_negative → irrelevant/waste
-- optimize_ad → generate new RSA assets
-- ignore
+Rules:
+- Focus on hiring intent
+- No informational queries
+- 2 to 4 words only
+- Location intent preferred (e.g. oakland, near me)
+- No duplicates
+- No explanations
 
-2. If add_keyword:
-- generate EXACTLY 2 keywords
-- each keyword MUST:
-  - be 2–4 words ONLY
-  - be under 30 characters
-  - NOT be a sentence
-  - NOT start with: how, what, when, why, should, can
-  - MUST look like a Google Ads keyword (short phrase)
-
-3. If optimize_ad:
-- generate:
-  - 10–15 headlines (max 30 chars)
-  - 3–4 descriptions (max 90 chars)
-
-TERMS:
-${terms.map((t, i) => `${i + 1}. ${t}`).join("\n")}
-
-Return JSON:
+Return format:
 [
   {
-    "term": "...",
-    "action": "...",
-    "keywords": [],
-    "headlines": [],
-    "descriptions": [],
-    "reasoning": "..."
+    "term": "input term",
+    "keywords": ["keyword1", "keyword2"]
   }
 ]
 `;
 
   const res = await openai.responses.create({
-    model: "gpt-5-mini",
-    input: prompt,
+    model: "gpt-5",
+    input: `${GOC_LEGAL_BRAND_CONTEXT}
+
+TERMS:
+${terms.join("\n")}
+
+${prompt}`,
   });
 
-  return unifiedDecisionSchema.parse(JSON.parse(res.output_text));
+  try {
+    const parsed = JSON.parse(res.output_text || "[]");
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((x): x is KeywordDecision => {
+      return (
+        x &&
+        typeof x.term === "string" &&
+        Array.isArray(x.keywords)
+      );
+    });
+  } catch {
+    console.error("AI parse error");
+    return [];
+  }
 }
 
 // Fetch Low-Performance Assets
@@ -456,74 +440,18 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
-type AIAction =
-  | "add_keyword"
-  | "add_negative"
-  | "swap_to_negative"
-  | "optimize_ad"
-  | "ignore";
-
-type AIDecision = {
+// types
+type KeywordDecision = {
   term: string;
-  action: AIAction;
-  keywords?: string[];
-  headlines?: string[];
-  descriptions?: string[];
+  keywords: string[];
 };
-async function decideWithAI(terms: string[]): Promise<AIDecision[]> {
-  const prompt = `
-You are a Google Ads optimization engine.
 
-ONLY return JSON.
-
-For each term, choose ONE action:
-- add_keyword
-- add_negative
-- swap_to_negative
-- optimize_ad
-- ignore
-
-Return format:
-[
-  {
-    "term": "string",
-    "action": "add_keyword | add_negative | swap_to_negative | optimize_ad | ignore",
-    "keywords": ["optional"],
-    "headlines": ["optional"],
-    "descriptions": ["optional"]
-  }
-]
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5",
-    input: `${GOC_LEGAL_BRAND_CONTEXT}\n\nTERMS:\n${terms.join("\n")}\n\n${prompt}`,
-  });
-
-  try {
-    const parsed = JSON.parse(res.output_text || "[]");
-
-    if (!Array.isArray(parsed)) return [];
-
-    // 🔒 Runtime guard (VERY important)
-    return parsed.filter((item): item is AIDecision => {
-      return (
-        item &&
-        typeof item.term === "string" &&
-        typeof item.action === "string"
-      );
-    });
-  } catch {
-    console.error("[AI PARSE ERROR]");
-    return [];
-  }
-}
-
-export async function runGoogleAdsEngine({ dryRun = false } = {}) {
+// core
+export async function runKeywordExpansion({ dryRun = false } = {}) {
   resetAICallCount();
 
-  const results: Array<Record<string, unknown>> = [];
-  const addedKeywords = new Set<string>();
+  const results: Array<{ action: string; keyword: string }> = [];
+  const added = new Set<string>();
 
   const normalize = (s: string) =>
     s.toLowerCase().replace(/[^\w\s]/g, "").trim();
@@ -539,119 +467,54 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     );
   };
 
-  // -------------------------
-  // FETCH
-  // -------------------------
-  const [terms, lowAds] = await Promise.all([
-    getSearchTermWinners(),
-    getLowPerformingAssets(),
-  ]);
+  // fetch
+  const terms = await getSearchTermWinners();
 
-  const termCandidates = terms
-    .filter((t: any) => t.score >= 2)
+  const candidates = terms
+    .filter((t: any) => t.score >= 2 && t.term)
     .slice(0, 10);
 
-  const adCandidates = lowAds
-    .slice(0, 5)
-    .map((ad: any) => ({
-      adId: ad.ad_group_ad?.ad?.id as number | undefined,
-      adGroupId: String(ad.ad_group_ad?.ad_group || "")
-        .split("/")
-        .pop(),
-      keyword: extractTopKeyword(ad),
-    }))
-    .filter(
-      (a): a is { adId: number; adGroupId: string; keyword: string } =>
-        !!a.adId && !!a.adGroupId && !!a.keyword
-    );
+  if (!candidates.length) return results;
 
-  if (!termCandidates.length && !adCandidates.length) {
-    return results;
-  }
-
-  // -------------------------
-  // AI INPUT
-  // -------------------------
-  const aiInput = [
-    ...termCandidates.map((t: any) => t.term),
-    ...adCandidates.map(a => a.keyword),
-  ].map(normalize);
-
-  const decisions = await decideWithAI(aiInput);
-
-  // ✅ FIXED: typed Map (no implicit any)
-  const decisionMap = new Map<string, AIDecision>(
-    decisions.map((d: AIDecision) => [normalize(d.term), d])
+  const inputTerms = candidates.map((t: any) =>
+    normalize(String(t.term))
   );
 
-  // -------------------------
-  // PROCESS TERMS
-  // -------------------------
-  for (const row of termCandidates) {
-    const term = normalize(row.term);
-    const d = decisionMap.get(term);
+  // ai
+  const decisions = await decideKeywords(inputTerms);
 
-    if (!d) continue;
+  const map = new Map<string, KeywordDecision>(
+    decisions.map((d: KeywordDecision) => [normalize(d.term), d])
+  );
 
-    if (d.action === "add_keyword") {
-      for (const kw of d.keywords || []) {
-        const cleaned = normalize(kw);
+  // process
+  for (const row of candidates) {
+    const term = normalize(String(row.term));
+    const decision = map.get(term);
 
-        if (!isValidKeyword(cleaned)) continue;
-        if (addedKeywords.has(cleaned)) continue;
+    if (!decision) continue;
 
-        addedKeywords.add(cleaned);
+    for (const kw of decision.keywords || []) {
+      const cleaned = normalize(kw);
 
-        if (dryRun) {
-          results.push({ action: "add_keyword", keyword: cleaned });
-        } else {
-          await addExactMatchKeyword({
-            adGroupId: row.adGroupId,
-            keyword: cleaned,
-          });
-        }
-      }
-    }
+      if (!isValidKeyword(cleaned)) continue;
+      if (added.has(cleaned)) continue;
 
-    if (d.action === "add_negative" || d.action === "swap_to_negative") {
+      added.add(cleaned);
+
       if (dryRun) {
-        results.push({ action: d.action, keyword: term });
+        results.push({ action: "add_keyword", keyword: cleaned });
       } else {
-        await addNegativeKeyword({
-          campaignId: row.campaignId,
-          keyword: term,
+        await addExactMatchKeyword({
+          adGroupId: row.adGroupId,
+          keyword: cleaned,
         });
       }
     }
   }
 
-  // -------------------------
-  // ADS
-  // -------------------------
-  for (const ad of adCandidates) {
-    const key = normalize(ad.keyword);
-    const d = decisionMap.get(key);
-
-    if (!d || d.action !== "optimize_ad") continue;
-
-    if (dryRun) {
-      results.push({ action: "optimize_ad", adId: ad.adId });
-      continue;
-    }
-
-    await updateAdAssets({
-      adGroupId: ad.adGroupId,
-      adId: ad.adId,
-      assets: {
-        headlines: d.headlines ?? [],
-        descriptions: d.descriptions ?? [],
-      },
-    });
-  }
-
   return results;
 }
-
 
 
 type ScoredWasteTerm = {
