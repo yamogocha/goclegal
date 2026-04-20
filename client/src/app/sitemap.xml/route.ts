@@ -1,12 +1,12 @@
 import { sitemapIndexXml } from "@/lib/sitemap"
 
 export const runtime =  "nodejs"
-const SITE_URL = process.env.SITE_URL!
+const BASE_URL = process.env.BASE_URL!
 
 export async function GET() {
     const xml = sitemapIndexXml([
-        { loc: `${SITE_URL}/sitemap-pages.xml` },
-        { loc: `${SITE_URL}/sitemap-posts.xml` },
+        { loc: `${BASE_URL}/sitemap-pages.xml` },
+        { loc: `${BASE_URL}/sitemap-posts.xml` },
     ])
 
     return new Response(xml, {
