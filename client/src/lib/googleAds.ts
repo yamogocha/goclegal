@@ -544,45 +544,41 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
 
     // ADD KEYWORDS
     if (d.action === "add_keyword" && d.keywords?.length) {
-      for (const raw of d.keywords) {
+      for (const raw of d.keywords) {for (const raw of d.keywords) {
         const cleaned = raw
           .toLowerCase()
           .replace(/[^\w\s]/g, "")
           .trim();
-    
+
         const words = cleaned.split(/\s+/);
-    
-        // 🚫 FINAL NON-BYPASSABLE FILTER
-        if (
+
+        const isInvalid =
           words.length < 2 ||
           words.length > 4 ||
           cleaned.length > 30 ||
           /^(how|what|when|why|should|can)\b/.test(cleaned) ||
-          /\bto\b/.test(cleaned)
-        ) {
-          console.log("[BLOCKED FINAL KEYWORD]", cleaned);
+          /\bto\b/.test(cleaned);
+
+        if (isInvalid) {
+          console.log("[BLOCKED KEYWORD FINAL]", cleaned);
           continue;
         }
-    
-        if (addedKeywords.has(cleaned)) continue;
-        addedKeywords.add(cleaned);
-    
+
         if (dryRun) {
           results.push({ action: "add_keyword", term: cleaned });
         } else {
           const customer = getCustomer();
-    
-          throw new Error("STOP: BEFORE GOOGLE CREATE");
-          // await customer.adGroupCriteria.create([
-          //   {
-          //     ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
-          //     status: "ENABLED",
-          //     keyword: {
-          //       text: `[${cleaned}]`,
-          //       match_type: "EXACT",
-          //     },
-          //   },
-          // ]);
+
+          await customer.adGroupCriteria.create([
+            {
+              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+              status: "ENABLED",
+              keyword: {
+                text: `[${cleaned}]`,
+                match_type: "EXACT",
+              },
+            },
+          ]);
         }
       }
     }
@@ -590,23 +586,23 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     // -------------------------
     // ADD NEGATIVES
     // -------------------------
-    if (d.action === "add_negative") {
-      const cleaned = normalize(term);
+    // if (d.action === "add_negative") {
+    //   const cleaned = normalize(term);
 
-      if (await negativeKeywordExists(campaignId, cleaned)) {
-        console.log("[SKIP DUP NEGATIVE]", cleaned);
-        continue;
-      }
+    //   if (await negativeKeywordExists(campaignId, cleaned)) {
+    //     console.log("[SKIP DUP NEGATIVE]", cleaned);
+    //     continue;
+    //   }
 
-      if (dryRun) {
-        results.push({ action: "add_negative", term: cleaned });
-      } else {
-        await addNegativeKeyword({
-          campaignId,
-          keyword: cleaned,
-        });
-      }
-    }
+    //   if (dryRun) {
+    //     results.push({ action: "add_negative", term: cleaned });
+    //   } else {
+    //     await addNegativeKeyword({
+    //       campaignId,
+    //       keyword: cleaned,
+    //     });
+    //   }
+    // }
   }
 
   // -------------------------
