@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createClient } from "next-sanity";
 import { ResponseOutputItem } from 'openai/resources/responses/responses.mjs'
 import { client } from "@/sanity/client";

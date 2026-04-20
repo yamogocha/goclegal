@@ -1,7 +1,3 @@
-import "server-only";
-import type { resources, services } from "google-ads-api";
-import { getCustomer } from "./googleAds";
-
 const LOOKBACK = "LAST_30_DAYS";
 const MIN_COST = 5;
 const TARGET_HOURS = 6;

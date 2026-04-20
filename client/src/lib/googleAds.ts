@@ -1,5 +1,3 @@
-import "server-only";
-
 import { GoogleAdsApi, type services } from "google-ads-api";
 import { GOC_LEGAL_BRAND_CONTEXT, openai } from "@/lib/openai";
 import { z } from "zod";
