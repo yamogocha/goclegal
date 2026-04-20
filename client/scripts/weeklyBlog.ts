@@ -1,45 +1,39 @@
 // scripts/weeklyBlog.ts
-export {};
-const BASE_URL = process.env.BASE_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-if (!BASE_URL) {
-  console.error("Missing BASE_URL");
-  process.exit(1);
-}
-
-if (!CRON_SECRET) {
-  console.error("Missing CRON_SECRET");
-  process.exit(1);
-}
+import { generateWeeklyBlog } from "../src/lib/weeklyBlog";
 
 async function main() {
-  const preview = process.env.PREVIEW === "true";
-  const dryRun = process.env.DRY_RUN === "true";
+  console.log("[WEEKLY BLOG] Starting job");
 
-  const url = `${BASE_URL}/api/cron/weeklyBlog?preview=${preview}&dryRun=${dryRun}`;
+  const start = Date.now();
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CRON_SECRET}`,
-      "Content-Type": "application/json",
-    },
-  });
+  try {
+    const result = await generateWeeklyBlog();
 
-  const text = await res.text();
+    if (!result) {
+      throw new Error("Empty weekly blog result");
+    }
 
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} - ${text}`);
+    console.log("[WEEKLY BLOG] Success");
+
+    console.log("::group::Weekly Blog Result");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          durationMs: Date.now() - start,
+          result,
+        },
+        null,
+        2
+      )
+    );
+    console.log("::endgroup::");
+
+    process.exit(0);
+  } catch (err) {
+    console.error("[WEEKLY BLOG ERROR]", err);
+    process.exit(1);
   }
-
-  console.log("Weekly Blog job completed");
-  console.log(text);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Weekly Blog job failed", err);
-    process.exit(1);
-  });
+main();
