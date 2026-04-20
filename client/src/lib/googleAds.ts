@@ -457,14 +457,18 @@ async function addExactMatchKeyword(params: {
 }
 
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
-  console.log("ENGINE V0");
+  console.log("ENGINE V1");
 
   const terms = await getSearchTermWinners();
+  const termCandidates = terms.slice(0, 3);
 
-  return terms.slice(0, 3).map(t => ({
-    term: t.term,
-    score: t.score,
-  }));
+  const decisions = await decideSearchTermsAndAds(
+    termCandidates.map(t => t.term)
+  );
+
+  console.log("DECISIONS:", decisions);
+
+  return decisions;
 }
 
 
