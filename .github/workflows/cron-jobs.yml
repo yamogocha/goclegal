@@ -22,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install deps
+        working-directory: client
         run: npm install
 
       # ----------------------------
@@ -41,6 +42,7 @@ jobs:
         run: npx tsx scripts/budget.ts
 
       - name: Google Ads
+        working-directory: client
         run: npx tsx scripts/googleAds.ts
 
       - name: Weekly Google Ads tune

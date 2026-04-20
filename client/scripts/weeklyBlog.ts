@@ -1,5 +1,5 @@
-// scripts/weeklyAdsOptimizer.ts
-
+// scripts/weeklyBlog.ts
+export {};
 const BASE_URL = process.env.BASE_URL;
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -14,9 +14,10 @@ if (!CRON_SECRET) {
 }
 
 async function main() {
+  const preview = process.env.PREVIEW === "true";
   const dryRun = process.env.DRY_RUN === "true";
 
-  const url = `${BASE_URL}/api/cron/weeklyAdsOptimizer?dryRun=${dryRun}`;
+  const url = `${BASE_URL}/api/cron/weeklyBlog?preview=${preview}&dryRun=${dryRun}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -32,13 +33,13 @@ async function main() {
     throw new Error(`Request failed: ${res.status} - ${text}`);
   }
 
-  console.log("Weekly Ads Optimizer completed");
+  console.log("Weekly Blog job completed");
   console.log(text);
 }
 
 main()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error("Weekly Ads Optimizer failed", err);
+    console.error("Weekly Blog job failed", err);
     process.exit(1);
   });

@@ -1,5 +1,5 @@
 // scripts/weeklyAd.ts
-
+export {};
 const BASE_URL = process.env.BASE_URL;
 const CRON_SECRET = process.env.CRON_SECRET;
 
