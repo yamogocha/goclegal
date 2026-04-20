@@ -1,45 +1,46 @@
 // scripts/weeklyAd.ts
-export {};
-const BASE_URL = process.env.BASE_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
-
-if (!BASE_URL) {
-  console.error("Missing BASE_URL");
-  process.exit(1);
-}
-
-if (!CRON_SECRET) {
-  console.error("Missing CRON_SECRET");
-  process.exit(1);
-}
+import { generateWeeklyAd } from "../src/lib/weeklyAd";
 
 async function main() {
   const preview = process.env.PREVIEW === "true";
   const dryRun = process.env.DRY_RUN === "true";
 
-  const url = `${BASE_URL}/api/cron/weeklyAd?preview=${preview}&dryRun=${dryRun}`;
+  console.log("[WEEKLY AD] Starting job");
+  console.log("[WEEKLY AD] preview:", preview);
+  console.log("[WEEKLY AD] dryRun:", dryRun);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CRON_SECRET}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const start = Date.now();
 
-  const text = await res.text();
+  try {
+    const result = await generateWeeklyAd({ preview, dryRun });
 
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status} - ${text}`);
+    if (!result) {
+      throw new Error("Empty weekly ad result");
+    }
+
+    console.log("[WEEKLY AD] Success");
+
+    console.log("::group::Weekly Ad Result");
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          preview,
+          dryRun,
+          durationMs: Date.now() - start,
+          result,
+        },
+        null,
+        2
+      )
+    );
+    console.log("::endgroup::");
+
+    process.exit(0);
+  } catch (err) {
+    console.error("[WEEKLY AD ERROR]", err);
+    process.exit(1);
   }
-
-  console.log("Weekly Ad job completed");
-  console.log(text);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Weekly Ad job failed", err);
-    process.exit(1);
-  });
+main();

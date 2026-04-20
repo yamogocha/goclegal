@@ -16,22 +16,12 @@ export async function POST(req: Request) {
   try {
     const result = await generateWeeklyAd({ preview, dryRun });
 
-    return Response.json({
-      ok: true,
-      preview,
-      dryRun,
-      result,
-    });
-  } catch (err: unknown) {
+    return Response.json({ ok: true, result });
+  } catch (err) {
     console.error("[WEEKLY AD ERROR]", err);
 
-    const message = err instanceof Error ? err.message : String(err);
-
     return Response.json(
-      {
-        ok: false,
-        error: message,
-      },
+      { ok: false, error: String(err) },
       { status: 500 }
     );
   }
