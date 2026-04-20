@@ -14,6 +14,8 @@ if (!CRON_SECRET) {
 }
 
 async function main() {
+
+  console.log("BASE_URL USED:", BASE_URL);
   const dryRun = process.env.DRY_RUN === "true";
 
   const url = `${BASE_URL}/api/cron/googleAds?dryRun=${dryRun}`;
