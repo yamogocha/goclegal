@@ -458,6 +458,7 @@ async function addExactMatchKeyword(params: {
 }
 
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
+  throw new Error("ENGINE HIT TEST");
   resetAICallCount();
 
   const results: any[] = [];
