@@ -466,15 +466,14 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
   const isValidKeyword = (kw: string) => {
-    const cleaned = normalize(kw);
-    const words = cleaned.split(/\s+/);
+    const words = kw.split(/\s+/);
 
     return (
       words.length >= 2 &&
       words.length <= 4 &&
-      cleaned.length <= 30 &&
-      !/^(how|what|when|why|should|can)\b/.test(cleaned) &&
-      !/\bto\b/.test(cleaned)
+      kw.length <= 30 &&
+      !/^(how|what|when|why|should|can)\b/.test(kw) &&
+      !/\bto\b/.test(kw)
     );
   };
 
@@ -492,6 +491,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     .map((ad) => {
       const adId = ad.ad_group_ad?.ad?.id;
       const adGroupId = ad.ad_group_ad?.ad_group;
+
       if (!adId || !adGroupId) return null;
 
       return {
@@ -507,7 +507,9 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     keyword: string;
   }[];
 
-  if (!termCandidates.length && !adItems.length) return results;
+  if (!termCandidates.length && !adItems.length) {
+    return results;
+  }
 
   // -------------------------
   // AI DECISION
@@ -533,114 +535,97 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     const key = normalize(term);
     const d = decisionMap.get(key);
 
-    if (!d) {
-      console.log("[SKIP NO DECISION]", term);
-      continue;
-    }
+    if (!d) continue;
 
-    console.log("DECISION USED:", term, d.action);
+    // 🔒 SAFEST: switch (prevents TS narrowing bugs)
+    switch (d.action) {
+      case "add_keyword": {
+        if (!d.keywords?.length) break;
 
-    processedTerms.add(getKey(campaignId, term));
+        for (const raw of d.keywords) {
+          const cleaned = normalize(raw);
 
-    // ADD KEYWORDS
-    if (d.action === "add_keyword" && d.keywords?.length) {
-      for (const raw of d.keywords) {for (const raw of d.keywords) {
-        const cleaned = raw
-          .toLowerCase()
-          .replace(/[^\w\s]/g, "")
-          .trim();
+          // 🔒 FINAL HARD GUARD (cannot be bypassed)
+          if (!isValidKeyword(cleaned)) {
+            console.log("[BLOCKED KEYWORD FINAL]", cleaned);
+            continue;
+          }
 
-        const words = cleaned.split(/\s+/);
+          if (addedKeywords.has(cleaned)) continue;
+          addedKeywords.add(cleaned);
 
-        const isInvalid =
-          words.length < 2 ||
-          words.length > 4 ||
-          cleaned.length > 30 ||
-          /^(how|what|when|why|should|can)\b/.test(cleaned) ||
-          /\bto\b/.test(cleaned);
+          if (dryRun) {
+            results.push({ action: "add_keyword", term: cleaned });
+          } else {
+            const customer = getCustomer();
 
-        if (isInvalid) {
-          console.log("[BLOCKED KEYWORD FINAL]", cleaned);
-          continue;
+            await customer.adGroupCriteria.create([
+              {
+                ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+                status: "ENABLED",
+                keyword: {
+                  text: `[${cleaned}]`,
+                  match_type: "EXACT",
+                },
+              },
+            ]);
+          }
+        }
+        break;
+      }
+
+      case "add_negative": {
+        const cleaned = normalize(term);
+
+        if (await negativeKeywordExists(campaignId, cleaned)) {
+          console.log("[SKIP DUP NEGATIVE]", cleaned);
+          break;
         }
 
         if (dryRun) {
-          results.push({ action: "add_keyword", term: cleaned });
+          results.push({ action: "add_negative", term: cleaned });
         } else {
-          const customer = getCustomer();
-
-          await customer.adGroupCriteria.create([
-            {
-              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
-              status: "ENABLED",
-              keyword: {
-                text: `[${cleaned}]`,
-                match_type: "EXACT",
-              },
-            },
-          ]);
+          await addNegativeKeyword({
+            campaignId,
+            keyword: cleaned,
+          });
         }
+        break;
       }
-    }
 
-    // -------------------------
-    // ADD NEGATIVES
-    // -------------------------
-    // if (d.action === "add_negative") {
-    //   const cleaned = normalize(term);
+      case "optimize_ad": {
+        const matchAd = adItems.find(
+          (a) => normalize(a.keyword) === key
+        );
 
-    //   if (await negativeKeywordExists(campaignId, cleaned)) {
-    //     console.log("[SKIP DUP NEGATIVE]", cleaned);
-    //     continue;
-    //   }
+        if (!matchAd) break;
+        if (!d.headlines || !d.descriptions) break;
 
-    //   if (dryRun) {
-    //     results.push({ action: "add_negative", term: cleaned });
-    //   } else {
-    //     await addNegativeKeyword({
-    //       campaignId,
-    //       keyword: cleaned,
-    //     });
-    //   }
-    // }
-  }
+        if (dryRun) {
+          results.push({
+            action: "optimize_ad",
+            adId: matchAd.adId,
+          });
+        } else {
+          try {
+            await updateAdAssets({
+              adGroupId: matchAd.adGroupId,
+              adId: matchAd.adId,
+              assets: {
+                headlines: d.headlines,
+                descriptions: d.descriptions,
+              },
+            });
+          } catch (err) {
+            console.error("[AD UPDATE FAILED]", matchAd.adId, err);
+          }
+        }
+        break;
+      }
 
-  // -------------------------
-  // AD OPTIMIZATION
-  // -------------------------
-  for (const item of adItems) {
-    const key = normalize(item.keyword);
-    const d = decisionMap.get(key);
-
-    if (!d) continue;
-
-    if (
-      d.action !== "optimize_ad" ||
-      !d.headlines ||
-      !d.descriptions
-    ) continue;
-
-    if (dryRun) {
-      results.push({
-        action: "optimize_ad",
-        adId: item.adId,
-      });
-      continue;
-    }
-
-    try {
-      await updateAdAssets({
-        adGroupId: item.adGroupId,
-        adId: item.adId,
-        assets: {
-          headlines: d.headlines,
-          descriptions: d.descriptions,
-        },
-      });
-
-      console.log("[AD UPDATED]", item.adId);
-    } catch (err) {
-      console.error("[AD UPDATE FAILED]", item.adId, err);
+      case "ignore":
+      default:
+        break;
     }
   }
 
