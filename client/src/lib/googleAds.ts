@@ -427,7 +427,7 @@ async function addExactMatchKeyword(params: {
   if (params.keyword.includes("how to handle")) {
     throw new Error("TRAP: RAW TERM REACHED KEYWORD CREATION");
   }
-  
+
   const cleaned = params.keyword
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
@@ -464,49 +464,55 @@ async function addExactMatchKeyword(params: {
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   resetAICallCount();
 
-  const addedKeywords = new Set<string>();
   const results: any[] = [];
+  const addedKeywords = new Set<string>();
+
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+  const isValidKeyword = (kw: string) => {
+    const cleaned = normalize(kw);
+    const words = cleaned.split(/\s+/);
+
+    return (
+      words.length >= 2 &&
+      words.length <= 4 &&
+      cleaned.length <= 30 &&
+      !/^(how|what|when|why|should|can)\b/.test(cleaned) &&
+      !/\bto\b/.test(cleaned)
+    );
+  };
 
   // -------------------------
-  // FETCH DATA
+  // FETCH
   // -------------------------
   const [terms, lowAds] = await Promise.all([
     getSearchTermWinners(),
     getLowPerformingAssets(),
   ]);
 
-  const MAX_TERMS = 5;
-  const MAX_ADS = 5;
-
-  const termCandidates = terms
-    .filter(t => t.score >= 2)
-    .slice(0, MAX_TERMS);
+  const termCandidates = terms.filter(t => t.score >= 2).slice(0, 5);
 
   const adItems = lowAds
     .map((ad) => {
       const adId = ad.ad_group_ad?.ad?.id;
       const adGroupId = ad.ad_group_ad?.ad_group;
-
       if (!adId || !adGroupId) return null;
 
       return {
-        ad,
         adId,
         adGroupId: String(adGroupId).split("/").pop()!,
         keyword: extractTopKeyword(ad),
       };
     })
     .filter(Boolean)
-    .slice(0, MAX_ADS) as {
-    ad: any;
+    .slice(0, 5) as {
     adId: number;
     adGroupId: string;
     keyword: string;
   }[];
 
-  if (termCandidates.length === 0 && adItems.length === 0) {
-    return results;
-  }
+  if (!termCandidates.length && !adItems.length) return results;
 
   // -------------------------
   // AI DECISION
@@ -517,44 +523,39 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
   ];
 
   const decisions = await decideSearchTermsAndAds(inputTerms);
-  const decisionMap = new Map(decisions.map(d => [d.term, d]));
+
+  const decisionMap = new Map(
+    decisions.map(d => [normalize(d.term), d])
+  );
 
   // -------------------------
-  // APPLY SEARCH TERM ACTIONS
+  // PROCESS TERMS
   // -------------------------
   for (const row of termCandidates) {
     const { term, campaignId, adGroupId } = row;
     if (!campaignId || !adGroupId) continue;
 
-    const d = decisionMap.get(term);
-    if (!d) continue;
+    const key = normalize(term);
+    const d = decisionMap.get(key);
 
-    console.log("TERM DECISION:", d);
+    if (!d) {
+      console.log("[SKIP NO DECISION]", term);
+      continue;
+    }
 
-    const key = getKey(campaignId, term);
-    processedTerms.add(key);
+    console.log("DECISION USED:", term, d.action);
+
+    processedTerms.add(getKey(campaignId, term));
 
     // -------------------------
-    // KEYWORDS (SAFE)
+    // ADD KEYWORDS
     // -------------------------
-    if (d.action === "add_keyword" && d.keywords) {
+    if (d.action === "add_keyword" && d.keywords?.length) {
       for (const raw of d.keywords) {
-        const cleaned = raw
-          .toLowerCase()
-          .replace(/[^\w\s]/g, "")
-          .trim();
+        const cleaned = normalize(raw);
 
-        const words = cleaned.split(/\s+/);
-
-        // 🚫 HARD BLOCKS (bulletproof)
-        if (
-          words.length < 2 ||
-          words.length > 4 ||
-          cleaned.length > 30 ||
-          /^(how|what|when|why|should|can)\b/.test(cleaned) ||
-          /\bto\b/.test(cleaned) // sentence indicator
-        ) {
-          console.log("[SKIP INVALID KEYWORD]", raw);
+        if (!isValidKeyword(cleaned)) {
+          console.log("[INVALID KEYWORD BLOCKED]", raw);
           continue;
         }
 
@@ -573,78 +574,63 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     }
 
     // -------------------------
-    // NEGATIVES (SAFE)
+    // ADD NEGATIVES
     // -------------------------
     if (d.action === "add_negative") {
-      const cleaned = term
-      .toLowerCase()
-      .replace(/[^\w\s]/g, "")
-      .trim();
+      const cleaned = normalize(term);
 
-    const words = cleaned.split(/\s+/);
+      if (await negativeKeywordExists(campaignId, cleaned)) {
+        console.log("[SKIP DUP NEGATIVE]", cleaned);
+        continue;
+      }
 
-    // 🚫 only block extreme cases (not normal long phrases)
-    if (words.length > 12 || cleaned.length > 120) {
-      console.log("[SKIP EXTREME NEGATIVE]", term);
-      continue;
-    }
-
-    if (await negativeKeywordExists(campaignId, cleaned)) continue;
-
-    if (dryRun) {
-      results.push({ action: "add_negative", term: cleaned });
-    } else {
-      await addNegativeKeyword({
-        campaignId,
-        keyword: cleaned,
-      });
-    }
+      if (dryRun) {
+        results.push({ action: "add_negative", term: cleaned });
+      } else {
+        await addNegativeKeyword({
+          campaignId,
+          keyword: cleaned,
+        });
+      }
     }
   }
 
   // -------------------------
-  // APPLY AD OPTIMIZATION
+  // AD OPTIMIZATION
   // -------------------------
   for (const item of adItems) {
-    const { adId, adGroupId, keyword } = item;
+    const key = normalize(item.keyword);
+    const d = decisionMap.get(key);
 
-    const d = decisionMap.get(keyword);
     if (!d) continue;
-
-    console.log("AD DECISION:", d);
 
     if (
       d.action !== "optimize_ad" ||
       !d.headlines ||
       !d.descriptions
-    ) {
-      continue;
-    }
-
-    const newAssets = {
-      headlines: d.headlines,
-      descriptions: d.descriptions,
-    };
+    ) continue;
 
     if (dryRun) {
       results.push({
         action: "optimize_ad",
-        adId,
-        keyword,
+        adId: item.adId,
       });
       continue;
     }
 
     try {
       await updateAdAssets({
-        adGroupId,
-        adId,
-        assets: newAssets,
+        adGroupId: item.adGroupId,
+        adId: item.adId,
+        assets: {
+          headlines: d.headlines,
+          descriptions: d.descriptions,
+        },
       });
 
-      console.log("[UPDATED AD]", { adId, keyword });
+      console.log("[AD UPDATED]", item.adId);
     } catch (err) {
-      console.error("[UPDATE AD FAILED]", adId, err);
+      console.error("[AD UPDATE FAILED]", item.adId, err);
     }
   }
 
