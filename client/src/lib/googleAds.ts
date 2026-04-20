@@ -1,4 +1,3 @@
-
 import "server-only";
 
 import { GoogleAdsApi, type services } from "google-ads-api";
@@ -425,7 +424,6 @@ async function addExactMatchKeyword(params: {
   adGroupId: string;
   keyword: string;
 }) {
-  throw new Error("STOP: addExactMatchKeyword was called");
   const cleaned = params.keyword
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
@@ -459,7 +457,6 @@ async function addExactMatchKeyword(params: {
 }
 
 export async function runGoogleAdsEngine({ dryRun = false } = {}) {
-  throw new Error("ENGINE HIT TEST");
   resetAICallCount();
 
   const results: any[] = [];
@@ -541,25 +538,29 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
       continue;
     }
 
-      console.log("DECISION USED:", term, d!.action);
+    console.log("DECISION USED:", term, d.action);
 
     processedTerms.add(getKey(campaignId, term));
 
     // ADD KEYWORDS
-    if (d!.action === "add_keyword" && d!.keywords?.length) {
-      for (const raw of d!.keywords!) {
-        const cleaned = normalize(raw);
+    if (d.action === "add_keyword" && d.keywords?.length) {
+      for (const raw of d.keywords) {
+        const cleaned = raw
+          .toLowerCase()
+          .replace(/[^\w\s]/g, "")
+          .trim();
     
         const words = cleaned.split(/\s+/);
     
-        const isInvalid =
+        // 🚫 FINAL NON-BYPASSABLE FILTER
+        if (
+          words.length < 2 ||
           words.length > 4 ||
           cleaned.length > 30 ||
           /^(how|what|when|why|should|can)\b/.test(cleaned) ||
-          /\bto\b/.test(cleaned);
-    
-        if (isInvalid) {
-          console.log("[BLOCKED KEYWORD - FINAL]", cleaned);
+          /\bto\b/.test(cleaned)
+        ) {
+          console.log("[BLOCKED FINAL KEYWORD]", cleaned);
           continue;
         }
     
@@ -569,7 +570,6 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
         if (dryRun) {
           results.push({ action: "add_keyword", term: cleaned });
         } else {
-          // 👇 INLINE create — NO separate function
           const customer = getCustomer();
     
           await customer.adGroupCriteria.create([
@@ -589,7 +589,7 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     // -------------------------
     // ADD NEGATIVES
     // -------------------------
-    if (d!.action === "add_negative") {
+    if (d.action === "add_negative") {
       const cleaned = normalize(term);
 
       if (await negativeKeywordExists(campaignId, cleaned)) {
@@ -618,9 +618,9 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
     if (!d) continue;
 
     if (
-      d!.action !== "optimize_ad" ||
-      !d!.headlines ||
-      !d!.descriptions
+      d.action !== "optimize_ad" ||
+      !d.headlines ||
+      !d.descriptions
     ) continue;
 
     if (dryRun) {
@@ -636,8 +636,8 @@ export async function runGoogleAdsEngine({ dryRun = false } = {}) {
         adGroupId: item.adGroupId,
         adId: item.adId,
         assets: {
-          headlines: d!.headlines!,
-          descriptions: d!.descriptions!,
+          headlines: d.headlines,
+          descriptions: d.descriptions,
         },
       });
 
