@@ -10,6 +10,7 @@ import { verifyCronAuth } from "@/lib/oauth";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  throw new Error("ROUTE HARD STOP");
   const unauthorized = verifyCronAuth(req);
   if (unauthorized) return unauthorized;
 
