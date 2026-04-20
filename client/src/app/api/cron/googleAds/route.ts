@@ -9,10 +9,12 @@ import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  throw new Error("ROUTE HARD STOP");
+export async function POST(req: Request): Promise<Response> {
+  // HARD STOP TEST
+  return new Response("ROUTE HARD STOP", { status: 500 });
+
   const unauthorized = verifyCronAuth(req);
-if (unauthorized instanceof Response) return unauthorized;
+  if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(req.url);
   const dryRun = searchParams.get("dryRun") === "true";
@@ -21,32 +23,22 @@ if (unauthorized instanceof Response) return unauthorized;
 
   try {
     const runGoogleAdsResult = await runGoogleAdsEngine({ dryRun });
-    // const negativeKeywordResult = await runNegativeKeywordCleanup({ dryRun });
 
     return Response.json({
       ok: true,
       dryRun,
       runGoogleAdsResult,
-      // negativeKeywordResult,
     });
   } catch (err: unknown) {
-    console.error("[GOOGLE ADS ERROR]", err);
-
-    let message: string;
-
-    if (err instanceof Error) {
-      message = err.message;
-    } else if (typeof err === "object" && err !== null) {
-      message = JSON.stringify(err, null, 2);
-    } else {
-      message = String(err);
-    }
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null
+        ? JSON.stringify(err, null, 2)
+        : String(err);
 
     return Response.json(
-      {
-        ok: false,
-        error: message,
-      },
+      { ok: false, error: message },
       { status: 500 }
     );
   }
