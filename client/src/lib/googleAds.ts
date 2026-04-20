@@ -424,7 +424,7 @@ async function addExactMatchKeyword(params: {
   adGroupId: string;
   keyword: string;
 }) {
-  console.log("KEYWORD CREATE CALLED:", params.keyword);
+  throw new Error("STOP: addExactMatchKeyword was called");
   const cleaned = params.keyword
     .toLowerCase()
     .replace(/[^\w\s]/g, "")
