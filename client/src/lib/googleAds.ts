@@ -18,74 +18,6 @@ export function getCustomer() {
   });
 }
 
-// ai generation helper
-async function decideKeywords(
-  terms: string[]
-): Promise<KeywordDecision[]> {
-  const prompt = `
-You convert search terms into Google Ads keywords.
-
-ONLY return JSON.
-
-GOAL:
-Compress each term into ONE short, high-intent keyword.
-
-RULES:
-- 2 to 4 words ONLY
-- Must represent hiring intent
-- Remove filler words (how, to, handle, need, etc.)
-- Prefer "lawyer" or "attorney"
-- Add location if useful (oakland)
-- No explanations
-
-EXAMPLES:
-
-Input: how to handle a personal injury case from start to finish
-Output: personal injury lawyer
-
-Input: i need a personal injury lawyer
-Output: personal injury lawyer
-
-Input: legal aid oakland
-Output: personal injury lawyer oakland
-
-FORMAT:
-[
-  {
-    "term": "input",
-    "keyword": "compressed keyword"
-  }
-]
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5",
-    input: `${GOC_LEGAL_BRAND_CONTEXT}
-
-TERMS:
-${terms.join("\n")}
-
-${prompt}`,
-  });
-
-  try {
-    const parsed = JSON.parse(res.output_text || "[]");
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter((x): x is KeywordDecision => {
-      return (
-        x &&
-        typeof x.term === "string" &&
-        typeof x.keyword === "string"
-      );
-    });
-  } catch {
-    console.error("AI parse error");
-    return [];
-  }
-}
-
 // Fetch Low-Performance Assets
 async function getLowPerformingAssets() {
   const customer = getCustomer();
@@ -276,7 +208,6 @@ async function negativeKeywordExists(
   });
 }
 
-
 const processedTerms = new Set<string>();
 function getKey(campaignId: string, term: string) {
   return `${campaignId}:${term.toLowerCase()}`;
@@ -449,6 +380,74 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
+// ai generation helper
+async function decideKeywords(
+  terms: string[]
+): Promise<KeywordDecision[]> {
+  const prompt = `
+You convert search terms into Google Ads keywords.
+
+ONLY return JSON.
+
+GOAL:
+Compress each term into ONE short, high-intent keyword.
+
+RULES:
+- 2 to 4 words ONLY
+- Must represent hiring intent
+- Remove filler words (how, to, handle, need, etc.)
+- Prefer "lawyer" or "attorney"
+- Add location if useful (oakland)
+- No explanations
+
+EXAMPLES:
+
+Input: how to handle a personal injury case from start to finish
+Output: personal injury lawyer
+
+Input: i need a personal injury lawyer
+Output: personal injury lawyer
+
+Input: legal aid oakland
+Output: personal injury lawyer oakland
+
+FORMAT:
+[
+  {
+    "term": "input",
+    "keyword": "compressed keyword"
+  }
+]
+`;
+
+  const res = await openai.responses.create({
+    model: "gpt-5",
+    input: `${GOC_LEGAL_BRAND_CONTEXT}
+
+TERMS:
+${terms.join("\n")}
+
+${prompt}`,
+  });
+
+  try {
+    const parsed = JSON.parse(res.output_text || "[]");
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((x): x is KeywordDecision => {
+      return (
+        x &&
+        typeof x.term === "string" &&
+        typeof x.keyword === "string"
+      );
+    });
+  } catch {
+    console.error("AI parse error");
+    return [];
+  }
+}
+
 // types
 type KeywordDecision = {
   term: string;
@@ -529,19 +528,19 @@ export async function runKeywordExpansion({ dryRun = false } = {}) {
 
     rootSet.add(root);
 
-    if (dryRun) {
-      results.push({ action: "add_keyword", keyword: kw });
-    } else {
+    if (!dryRun) {
       try {
         await addExactMatchKeyword({
           adGroupId: candidates[0].adGroupId,
           keyword: kw,
         });
         console.log("[ADDED]", kw);
+        results.push({ action: "add_keyword", keyword: kw });
       } catch (err) {
         console.error("[FAILED]", kw, err);
       }
     }
+    results.push({ action: "add_keyword", keyword: kw });
   }
 
   return results;
@@ -648,57 +647,169 @@ async function addNegativeKeyword(params: {
   ]);
 }
 
-type NegativeKeywordDryRunRow = {
-  action: "add_negative";
+// ai generation helper
+async function decideNegatives(
+  terms: string[]
+): Promise<NegativeDecision[]> {
+  const prompt = `
+You analyze search terms for Google Ads.
+
+ONLY return JSON.
+
+GOAL:
+Identify low-intent or irrelevant searches and convert them into clean negative keywords.
+
+RULES:
+- If NOT likely to hire a lawyer → negative = true
+- If high intent → negative = false
+
+NEGATIVE KEYWORD RULES:
+- Must be natural phrase (not awkward fragments)
+- 2 to 4 words
+- Keep meaning of original term
+- Remove filler but keep clarity
+- Avoid overly broad words
+
+BAD:
+"how to"
+"what is"
+"free"
+
+GOOD:
+"how to handle injury claim"
+"legal aid services"
+"injury claim process"
+
+FORMAT:
+[
+  {
+    "term": "input",
+    "negative": true/false,
+    "keyword": "clean phrase"
+  }
+]
+`;
+
+  const res = await openai.responses.create({
+    model: "gpt-5",
+    input: `${GOC_LEGAL_BRAND_CONTEXT}
+
+TERMS:
+${terms.join("\n")}
+
+${prompt}`,
+  });
+
+  try {
+    const parsed = JSON.parse(res.output_text || "[]");
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((x): x is NegativeDecision => {
+      return (
+        x &&
+        typeof x.term === "string" &&
+        typeof x.negative === "boolean" &&
+        typeof x.keyword === "string"
+      );
+    });
+  } catch {
+    console.error("AI parse error");
+    return [];
+  }
+}
+
+// types
+type NegativeDecision = {
   term: string;
-  campaignId: string;
-  reasoning: string;
+  negative: boolean;
+  keyword: string;
 };
-export async function runNegativeKeywordCleanup({ dryRun = false } = {}) {
-  const waste = await getWasteSearchTerms();
 
-  console.log("WASTE TERMS:", waste.length);
+export async function runNegativeKeywordStrategy({ dryRun = false } = {}) {
+  resetAICallCount();
 
-  const results: NegativeKeywordDryRunRow[] = [];
+  const results: Array<{ action: string; keyword: string }> = [];
+  const added = new Set<string>();
 
-  const MAX_NEGATIVES = 3;
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
-  const candidates = waste
-    .filter(w => w.score >= 4) // 🔥 stricter than before
-    .slice(0, MAX_NEGATIVES);
+  const isValid = (kw: string) => {
+    if (!kw) return false;
 
-  for (const row of candidates) {
-    const { term, campaignId } = row;
+    const words = kw.split(/\s+/);
 
-    const key = getKey(campaignId, term);
+    // allow slightly more natural phrases
+    if (words.length < 2 || words.length > 4) return false;
 
-    // ✅ skip anything already processed by AI layer
-    if (processedTerms.has(key)) {
-      console.log("[SKIP - handled by AI]", term);
+    return true;
+  };
+
+  // -------------------------
+  // FETCH
+  // -------------------------
+  const terms = await getSearchTermWinners();
+
+  const candidates = terms
+    .filter((t: any) => t.term)
+    .slice(0, 10);
+
+  if (!candidates.length) return results;
+
+  const inputTerms = candidates.map((t: any) =>
+    normalize(String(t.term))
+  );
+
+  // -------------------------
+  // AI
+  // -------------------------
+  const decisions = await decideNegatives(inputTerms);
+
+  const map = new Map<string, NegativeDecision>(
+    decisions.map((d) => [normalize(d.term), d])
+  );
+
+  const MAX_TOTAL = 8;
+
+  // -------------------------
+  // PROCESS
+  // -------------------------
+  for (const term of inputTerms) {
+    if (results.length >= MAX_TOTAL) break;
+
+    const d = map.get(term);
+    if (!d || !d.negative) continue;
+
+    const kw = normalize(d.keyword);
+
+    if (!isValid(kw)) {
+      console.log("[SKIP INVALID]", kw);
       continue;
     }
 
-    // ✅ dedup against Google Ads
-    if (await negativeKeywordExists(campaignId, term)) {
-      console.log("[SKIP DUP NEGATIVE - cleanup]", term);
+    if (added.has(kw)) {
+      console.log("[SKIP DUP]", kw);
       continue;
     }
 
-    const payload: NegativeKeywordDryRunRow = {
-      action: "add_negative",
-      term,
-      campaignId,
-      reasoning: "cleanup: extreme waste fallback",
-    };
+    added.add(kw);
 
-    if (dryRun) {
-      results.push(payload);
-    } else {
-      await addNegativeKeyword({
-        campaignId,
-        keyword: term,
-      });
+    if (!dryRun) {
+      try {
+        await addNegativeKeyword({
+          campaignId: candidates[0].campaignId,
+          keyword: kw,
+        });
+        console.log("[NEGATIVE ADDED]", kw);
+      } catch (err) {
+        console.error("[NEGATIVE FAILED]", kw, err);
+        continue;
+      }
     }
+
+    // ✅ ALWAYS push result (fix)
+    results.push({ action: "add_negative", keyword: kw });
   }
 
   return results;
