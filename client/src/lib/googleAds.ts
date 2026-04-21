@@ -640,19 +640,35 @@ type CampaignStat = {
   clicks: number;
   conversions: number;
 };
+type BudgetDecision = {
+  campaignId: string;
+  action: "increase" | "decrease" | "none";
+  oldBudget: number;
+  newBudget: number;
+
+  performance: {
+    clicks: number;
+    conversions: number;
+    cost: number;
+    cpa: number;
+  };
+
+  topKeywords: {
+    term: string;
+    clicks: number;
+    conversions: number;
+    cpa: number;
+    score: number;
+  }[];
+
+  reason: string[];
+};
 
 export async function runBudgetAllocation() {
   console.log("[BUDGET] Starting allocation");
 
-  const results: Array<{
-    campaignId: string;
-    action: string;
-    oldBudget: number;
-    newBudget: number;
-  }> = [];
-
   // -------------------------
-  // CONFIG (keep minimal)
+  // CONFIG (minimal + safe)
   // -------------------------
   const MIN_CLICKS = 20;
   const MIN_COST = 50;
@@ -661,14 +677,19 @@ export async function runBudgetAllocation() {
   const DECREASE_RATE = 0.15;
 
   const MIN_BUDGET = 5;
-  const MAX_CHANGE = 0.2; // safety cap
+  const MAX_CHANGE = 0.2;
 
   // -------------------------
-  // FETCH
+  // FETCH (ONLY ONCE)
   // -------------------------
-  const campaigns: CampaignStat[] = await getCampaignStats();
+  const [campaigns, terms] = await Promise.all([
+    getCampaignStats(),
+    getSearchTermWinners(), // reuse existing engine
+  ]);
 
-  if (!campaigns.length) return results;
+  if (!campaigns.length) return [];
+
+  const results: BudgetDecision[] = [];
 
   // -------------------------
   // PROCESS
@@ -676,32 +697,24 @@ export async function runBudgetAllocation() {
   for (const c of campaigns) {
     const { campaignId, budget, cost, clicks, conversions } = c;
 
-    // skip low data (critical)
+    // 🚫 skip low data
     if (clicks < MIN_CLICKS && cost < MIN_COST) {
-      console.log("[SKIP LOW DATA]", campaignId);
       continue;
     }
 
     let newBudget = budget;
-    let action = "none";
+    let action: "increase" | "decrease" | "none" = "none";
 
     // -------------------------
-    // WINNER
+    // DECISION
     // -------------------------
     if (conversions > 0) {
       newBudget = budget * (1 + INCREASE_RATE);
       action = "increase";
-    }
-
-    // -------------------------
-    // LOSER
-    // -------------------------
-    else if (cost >= MIN_COST && conversions === 0) {
+    } else if (cost >= MIN_COST && conversions === 0) {
       newBudget = budget * (1 - DECREASE_RATE);
       action = "decrease";
-    }
-
-    else {
+    } else {
       continue;
     }
 
@@ -713,17 +726,37 @@ export async function runBudgetAllocation() {
 
     if (newBudget > maxUp) newBudget = maxUp;
     if (newBudget < maxDown) newBudget = maxDown;
-
     if (newBudget < MIN_BUDGET) newBudget = MIN_BUDGET;
 
-    // round (clean)
     newBudget = Math.round(newBudget * 100) / 100;
 
-    // skip tiny changes
     if (Math.abs(newBudget - budget) < 0.5) {
-      console.log("[SKIP SMALL CHANGE]", campaignId);
       continue;
     }
+
+    // -------------------------
+    // CONTEXT (cheap + powerful)
+    // -------------------------
+    const cpa = conversions > 0 ? cost / conversions : cost;
+
+    const topKeywords = terms
+      .filter(t => t.campaignId === campaignId)
+      .slice(0, 3)
+      .map(t => ({
+        term: t.term,
+        clicks: t.clicks,
+        conversions: t.conversions,
+        cpa: t.cpa,
+        score: t.score,
+      }));
+
+    const reason: string[] = [];
+
+    if (conversions > 0) reason.push("has_conversions");
+    else reason.push("no_conversions");
+
+    if (cpa > 0 && cpa < 50) reason.push("good_cpa");
+    if (cost >= MIN_COST) reason.push("enough_data");
 
     // -------------------------
     // APPLY
@@ -741,6 +774,16 @@ export async function runBudgetAllocation() {
         action,
         oldBudget: budget,
         newBudget,
+
+        performance: {
+          clicks,
+          conversions,
+          cost,
+          cpa,
+        },
+
+        topKeywords,
+        reason,
       });
     } catch (err) {
       console.error("[FAILED]", campaignId, err);
