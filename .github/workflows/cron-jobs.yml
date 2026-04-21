@@ -3,6 +3,7 @@ name: Cron Jobs
 env:
   BASE_URL: https://www.goclegal.com
   CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
 on:
   schedule:
