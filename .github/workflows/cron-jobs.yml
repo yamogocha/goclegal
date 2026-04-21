@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: "0 16 * * 1" # Weekly blog → Monday 9:00 AM PST
     - cron: "0 17 * * 1" # Weekly ad → Monday 10:00 AM PST
-    - cron: "0 */4 * * *" # Budget → Every 4 hours
     - cron: "0 15 * * 1" # Weekly Google Ads tune → Monday 8:00 AM PST
     - cron: "0 16 */2 * *" # Google Ads → Every 2 days @ 9:00 AM PST
 
@@ -19,7 +18,6 @@ on:
           - all
           - blog
           - ad
-          - budget
           - googleAds
           - weeklyGoogleAdsTune
 
@@ -56,10 +54,6 @@ jobs:
       - name: Weekly ad
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyAd.ts
-
-      - name: Budget
-        if: github.event.schedule == '0 */4 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
-        run: npx tsx scripts/budget.ts
 
       - name: Weekly Google Ads tune
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'weeklyGoogleAdsTune' || github.event.inputs.job == 'all'
