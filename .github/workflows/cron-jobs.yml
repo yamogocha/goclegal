@@ -1,21 +1,11 @@
 name: Cron Jobs
 
-env:
-  BASE_URL: https://www.goclegal.com
-  CRON_SECRET: ${{ secrets.CRON_SECRET }}
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
 on:
   schedule:
-    # All cron times are in UTC (GitHub Actions standard)
-
-    - cron: "0 16 * * 1"   # Weekly blog → Monday 9:00 AM PST
-    - cron: "0 17 * * 1"   # Weekly ad → Monday 10:00 AM PST
-    - cron: "0 */4 * * *"  # Budget → Every 4 hours
-    - cron: "0 15 * * 1"   # Weekly Google Ads tune → Monday 8:00 AM PST
-
-    # Google Ads main job intentionally NOT scheduled for now
-    # so you can iterate safely via manual trigger
+    - cron: "0 16 * * 1" # Weekly blog → Monday 9:00 AM PST
+    - cron: "0 17 * * 1" # Weekly ad → Monday 10:00 AM PST
+    - cron: "0 */4 * * *" # Budget → Every 4 hours
+    - cron: "0 15 * * 1" # Weekly Google Ads tune → Monday 8:00 AM PST
 
   workflow_dispatch:
     inputs:
@@ -53,7 +43,7 @@ jobs:
         run: npm install
 
       # ----------------------------
-      # CRON TASKS (SCHEDULED)
+      # CRON TASKS
       # ----------------------------
 
       - name: Weekly blog
@@ -73,9 +63,9 @@ jobs:
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
 
       # ----------------------------
-      # GOOGLE ADS (MANUAL ONLY FOR NOW)
+      # GOOGLE ADS (MANUAL)
       # ----------------------------
 
-      - name: Google Ads (manual / iteration)
+      - name: Google Ads
         if: github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'googleAds' || github.event.inputs.job == 'all')
         run: npx tsx scripts/googleAds.ts
