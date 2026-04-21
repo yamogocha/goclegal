@@ -1,8 +1,21 @@
+// src/lib/openai.ts
 import OpenAI from "openai";
 
-export const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY!,
-})
+let client: OpenAI | null = null;
+
+export function getOpenAI() {
+  if (client) return client;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
+
+  client = new OpenAI({ apiKey });
+
+  return client;
+}
 
 const blockSchema = {
     type: "array",

@@ -3,6 +3,7 @@ import { resetAICallCount } from "../src/lib/budgetMonitor";
 import { runKeywordExpansion } from "../src/lib/googleAds";
 
 async function main() {
+  console.log("ENV KEY EXISTS:", !!process.env.OPENAI_API_KEY);
   const dryRun = process.env.DRY_RUN === "true";
 
   console.log("[GOOGLE ADS] Starting job");

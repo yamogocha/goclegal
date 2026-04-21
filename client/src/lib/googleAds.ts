@@ -1,9 +1,9 @@
 import { GoogleAdsApi, type services } from "google-ads-api";
-import { GOC_LEGAL_BRAND_CONTEXT, openai } from "@/lib/openai";
+import { GOC_LEGAL_BRAND_CONTEXT, getOpenAI } from "@/lib/openai";
 import { z } from "zod";
 import { canMakeAICall, resetAICallCount, trackAICall } from "./budgetMonitor";
 
-
+const openai = getOpenAI();
 export const googleAdsClient = new GoogleAdsApi({
   client_id: process.env.GOOGLE_CLIENT_ID!,
   client_secret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -23,26 +23,37 @@ async function decideKeywords(
   terms: string[]
 ): Promise<KeywordDecision[]> {
   const prompt = `
-You are a Google Ads keyword expansion engine for a personal injury law firm.
+You convert search terms into Google Ads keywords.
 
-Only return JSON.
+ONLY return JSON.
 
-Goal:
-Generate high-intent keywords likely to convert into legal cases.
+GOAL:
+Compress each term into ONE short, high-intent keyword.
 
-Rules:
-- Focus on hiring intent
-- No informational queries
-- 2 to 4 words only
-- Location intent preferred (e.g. oakland, near me)
-- No duplicates
+RULES:
+- 2 to 4 words ONLY
+- Must represent hiring intent
+- Remove filler words (how, to, handle, need, etc.)
+- Prefer "lawyer" or "attorney"
+- Add location if useful (oakland)
 - No explanations
 
-Return format:
+EXAMPLES:
+
+Input: how to handle a personal injury case from start to finish
+Output: personal injury lawyer
+
+Input: i need a personal injury lawyer
+Output: personal injury lawyer
+
+Input: legal aid oakland
+Output: personal injury lawyer oakland
+
+FORMAT:
 [
   {
-    "term": "input term",
-    "keywords": ["keyword1", "keyword2"]
+    "term": "input",
+    "keyword": "compressed keyword"
   }
 ]
 `;
@@ -66,7 +77,7 @@ ${prompt}`,
       return (
         x &&
         typeof x.term === "string" &&
-        Array.isArray(x.keywords)
+        typeof x.keyword === "string"
       );
     });
   } catch {
@@ -441,10 +452,9 @@ async function addExactMatchKeyword(params: {
 // types
 type KeywordDecision = {
   term: string;
-  keywords: string[];
+  keyword: string;
 };
 
-// core
 export async function runKeywordExpansion({ dryRun = false } = {}) {
   resetAICallCount();
 
@@ -454,23 +464,27 @@ export async function runKeywordExpansion({ dryRun = false } = {}) {
   const normalize = (s: string) =>
     s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
-  const isValidKeyword = (kw: string) => {
+  // enforce google-friendly keyword length
+  const isValidLength = (kw: string) => {
     const words = kw.split(/\s+/);
-    return (
-      words.length >= 2 &&
-      words.length <= 4 &&
-      kw.length <= 30 &&
-      !/^(how|what|when|why|should|can)\b/.test(kw) &&
-      !/\bto\b/.test(kw)
-    );
+    return words.length >= 2 && words.length <= 4;
   };
 
-  // fetch
+  // dedupe by simplified root
+  const getRoot = (kw: string) =>
+    kw
+      .replace(/\b(near me|oakland|california)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // -------------------------
+  // FETCH
+  // -------------------------
   const terms = await getSearchTermWinners();
 
   const candidates = terms
     .filter((t: any) => t.score >= 2 && t.term)
-    .slice(0, 10);
+    .slice(0, 5);
 
   if (!candidates.length) return results;
 
@@ -478,35 +492,54 @@ export async function runKeywordExpansion({ dryRun = false } = {}) {
     normalize(String(t.term))
   );
 
-  // ai
+  // -------------------------
+  // AI (single call)
+  // -------------------------
   const decisions = await decideKeywords(inputTerms);
 
   const map = new Map<string, KeywordDecision>(
-    decisions.map((d: KeywordDecision) => [normalize(d.term), d])
+    decisions.map((d) => [normalize(d.term), d])
   );
 
-  // process
-  for (const row of candidates) {
-    const term = normalize(String(row.term));
-    const decision = map.get(term);
+  const rootSet = new Set<string>();
+  const MAX_TOTAL = 5;
 
-    if (!decision) continue;
+  // -------------------------
+  // PROCESS
+  // -------------------------
+  for (const term of inputTerms) {
+    if (results.length >= MAX_TOTAL) break;
 
-    for (const kw of decision.keywords || []) {
-      const cleaned = normalize(kw);
+    const d = map.get(term);
+    if (!d) continue;
 
-      if (!isValidKeyword(cleaned)) continue;
-      if (added.has(cleaned)) continue;
+    const kw = normalize(d.keyword);
 
-      added.add(cleaned);
+    if (!isValidLength(kw)) {
+      console.log("[SKIP LENGTH]", kw);
+      continue;
+    }
 
-      if (dryRun) {
-        results.push({ action: "add_keyword", keyword: cleaned });
-      } else {
+    const root = getRoot(kw);
+
+    if (rootSet.has(root)) {
+      console.log("[SKIP DUP]", kw);
+      continue;
+    }
+
+    rootSet.add(root);
+
+    if (dryRun) {
+      results.push({ action: "add_keyword", keyword: kw });
+    } else {
+      try {
         await addExactMatchKeyword({
-          adGroupId: row.adGroupId,
-          keyword: cleaned,
+          adGroupId: candidates[0].adGroupId,
+          keyword: kw,
         });
+        console.log("[ADDED]", kw);
+      } catch (err) {
+        console.error("[FAILED]", kw, err);
       }
     }
   }
