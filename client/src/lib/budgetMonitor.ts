@@ -310,74 +310,90 @@ export async function weeklyGoogleAdsTune({ dryRun = false } = {}) {
 
 
 
+type BudgetState = "HARD_STOP" | "NEAR_LIMIT" | "NORMAL";
+
+type Result = {
+  ok: true;
+  spend: number;
+  state: BudgetState;
+  campaigns: {
+    enabled: string[];
+    paused: string[];
+  };
+  action: "PAUSE" | "ENABLE" | "NONE";
+  affected: string[];
+  dryRun: boolean;
+};
+
+// -----------------------------
+// Config
+// -----------------------------
 const DAILY_BUDGET = 25;
 
 const THRESHOLDS = {
-  hardStop: 1.1,   // 110%
-  nearLimit: 0.85, // 85%
+  hardStop: 1.1,
+  nearLimit: 0.85,
 };
-  
-async function getActiveCampaigns() {
+
+// Google Ads enum values
+const STATUS = {
+  ENABLED: 3,
+  PAUSED: 2,
+} as const;
+
+// -----------------------------
+// Helpers
+// -----------------------------
+function getState(spend: number): BudgetState {
+  if (spend >= DAILY_BUDGET * THRESHOLDS.hardStop) return "HARD_STOP";
+  if (spend >= DAILY_BUDGET * THRESHOLDS.nearLimit) return "NEAR_LIMIT";
+  return "NORMAL";
+}
+
+async function getCampaigns() {
   const customer = getCustomer();
 
   const rows = await customer.query(`
     SELECT campaign.id, campaign.status
     FROM campaign
-    WHERE campaign.status != 'REMOVED'
   `);
 
-  return rows;
+  const enabled: string[] = [];
+  const paused: string[] = [];
+
+  for (const r of rows) {
+    const id = r.campaign?.id;
+    const status = r.campaign?.status;
+
+    if (!id || status === undefined) continue;
+
+    if (status === STATUS.ENABLED) enabled.push(String(id));
+    if (status === STATUS.PAUSED) paused.push(String(id));
+  }
+
+  return { enabled, paused };
 }
 
-function campaignIdsFromRows(rows: services.IGoogleAdsRow[]): string[] {
-  return rows
-    .map(r => r.campaign?.id)
-    .filter((id): id is number => id !== undefined && id !== null)
-    .map(String);
-}
-
-
-async function getTodaySpend() {
+async function getSpend() {
   const customer = getCustomer();
 
-  const query = `
-      SELECT
-        metrics.cost_micros
-      FROM customer
-      WHERE segments.date DURING TODAY
-    `;
+  const rows = await customer.query(`
+    SELECT metrics.cost_micros
+    FROM customer
+    WHERE segments.date DURING TODAY
+  `);
 
-  const rows = await customer.query(query);
-
-  const totalMicros = rows.reduce(
-    (sum, r: services.IGoogleAdsRow) =>
-      sum + (r.metrics?.cost_micros ?? 0),
-    0,
+  const micros = rows.reduce(
+    (sum, r) => sum + (r.metrics?.cost_micros ?? 0),
+    0
   );
 
-  return totalMicros / 1_000_000; // dollars
+  return micros / 1_000_000;
 }
 
-function getPacing(spend: number, now = new Date()) {
-  const hour = now.getHours();
+async function update(ids: string[], status: 2 | 3) {
+  if (!ids.length) return;
 
-  const start = 6;
-  const end = 22;
-  const total = end - start;
-
-  const elapsed = Math.max(1, hour - start);
-  const expected = (elapsed / total) * DAILY_BUDGET;
-
-  const ratio = spend / expected;
-
-  return {
-    ratio,
-    isOver: ratio > 1.2,
-    isUnder: ratio < 0.6,
-  };
-}
-
-async function setCampaignStatusBatch(ids: string[], status: "ENABLED" | "PAUSED") {
   const customer = getCustomer();
 
   await customer.campaigns.update(
@@ -387,73 +403,50 @@ async function setCampaignStatusBatch(ids: string[], status: "ENABLED" | "PAUSED
     }))
   );
 }
-  
-  export async function controlBudget({ dryRun = false } = {}) {
-    const spend = await getTodaySpend();
-    const campaigns = await getActiveCampaigns();
-  
-    const ids = campaignIdsFromRows(campaigns);
-  
-    if (ids.length === 0) return;
-  
-    const pacing = getPacing(spend);
-  
-    console.log("[budget]", { spend, pacing });
-  
-    // HARD STOP
-    if (spend >= DAILY_BUDGET * THRESHOLDS.hardStop) {
-      if (dryRun) {
-        console.log("[DRY RUN] HARD STOP → would pause", ids);
-      } else {
-        await setCampaignStatusBatch(ids, "PAUSED");
-      }
-      return;
-    }
 
-    // NEAR LIMIT
-    if (spend >= DAILY_BUDGET * THRESHOLDS.nearLimit) {
-      if (dryRun) {
-        console.log("[DRY RUN] NEAR LIMIT → would pause", ids);
-      } else {
-        await setCampaignStatusBatch(ids, "PAUSED");
-      }
-      return;
-    }
+// -----------------------------
+// Main
+// -----------------------------
+export async function controlBudget({ dryRun = false } = {}): Promise<Result> {
+  const spend = await getSpend();
+  const campaigns = await getCampaigns();
 
-    // NORMAL
-    const pausedCampaigns = campaigns.filter(
-      (c: services.IGoogleAdsRow) => c.campaign?.status === "PAUSED"
-    );
-    
-    if (pausedCampaigns.length > 0) {
-      const pausedIds = campaignIdsFromRows(pausedCampaigns);
-    
-      if (dryRun) {
-        console.log("[DRY RUN] would re-enable", pausedIds);
-      } else {
-        await setCampaignStatusBatch(pausedIds, "ENABLED");
-      }
+  const state = getState(spend);
+
+  let action: Result["action"] = "NONE";
+  let affected: string[] = [];
+
+  // Pause if over budget
+  if (state !== "NORMAL" && campaigns.enabled.length > 0) {
+    action = "PAUSE";
+    affected = campaigns.enabled;
+
+    if (!dryRun) {
+      await update(affected, STATUS.PAUSED);
     }
   }
 
+  // Re-enable if normal
+  if (state === "NORMAL" && campaigns.paused.length > 0) {
+    action = "ENABLE";
+    affected = campaigns.paused;
 
+    if (!dryRun) {
+      await update(affected, STATUS.ENABLED);
+    }
+  }
 
-let aiCallCount = 0;
+  const result: Result = {
+    ok: true,
+    spend,
+    state,
+    campaigns,
+    action,
+    affected,
+    dryRun,
+  };
 
-const MAX_AI_CALLS = 5; // adjust as needed
+  console.log("[controlBudget]", result);
 
-export function canMakeAICall() {
-  return aiCallCount < MAX_AI_CALLS;
-}
-
-export function trackAICall() {
-  aiCallCount++;
-}
-
-export function getAICallCount() {
-  return aiCallCount;
-}
-
-export function resetAICallCount() {
-  aiCallCount = 0;
+  return result;
 }
