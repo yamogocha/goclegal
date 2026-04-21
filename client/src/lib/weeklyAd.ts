@@ -5,13 +5,14 @@ import sharp from "sharp";
 import path from "path";
 import fs from "fs";
 import { z } from "zod";
-import { openai } from "./openai";
+import { getOpenAI } from "./openai";
 import { toFile } from "openai";
 import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+const openai = getOpenAI();
 
 const CreativeSchema = z.object({
     message: z.string().min(5).max(140),
