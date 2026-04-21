@@ -6,6 +6,7 @@ on:
     - cron: "0 17 * * 1" # Weekly ad → Monday 10:00 AM PST
     - cron: "0 */4 * * *" # Budget → Every 4 hours
     - cron: "0 15 * * 1" # Weekly Google Ads tune → Monday 8:00 AM PST
+    - cron: "0 16 */2 * *" # Google Ads → Every 2 days @ 9:00 AM PST
 
   workflow_dispatch:
     inputs:
@@ -64,10 +65,6 @@ jobs:
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'weeklyGoogleAdsTune' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
 
-      # ----------------------------
-      # GOOGLE ADS (MANUAL)
-      # ----------------------------
-
       - name: Google Ads
-        if: github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'googleAds' || github.event.inputs.job == 'all')
+        if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'googleAds' || github.event.inputs.job == 'all'
         run: npx tsx scripts/googleAds.ts
