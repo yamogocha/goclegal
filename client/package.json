@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "googleAds": "dotenv -e .env.local -- tsx ./scripts/googleAds.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@fontsource/eb-garamond": "^5.2.7",
