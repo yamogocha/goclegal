@@ -9,7 +9,6 @@ import { getOpenAI } from "./openai";
 import { toFile } from "openai";
 import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
-import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 const openai = getOpenAI();
@@ -333,103 +332,232 @@ export async function renderWithFfmpeg(imageBuffer: Buffer, width: number, heigh
     if (!uploadRes.ok) throw new Error(`YouTube video upload failed: ${JSON.stringify(uploadData)}`);
     return uploadData.id as string; // YouTube video ID
   }
-  
-  async function gbpUploadMedia({ accountId, locationId, imageUrl }: {
+
+  async function gbpUploadMedia({
+    accountId,
+    locationId,
+    imageUrl,
+  }: {
     accountId: string;
     locationId: string;
     imageUrl: string;
   }) {
     const accessToken = await getGoogleAccessToken();
-    const url = `https://mybusiness.googleapis.com/v4/${accountId}/${locationId}/media`;
+  
+    const url = `https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/media`;
+  
+    const payload = {
+      mediaFormat: "PHOTO",
+      locationAssociation: { category: "ADDITIONAL" },
+      sourceUrl: imageUrl,
+    };
   
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        mediaFormat: "PHOTO",
-        locationAssociation: { category: "ADDITIONAL" },
-        sourceUrl: imageUrl,
-      }),
+      body: JSON.stringify(payload),
     });
   
-    const text = await res.text(); // ← read as text first
+    const raw = await res.text();
   
-    let data: unknown;
+    let data: any = null;
+    let isJson = false;
+  
     try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error(`GBP upload failed with non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+      data = JSON.parse(raw);
+      isJson = true;
+    } catch {}
+  
+    // // CORE DEBUG BLOCK — single place to inspect everything
+    if (!res.ok) {
+      throw new Error(
+        JSON.stringify(
+          {
+            message: "GBP upload failed",
+            status: res.status,
+            statusText: res.statusText,
+            url,
+            request: payload,
+            response: isJson ? data : raw.slice(0, 1000),
+          },
+          null,
+          2
+        )
+      );
     }
   
-    if (!res.ok) throw new Error(`GBP upload failed: ${JSON.stringify(data)}`);
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !("name" in data) ||
-      typeof (data as { name: unknown }).name !== "string"
-    ) {
-      throw new Error("GBP upload response missing name");
+    // // Handle "success but weird shape"
+    if (!isJson) {
+      throw new Error(
+        JSON.stringify(
+          {
+            message: "GBP upload returned non-JSON success response",
+            status: res.status,
+            raw: raw.slice(0, 1000),
+          },
+          null,
+          2
+        )
+      );
     }
-    return (data as { name: string }).name;
+  
+    if (!data?.name) {
+      throw new Error(
+        JSON.stringify(
+          {
+            message: "GBP response missing expected 'name'",
+            response: data,
+          },
+          null,
+          2
+        )
+      );
+    }
+  
+    return data.name as string;
   }
-  
-  export async function generateWeeklyAd({ preview = false, dryRun = false }: { preview?: boolean, dryRun?: boolean } = {}) {
-    try {
-      const post = await client.fetch<{title: string, headline: string, slug: string, date: string}>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`)
-      if (!post) throw new Error("No post found");
-      const { title, headline, slug } = post
-      const { message, hashtags } = await generateCaption({ title, headline });
-      const igCaption = buildInstagramCaption(message, hashtags);
-    
-      const weekNumber = getWeekOfMonth();
-    
-      // 1) generate image with message text baked in by OpenAI
-      const imageBuffer = await generateImage({ message, weekNumber });
-      const imageUrl = await saveAdToBlob(imageBuffer, `${slug}.png`);
-    
-      // 2) generate square video (1080x1080) for Instagram Reel
-      const videoBuffer = await generateVideo({ imageBuffer });
-      const videoUrl = await saveReelToBlob(videoBuffer, `${slug}.mp4`);
-    
-      // 2b) generate widescreen video (1920x1080) for YouTube
-      const youtubeVideoBuffer = await generateYouTubeVideo({ message, weekNumber });
-      const youtubeVideoUrl = await saveReelToBlob(youtubeVideoBuffer, `${slug}-yt.mp4`);
-    
-      if (preview) {
-        return { preview: true, imageUrl, videoUrl, youtubeVideoUrl }
-      }
-    
-      // Instagram
-      const igUserId = process.env.IG_USER_ID!;
-      const accessToken = process.env.FB_ACCESS_TOKEN!;
-      const creationId = await igCreateReelContainer({ igUserId, accessToken, videoUrl, caption: igCaption });
-      await igWaitForContainer({ creationId, accessToken });
-      const postId = await igPublish({ igUserId, accessToken, creationId });
-    
-      // YouTube
-        const youtubeDescription = `${message}\n\n#Shorts\n\n${hashtags.map(h => (h.startsWith("#") ? h : `#${h}`)).join(" ")}`;
-        const youtubeVideoId = await youtubeUploadVideo({ videoBuffer: youtubeVideoBuffer, title, description: youtubeDescription });
+  // weekly ad generation and multi-platform publishing with isolation and logs
+export async function generateWeeklyAd(
+  { preview = false, dryRun = false }: { preview?: boolean; dryRun?: boolean } = {}
+) {
+  const start = Date.now();
 
-      // GBP
+  const result: any = {
+    ok: true,
+    preview,
+    dryRun,
+    durationMs: 0,
+  };
+
+  try {
+    // fetch latest post
+    const post = await client.fetch<{
+      title: string;
+      headline: string;
+      slug: string;
+      date: string;
+    }>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`);
+
+    if (!post) throw new Error("No post found");
+
+    const { title, headline, slug } = post;
+
+    // generate caption
+    const { message, hashtags } = await generateCaption({ title, headline });
+    const igCaption = buildInstagramCaption(message, hashtags);
+
+    const weekNumber = getWeekOfMonth();
+
+    // generate assets
+    console.log("[ASSET] generating image");
+    const imageBuffer = await generateImage({ message, weekNumber });
+    const imageUrl = await saveAdToBlob(imageBuffer, `${slug}.png`);
+
+    console.log("[ASSET] generating IG video");
+    const videoBuffer = await generateVideo({ imageBuffer });
+    const videoUrl = await saveReelToBlob(videoBuffer, `${slug}.mp4`);
+
+    console.log("[ASSET] generating YouTube video");
+    const youtubeVideoBuffer = await generateYouTubeVideo({ message, weekNumber });
+    const youtubeVideoUrl = await saveReelToBlob(youtubeVideoBuffer, `${slug}-yt.mp4`);
+
+    Object.assign(result, {
+      imageUrl,
+      videoUrl,
+      youtubeVideoUrl,
+      caption: message,
+      hashtags,
+    });
+
+    if (preview) {
+      result.durationMs = Date.now() - start;
+      console.log("[PREVIEW] done");
+      return result;
+    }
+
+    if (dryRun) {
+      result.durationMs = Date.now() - start;
+      console.log("[DRY RUN] skipping publish");
+      return result;
+    }
+
+    // instagram publish
+    try {
+      console.log("[IG] creating container");
+      const creationId = await igCreateReelContainer({
+        igUserId: process.env.IG_USER_ID!,
+        accessToken: process.env.FB_ACCESS_TOKEN!,
+        videoUrl,
+        caption: igCaption,
+      });
+
+      console.log("[IG] waiting for processing");
+      await igWaitForContainer({
+        creationId,
+        accessToken: process.env.FB_ACCESS_TOKEN!,
+      });
+
+      console.log("[IG] publishing");
+      const postId = await igPublish({
+        igUserId: process.env.IG_USER_ID!,
+        accessToken: process.env.FB_ACCESS_TOKEN!,
+        creationId,
+      });
+
+      result.postId = postId;
+      console.log("[IG] success", postId);
+    } catch (err) {
+      result.igError = String(err);
+      console.error("[IG ERROR]", err);
+    }
+
+    // youtube publish
+    try {
+      console.log("[YT] uploading video");
+      const youtubeDescription = `${message}\n\n#Shorts\n\n${hashtags
+        .map((h) => (h.startsWith("#") ? h : `#${h}`))
+        .join(" ")}`;
+
+      const youtubeVideoId = await youtubeUploadVideo({
+        videoBuffer: youtubeVideoBuffer,
+        title,
+        description: youtubeDescription,
+      });
+
+      result.youtubeVideoId = youtubeVideoId;
+      console.log("[YT] success", youtubeVideoId);
+    } catch (err) {
+      result.youtubeError = String(err);
+      console.error("[YT ERROR]", err);
+    }
+
+    // gbp publish
+    try {
+      console.log("[GBP] uploading media");
       const gbpMediaName = await gbpUploadMedia({
         accountId: process.env.GBP_ACCOUNT_ID!,
         locationId: process.env.GBP_LOCATION_ID!,
         imageUrl,
       });
-    
-      if (dryRun) {
-        return { dryRun: true, imageUrl, videoUrl, youtubeVideoUrl, youtubeVideoId, postId, gbpMediaName }
-      }  
-    
-      const result = { postId, youtubeVideoId, gbpMediaName, imageUrl, videoUrl, youtubeVideoUrl, caption: message, hashtags }
-    
-      return NextResponse.json({ ok: true, ...result });
-    } catch (err: any) {
-      return NextResponse.json(
-        { error: err?.message ?? "Cron failed" }, { status: 500 }
-      );
+
+      result.gbpMediaName = gbpMediaName;
+      console.log("[GBP] success", gbpMediaName);
+    } catch (err) {
+      result.gbpError = String(err);
+      console.error("[GBP ERROR]", err);
     }
+
+    result.durationMs = Date.now() - start;
+    return result;
+  } catch (err) {
+    console.error("[WEEKLY AD FATAL]", err);
+    return {
+      ok: false,
+      error: String(err),
+      durationMs: Date.now() - start,
+    };
   }
+}
