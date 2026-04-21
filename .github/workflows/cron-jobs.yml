@@ -25,6 +25,8 @@ on:
 jobs:
   run-crons:
     runs-on: ubuntu-latest
+    
+    env: ${{ secrets }}
 
     defaults:
       run:
