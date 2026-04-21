@@ -1,6 +1,5 @@
 // client/src/app/api/cron/googleAds/route.ts
-import { resetAICallCount } from "@/lib/budgetMonitor";
-import { runKeywordExpansion, runNegativeKeywordStrategy } from "@/lib/googleAds";
+import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "@/lib/googleAds";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
@@ -13,14 +12,16 @@ export async function POST(req: Request): Promise<Response> {
   const dryRun = searchParams.get("dryRun") === "true";
 
   try {
-    resetAICallCount();
 
     const keywordExpansion = await runKeywordExpansion({ dryRun });
     const negativeKeyword = await runNegativeKeywordStrategy({ dryRun });
+    const budgetAllocation = await runBudgetAllocation();
 
     return Response.json({ ok: true, 
       keywordExpansion, 
-      negativeKeyword });
+      negativeKeyword,
+      budgetAllocation,
+    });
   } catch (err) {
     console.error("[GOOGLE ADS ERROR]", err);
 

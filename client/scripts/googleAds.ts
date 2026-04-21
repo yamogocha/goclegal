@@ -1,6 +1,5 @@
 // scripts/googleAds.ts
-import { resetAICallCount } from "../src/lib/budgetMonitor";
-import { runKeywordExpansion, runNegativeKeywordStrategy } from "../src/lib/googleAds";
+import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "../src/lib/googleAds";
 
 async function main() {
   console.log("ENV KEY EXISTS:", !!process.env.OPENAI_API_KEY);
@@ -12,11 +11,9 @@ async function main() {
   const start = Date.now();
 
   try {
-    // important: reset per run
-    resetAICallCount();
-
     const keywordExpansion = await runKeywordExpansion({ dryRun });
     const negativeKeyword = await runNegativeKeywordStrategy({ dryRun });
+    const budgetAllocation = await runBudgetAllocation();
 
     console.log("[GOOGLE ADS] Success");
 
@@ -29,6 +26,7 @@ async function main() {
           durationMs: Date.now() - start,
           keywordExpansion,
           negativeKeyword,
+          budgetAllocation,
         },
         null,
         2
