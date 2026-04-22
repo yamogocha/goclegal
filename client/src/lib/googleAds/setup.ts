@@ -2,7 +2,6 @@
 import { z } from "zod";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
 import { getCustomer } from "./index";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 const openai = getOpenAI();
 
@@ -30,6 +29,7 @@ const CampaignSchema = z.object({
     })
   ).min(1).max(3),
 });
+type CampaignData = z.infer<typeof CampaignSchema>;
 
 export async function generateSearchCampaign({
   location = "Alameda CA",
@@ -78,12 +78,12 @@ Return clean structured output.`,
       format: {
         type: "json_schema",
         name: "campaign",
-        schema: zodToJsonSchema(CampaignSchema)
+        schema: CampaignSchema as unknown as Record<string, unknown>,
       },
     },
   });
 
-  return res.output_parsed;
+  return res.output_parsed as CampaignData | null;
 }
 
 // create search campaign with intent-matched landing pages minimal and safe
@@ -104,6 +104,7 @@ export async function createSearchCampaign(opts: {
   
     const customer = getCustomer();
     const data = await generateSearchCampaign({ location });
+    if (!data) throw new Error("Failed to parse generated campaign data");
   
     if (dryRun) return { ok: true, preview: data };
   
@@ -121,26 +122,34 @@ export async function createSearchCampaign(opts: {
     };
   
     // 1) budget
-    const budget = await customer.campaignBudgets.create({
-      name: `${data.campaign.name} Budget`,
-      amount_micros: data.campaign.dailyBudget * 1_000_000,
-      delivery_method: "STANDARD",
-    });
+    const budget = await customer.campaignBudgets.create([
+      {
+        name: `${data.campaign.name} Budget`,
+        amount_micros: data.campaign.dailyBudget * 1_000_000,
+        delivery_method: "STANDARD",
+      },
+    ]);
+    const budgetResourceName = budget.results?.[0]?.resource_name;
+    if (!budgetResourceName) throw new Error("Failed to create campaign budget");
   
     // 2) campaign
-    const campaign = await customer.campaigns.create({
-      name: data.campaign.name,
-      advertising_channel_type: "SEARCH",
-      status: "PAUSED",
-      campaign_budget: budget.resource_name,
-      manual_cpc: {},
-      network_settings: {
-        target_google_search: true,
-        target_search_network: true,
-        target_content_network: false,
-        target_partner_search_network: false,
+    const campaign = await customer.campaigns.create([
+      {
+        name: data.campaign.name,
+        advertising_channel_type: "SEARCH",
+        status: "PAUSED",
+        campaign_budget: budgetResourceName,
+        manual_cpc: {},
+        network_settings: {
+          target_google_search: true,
+          target_search_network: true,
+          target_content_network: false,
+          target_partner_search_network: false,
+        },
       },
-    });
+    ]);
+    const campaignResourceName = campaign.results?.[0]?.resource_name;
+    if (!campaignResourceName) throw new Error("Failed to create campaign");
   
     // 3) hyper-local targeting
     const geoRows = await customer.query(`
@@ -153,26 +162,30 @@ export async function createSearchCampaign(opts: {
     const geo = geoRows?.[0]?.geo_target_constant?.resource_name;
   
     if (geo) {
-      await customer.campaignCriteria.create({
-        campaign: campaign.resource_name,
-        location: { geo_target_constant: geo },
-      });
+      await customer.campaignCriteria.create([
+        {
+          campaign: campaignResourceName,
+          location: { geo_target_constant: geo },
+        },
+      ]);
     }
   
-    await customer.campaignCriteria.create({
-      campaign: campaign.resource_name,
-      proximity: {
-        geo_point: {
-          latitude_in_micro_degrees: Math.round(lat * 1e6),
-          longitude_in_micro_degrees: Math.round(lng * 1e6),
+    await customer.campaignCriteria.create([
+      {
+        campaign: campaignResourceName,
+        proximity: {
+          geo_point: {
+            latitude_in_micro_degrees: Math.round(lat * 1e6),
+            longitude_in_micro_degrees: Math.round(lng * 1e6),
+          },
+          radius: radiusMiles,
+          radius_units: "MILES",
         },
-        radius: radiusMiles,
-        radius_units: "MILES",
       },
-    });
+    ]);
   
     const results: any = {
-      campaign: campaign.resource_name,
+      campaign: campaignResourceName,
       adGroups: [],
     };
   
@@ -180,18 +193,22 @@ export async function createSearchCampaign(opts: {
     for (const ag of data.adGroups) {
       const finalUrl = getFinalUrl(ag.name);
   
-      const adGroup = await customer.adGroups.create({
-        name: ag.name,
-        campaign: campaign.resource_name,
-        type: "SEARCH_STANDARD",
-        cpc_bid_micros: 2_000_000,
-        status: "ENABLED",
-      });
+      const adGroup = await customer.adGroups.create([
+        {
+          name: ag.name,
+          campaign: campaignResourceName,
+          type: "SEARCH_STANDARD",
+          cpc_bid_micros: 2_000_000,
+          status: "ENABLED",
+        },
+      ]);
+      const adGroupResourceName = adGroup.results?.[0]?.resource_name;
+      if (!adGroupResourceName) throw new Error(`Failed to create ad group: ${ag.name}`);
   
       // 5) keywords
       await customer.adGroupCriteria.create(
-        ag.keywords.map((kw) => ({
-          ad_group: adGroup.resource_name,
+        ag.keywords.map((kw: string) => ({
+          ad_group: adGroupResourceName,
           status: "ENABLED",
           keyword: {
             text: kw,
@@ -201,21 +218,23 @@ export async function createSearchCampaign(opts: {
       );
   
       // 6) responsive search ad with matched landing page
-      await customer.adGroupAds.create({
-        ad_group: adGroup.resource_name,
-        status: "PAUSED",
-        ad: {
-          final_urls: [finalUrl],
-          responsive_search_ad: {
-            headlines: ag.headlines.map((h) => ({ text: h })),
-            descriptions: ag.descriptions.map((d) => ({ text: d })),
+      await customer.adGroupAds.create([
+        {
+          ad_group: adGroupResourceName,
+          status: "PAUSED",
+          ad: {
+            final_urls: [finalUrl],
+            responsive_search_ad: {
+              headlines: ag.headlines.map((h: string) => ({ text: h })),
+              descriptions: ag.descriptions.map((d: string) => ({ text: d })),
+            },
           },
         },
-      });
+      ]);
   
       results.adGroups.push({
         name: ag.name,
-        resource: adGroup.resource_name,
+        resource: adGroupResourceName,
         url: finalUrl,
         keywords: ag.keywords.length,
       });
@@ -244,46 +263,55 @@ export async function setupConversionsAndCalls(opts: {
     }
   
     // 1) create call conversion (primary)
-    const callConversion = await customer.conversionActions.create({
-      name: "Calls from Ads",
-      type: "CALL_FROM_ADS",
-      category: "LEAD",
-      status: "ENABLED",
-      value_settings: { default_value: 1, always_use_default_value: true },
-      call_conversion_action: {
-        call_duration_seconds: 30, // only count real calls
+    const callConversion = await customer.conversionActions.create([
+      {
+        name: "Calls from Ads",
+        type: "AD_CALL",
+        category: "DEFAULT",
+        status: "ENABLED",
+        value_settings: { default_value: 1, always_use_default_value: true },
       },
-    });
+    ]);
+    const callConversionResourceName = callConversion.results?.[0]?.resource_name;
+    if (!callConversionResourceName) throw new Error("Failed to create call conversion");
   
     // 2) create website form conversion (secondary)
-    const formConversion = await customer.conversionActions.create({
-      name: "Form Submissions",
-      type: "WEBPAGE",
-      category: "LEAD",
-      status: "ENABLED",
-      value_settings: { default_value: 1, always_use_default_value: true },
-    });
+    const formConversion = await customer.conversionActions.create([
+      {
+        name: "Form Submissions",
+        type: "WEBPAGE",
+        category: "DEFAULT",
+        status: "ENABLED",
+        value_settings: { default_value: 1, always_use_default_value: true },
+      },
+    ]);
+    const formConversionResourceName = formConversion.results?.[0]?.resource_name;
+    if (!formConversionResourceName) throw new Error("Failed to create form conversion");
   
     // 3) enable call reporting at campaign level
-    await customer.campaigns.update({
-      resource_name: campaignResourceName,
-      call_reporting_setting: {
-        call_reporting_enabled: true,
-        call_conversion_action: callConversion.resource_name,
+    await customer.campaigns.update([
+      {
+        resource_name: campaignResourceName,
+        call_reporting_setting: {
+          call_reporting_enabled: true,
+          call_conversion_action: callConversionResourceName,
+        },
       },
-    });
+    ] as any);
   
     // 4) (optional but recommended) switch to maximize conversions
-    await customer.campaigns.update({
-      resource_name: campaignResourceName,
-      maximize_conversions: {},
-    });
+    await customer.campaigns.update([
+      {
+        resource_name: campaignResourceName,
+        maximize_conversions: {},
+      },
+    ]);
   
     return {
       ok: true,
       result: {
-        callConversion: callConversion.resource_name,
-        formConversion: formConversion.resource_name,
+        callConversion: callConversionResourceName,
+        formConversion: formConversionResourceName,
         campaign: campaignResourceName,
       },
     };
@@ -317,25 +345,30 @@ export async function setupCallExtension(opts: {
     }
   
     // 1) create call asset
-    const callAsset = await customer.assets.create({
-      call_asset: {
-        phone_number: phoneNumber,
-        country_code: countryCode,
-        call_tracking_enabled: true,
+    const callAsset = await customer.assets.create([
+      {
+        call_asset: {
+          phone_number: phoneNumber,
+          country_code: countryCode,
+        },
       },
-    });
+    ]);
+    const callAssetResourceName = callAsset.results?.[0]?.resource_name;
+    if (!callAssetResourceName) throw new Error("Failed to create call asset");
   
     // 2) attach asset to campaign
-    await customer.campaignAssets.create({
-      campaign: campaignResourceName,
-      asset: callAsset.resource_name,
-      field_type: "CALL",
-    });
+    await customer.campaignAssets.create([
+      {
+        campaign: campaignResourceName,
+        asset: callAssetResourceName,
+        field_type: "CALL",
+      },
+    ]);
   
     return {
       ok: true,
       result: {
-        asset: callAsset.resource_name,
+        asset: callAssetResourceName,
         campaign: campaignResourceName,
       },
     };
