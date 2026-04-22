@@ -26,10 +26,12 @@
     "openai": "^6.16.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "schema": "^0.2.1",
     "sharp": "^0.34.5",
     "swiper": "^12.0.3",
     "tsx": "^4.21.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -37,9 +39,11 @@
     "@types/node": "^20.19.39",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.5",
+    "eslint-config-next": "^16.2.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
