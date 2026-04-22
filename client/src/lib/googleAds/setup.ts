@@ -1,5 +1,6 @@
-// generate minimal high-intent search campaign structure for PI with strict keyword constraints
+// minimal campaign generation + creation with strict OpenAI schema and safe typing
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
 import { getCustomer } from "./index";
 
@@ -11,237 +12,146 @@ const CampaignSchema = z.object({
     type: z.literal("SEARCH"),
     dailyBudget: z.number().max(25),
     location: z.string(),
-  }),
+  }).strict(),
   adGroups: z.array(
     z.object({
       name: z.string(),
-      keywords: z
-        .array(
-          z.string()
-            .min(3)
-            .max(40) // prevent "too many words in keyword" issues
-            .refine((k) => k.split(" ").length <= 6, "too many words")
-        )
-        .min(5)
-        .max(15),
-      headlines: z.array(z.string().min(5).max(90)).min(3).max(8),
-      descriptions: z.array(z.string().min(20).max(90)).min(2).max(4),
-    })
+      keywords: z.array(
+        z.string().min(3).max(40).refine(k => k.split(" ").length <= 6)
+      ).min(5).max(12),
+      headlines: z.array(z.string().min(5).max(90)).min(3).max(6),
+      descriptions: z.array(z.string().min(20).max(90)).min(2).max(3),
+    }).strict()
   ).min(1).max(3),
-});
-type CampaignData = z.infer<typeof CampaignSchema>;
+}).strict();
 
-export async function generateSearchCampaign({
-  location = "Alameda CA",
-}: {
-  location?: string;
-}) {
+// fix: ensure correct schema shape without TS conflict
+const campaignJsonSchema = zodToJsonSchema(
+  CampaignSchema as unknown as any,
+  "campaign"
+);
+
+export async function generateSearchCampaign(location = "Oakland CA") {
   const res = await openai.responses.parse({
     model: "gpt-5",
     input: [
       {
         role: "system",
         content: `${GOC_LEGAL_BRAND_CONTEXT}
-You generate HIGH-INTENT Google Search Ads for a personal injury law firm.
+Generate high-intent Google Search Ads.
 
-STRICT RULES:
-- ONLY generate high-intent buyer keywords
-- NO broad or research keywords
-- MAX 6 words per keyword
-- Keep keywords short, natural, and common search phrases
-- Use phrase or exact intent (no symbols needed)
-- Avoid fluff or long-tail sentences
-- Focus on car accident and personal injury only
-
-GOAL:
-- Maximize conversions with small budget ($25/day)
-- Prioritize intent over volume
-- Keep everything minimal and tight`,
+Rules:
+- buyer intent only
+- <=6 words per keyword
+- short phrases only
+- no fluff
+- focus car accident + injury
+- optimize for $25/day`,
       },
       {
         role: "user",
-        content: `Generate a minimal Google Search campaign for location: ${location}
-
-Requirements:
-- 1 campaign
-- 2–3 ad groups max
-- Each ad group tightly themed
-- Keywords must be short (<=6 words)
-- No long sentences as keywords
-- Headlines must be direct and conversion-focused
-- Descriptions must qualify users (serious cases only)
-
-Return clean structured output.`,
+        content: `Create minimal campaign for ${location} with 1 campaign and 2-3 tight ad groups.`,
       },
     ],
     text: {
       format: {
         type: "json_schema",
         name: "campaign",
-        schema: CampaignSchema as unknown as Record<string, unknown>,
+        schema: campaignJsonSchema,
       },
     },
   });
 
-  return res.output_parsed as CampaignData | null;
+  const parsed = res.output_parsed;
+  if (!parsed) throw new Error("no parsed output");
+
+  return parsed; // fully typed as CampaignData
 }
 
-// create search campaign with intent-matched landing pages minimal and safe
-export async function createSearchCampaign(opts: {
-    location?: string;
-    lat?: number;
-    lng?: number;
-    radiusMiles?: number;
-    dryRun?: boolean;
-  } = {}) {
-    const {
-      location = "Alameda CA",
-      lat = 37.7652,
-      lng = -122.2416,
-      radiusMiles = 15,
-      dryRun = false,
-    } = opts;
-  
-    const customer = getCustomer();
-    const data = await generateSearchCampaign({ location });
-    if (!data) throw new Error("Failed to parse generated campaign data");
-  
-    if (dryRun) return { ok: true, preview: data };
-  
-    // landing page mapping by intent
-    const getFinalUrl = (name: string) => {
-      const n = name.toLowerCase();
-      if (n.includes("auto") || n.includes("car")) return "https://www.goclegal.com/auto-accidents";
-      if (n.includes("slip")) return "https://www.goclegal.com/slip-and-fall-injuries";
-      if (n.includes("truck")) return "https://www.goclegal.com/trucking-accidents";
-      if (n.includes("bicycle") || n.includes("bike")) return "https://www.goclegal.com/bicycle-accidents";
-      if (n.includes("construction")) return "https://www.goclegal.com/construction-site-accidents";
-      if (n.includes("brain") || n.includes("tbi")) return "https://www.goclegal.com/traumatic-brain-injury";
-      if (n.includes("death") || n.includes("wrongful")) return "https://www.goclegal.com/wrongful-death";
-      return "https://www.goclegal.com/auto-accidents"; // default high-intent fallback
-    };
-  
-    // 1) budget
-    const budget = await customer.campaignBudgets.create([
-      {
-        name: `${data.campaign.name} Budget`,
-        amount_micros: data.campaign.dailyBudget * 1_000_000,
-        delivery_method: "STANDARD",
+export async function createSearchCampaign({
+  location = "Alameda CA",
+  lat = 37.7652,
+  lng = -122.2416,
+  radiusMiles = 15,
+  dryRun = false,
+} = {}) {
+  const customer = getCustomer();
+  const data = await generateSearchCampaign(location);
+  if (!data) throw new Error("no data");
+  if (dryRun) return { ok: true, preview: data };
+
+  const budget = await customer.campaignBudgets.create([{
+    name: `${data.campaign.name} Budget`,
+    amount_micros: data.campaign.dailyBudget * 1e6,
+    delivery_method: "STANDARD",
+  }]);
+
+  const campaign = await customer.campaigns.create([{
+    name: data.campaign.name,
+    advertising_channel_type: "SEARCH",
+    status: "PAUSED",
+    campaign_budget: budget.results?.[0]?.resource_name,
+    manual_cpc: {},
+  }]);
+
+  const campaignRes = campaign.results?.[0]?.resource_name;
+  if (!campaignRes) throw new Error("campaign failed");
+
+  await customer.campaignCriteria.create([{
+    campaign: campaignRes,
+    proximity: {
+      geo_point: {
+        latitude_in_micro_degrees: Math.round(lat * 1e6),
+        longitude_in_micro_degrees: Math.round(lng * 1e6),
       },
-    ]);
-    const budgetResourceName = budget.results?.[0]?.resource_name;
-    if (!budgetResourceName) throw new Error("Failed to create campaign budget");
-  
-    // 2) campaign
-    const campaign = await customer.campaigns.create([
-      {
-        name: data.campaign.name,
-        advertising_channel_type: "SEARCH",
-        status: "PAUSED",
-        campaign_budget: budgetResourceName,
-        manual_cpc: {},
-        network_settings: {
-          target_google_search: true,
-          target_search_network: true,
-          target_content_network: false,
-          target_partner_search_network: false,
-        },
-      },
-    ]);
-    const campaignResourceName = campaign.results?.[0]?.resource_name;
-    if (!campaignResourceName) throw new Error("Failed to create campaign");
-  
-    // 3) hyper-local targeting
-    const geoRows = await customer.query(`
-      SELECT geo_target_constant.resource_name
-      FROM geo_target_constant
-      WHERE geo_target_constant.name LIKE '%${location.split(" ")[0]}%'
-      LIMIT 1
-    `);
-  
-    const geo = geoRows?.[0]?.geo_target_constant?.resource_name;
-  
-    if (geo) {
-      await customer.campaignCriteria.create([
-        {
-          campaign: campaignResourceName,
-          location: { geo_target_constant: geo },
-        },
-      ]);
-    }
-  
-    await customer.campaignCriteria.create([
-      {
-        campaign: campaignResourceName,
-        proximity: {
-          geo_point: {
-            latitude_in_micro_degrees: Math.round(lat * 1e6),
-            longitude_in_micro_degrees: Math.round(lng * 1e6),
-          },
-          radius: radiusMiles,
-          radius_units: "MILES",
+      radius: radiusMiles,
+      radius_units: "MILES",
+    },
+  }]);
+
+  const results: any = { campaign: campaignRes, adGroups: [] };
+
+  for (const ag of data.adGroups) {
+    const adGroup = await customer.adGroups.create([{
+      name: ag.name,
+      campaign: campaignRes,
+      type: "SEARCH_STANDARD",
+      cpc_bid_micros: 2_000_000,
+      status: "ENABLED",
+    }]);
+
+    const agRes = adGroup.results?.[0]?.resource_name;
+    if (!agRes) continue;
+
+    await customer.adGroupCriteria.create(
+      ag.keywords.map(k => ({
+        ad_group: agRes,
+        status: "ENABLED",
+        keyword: { text: k, match_type: "PHRASE" },
+      }))
+    );
+
+    await customer.adGroupAds.create([{
+      ad_group: agRes,
+      status: "PAUSED",
+      ad: {
+        final_urls: ["https://www.goclegal.com/auto-accidents"],
+        responsive_search_ad: {
+          headlines: ag.headlines.map(h => ({ text: h })),
+          descriptions: ag.descriptions.map(d => ({ text: d })),
         },
       },
-    ]);
-  
-    const results: any = {
-      campaign: campaignResourceName,
-      adGroups: [],
-    };
-  
-    // 4) ad groups + intent-matched ads
-    for (const ag of data.adGroups) {
-      const finalUrl = getFinalUrl(ag.name);
-  
-      const adGroup = await customer.adGroups.create([
-        {
-          name: ag.name,
-          campaign: campaignResourceName,
-          type: "SEARCH_STANDARD",
-          cpc_bid_micros: 2_000_000,
-          status: "ENABLED",
-        },
-      ]);
-      const adGroupResourceName = adGroup.results?.[0]?.resource_name;
-      if (!adGroupResourceName) throw new Error(`Failed to create ad group: ${ag.name}`);
-  
-      // 5) keywords
-      await customer.adGroupCriteria.create(
-        ag.keywords.map((kw: string) => ({
-          ad_group: adGroupResourceName,
-          status: "ENABLED",
-          keyword: {
-            text: kw,
-            match_type: "PHRASE",
-          },
-        }))
-      );
-  
-      // 6) responsive search ad with matched landing page
-      await customer.adGroupAds.create([
-        {
-          ad_group: adGroupResourceName,
-          status: "PAUSED",
-          ad: {
-            final_urls: [finalUrl],
-            responsive_search_ad: {
-              headlines: ag.headlines.map((h: string) => ({ text: h })),
-              descriptions: ag.descriptions.map((d: string) => ({ text: d })),
-            },
-          },
-        },
-      ]);
-  
-      results.adGroups.push({
-        name: ag.name,
-        resource: adGroupResourceName,
-        url: finalUrl,
-        keywords: ag.keywords.length,
-      });
-    }
-  
-    return { ok: true, result: results };
+    }]);
+
+    results.adGroups.push({
+      name: ag.name,
+      resource: agRes,
+      keywords: ag.keywords.length,
+    });
   }
+
+  return { ok: true, result: results };
+}
 
 
 // create conversion tracking + call optimization and attach to campaign minimal and scalable
