@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
 import { getCustomer } from "./index";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 const openai = getOpenAI();
 
@@ -77,7 +78,7 @@ Return clean structured output.`,
       format: {
         type: "json_schema",
         name: "campaign",
-        schema: CampaignSchema,
+        schema: zodToJsonSchema(CampaignSchema)
       },
     },
   });
