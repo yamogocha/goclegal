@@ -1,7 +1,7 @@
 // generate minimal high-intent search campaign structure for PI with strict keyword constraints
 import { z } from "zod";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
-import { getCustomer } from "@/googleAds/index";
+import { getCustomer } from "@/lib/googleAds";
 
 const openai = getOpenAI();
 
