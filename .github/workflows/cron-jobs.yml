@@ -18,6 +18,7 @@ on:
           - all
           - blog
           - ad
+          - googleAdsSetup
           - googleAds
           - weeklyGoogleAdsTune
 
@@ -58,6 +59,10 @@ jobs:
       - name: Weekly Google Ads tune
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'weeklyGoogleAdsTune' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyGoogleAdsTune.ts
+      
+      - name: Google Ads Setup (one-time)
+        if: github.event.inputs.job == 'googleAdsSetup'
+        run: npx tsx scripts/googleAdsSetup.ts
 
       - name: Google Ads
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'googleAds' || github.event.inputs.job == 'all'
