@@ -1,5 +1,5 @@
 // client/src/app/api/cron/googleAds/route.ts
-import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "@/lib/googleAds";
+import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "@/lib/googleAds/optimize";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";

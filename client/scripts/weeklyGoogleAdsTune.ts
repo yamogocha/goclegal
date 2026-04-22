@@ -1,5 +1,6 @@
 // scripts/weeklyGoogleAdsTune.ts
-import { weeklyGoogleAdsTune } from "../src/lib/budgetMonitor";
+import { runAdCopyOptimization } from "@/lib/googleAds/optimize";
+import { weeklyGoogleAdsTune } from "../src/lib/googleAds/adjustment";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
@@ -11,6 +12,7 @@ async function main() {
 
   try {
     await weeklyGoogleAdsTune({ dryRun });
+    const adCopyOptimization = await runAdCopyOptimization({ dryRun });
 
     console.log("[WEEKLY ADS OPTIMIZER] Success");
 
@@ -20,7 +22,8 @@ async function main() {
         {
           ok: true,
           dryRun,
-          durationMs: Date.now() - start
+          durationMs: Date.now() - start,
+          adCopyOptimization
         },
         null,
         2

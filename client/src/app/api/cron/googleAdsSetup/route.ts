@@ -1,7 +1,7 @@
 // api/cron/googleAdsSetup/route.ts
 // one-time google ads setup pipeline (campaign + conversions + call extension) minimal and observable
 import { NextRequest, NextResponse } from "next/server";
-import { createSearchCampaign, setupConversionsAndCalls, setupCallExtension } from "@/googleAds/setup";
+import { createSearchCampaign, setupConversionsAndCalls, setupCallExtension } from "@/lib/googleAds/setup";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export async function POST(req: NextRequest) {

@@ -1,5 +1,5 @@
 // scripts/googleAds.ts
-import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "../src/lib/googleAds";
+import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "../src/lib/googleAds/optimize";
 
 async function main() {
   console.log("ENV KEY EXISTS:", !!process.env.OPENAI_API_KEY);

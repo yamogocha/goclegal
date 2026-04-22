@@ -1,5 +1,7 @@
 // client/src/app/api/cron/weeklyGoogleAdsTune/route.ts
-import { weeklyGoogleAdsTune } from "@/lib/budgetMonitor";
+// adjusts ad schedule, device bids
+import { weeklyGoogleAdsTune } from "@/lib/googleAds/adjustment";
+import { runAdCopyOptimization } from "@/lib/googleAds/optimize";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
@@ -13,8 +15,9 @@ export async function POST(req: Request) {
 
   try {
     await weeklyGoogleAdsTune({ dryRun });
+    const adCopyOptimization = await runAdCopyOptimization({ dryRun });
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, adCopyOptimization });
   } catch (err) {
     console.error("[WEEKLY ADS OPTIMIZER ERROR]", err);
 
