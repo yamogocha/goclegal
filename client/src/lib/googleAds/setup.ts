@@ -1,4 +1,4 @@
-// minimal campaign generation + creation with strict OpenAI schema and safe typing
+// minimal campaign generation + creation with strict schema, safe typing, and runtime validation
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
@@ -25,13 +25,11 @@ const CampaignSchema = z.object({
   ).min(1).max(3),
 }).strict();
 
-// fix: ensure correct schema shape without TS conflict
-const campaignJsonSchema = zodToJsonSchema(
-  CampaignSchema as unknown as any,
-  "campaign"
-);
+type CampaignData = z.infer<typeof CampaignSchema>;
 
-export async function generateSearchCampaign(location = "Oakland CA") {
+const campaignJsonSchema = zodToJsonSchema(CampaignSchema as any, "campaign");
+
+export async function generateSearchCampaign(location = "Oakland CA"): Promise<CampaignData> {
   const res = await openai.responses.parse({
     model: "gpt-5",
     input: [
@@ -62,10 +60,10 @@ Rules:
     },
   });
 
-  const parsed = res.output_parsed;
-  if (!parsed) throw new Error("no parsed output");
+  if (!res.output_parsed) throw new Error("no parsed output");
 
-  return parsed; // fully typed as CampaignData
+  // runtime validation → guarantees type safety
+  return CampaignSchema.parse(res.output_parsed);
 }
 
 export async function createSearchCampaign({
@@ -77,7 +75,7 @@ export async function createSearchCampaign({
 } = {}) {
   const customer = getCustomer();
   const data = await generateSearchCampaign(location);
-  if (!data) throw new Error("no data");
+
   if (dryRun) return { ok: true, preview: data };
 
   const budget = await customer.campaignBudgets.create([{
