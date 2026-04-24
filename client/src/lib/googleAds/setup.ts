@@ -125,14 +125,31 @@ KEYWORDS:
 - high intent only
 
 DESCRIPTIONS:
-- EXACTLY 3 per group
-- 40–90 chars
+
+Generate EXACTLY 3 descriptions per ad group.
+
+HARD LENGTH RULE (CRITICAL):
+- TARGET 55–75 characters
+- NEVER go below 45 characters
+- If under 45, expand before returning
+
+ROLE ASSIGNMENT:
+1. Authority
+2. Outcome
+3. Process OR Risk
+
+STRUCTURE:
 - full sentences
-- 1 authority, 1 outcome, 1 process or risk
+- must end with punctuation
+- natural phrasing
+
+CONSTRAINTS:
+- max ONE numeric proof per campaign
+- no filler phrases
+- no truncation
 
 IMPORTANT:
-- prioritize staying UNDER limits over creativity
-- shorter is better than longer
+- prioritize meeting minimum length over brevity
 `,
       },
       {
