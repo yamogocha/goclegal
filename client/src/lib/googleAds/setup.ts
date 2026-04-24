@@ -1,4 +1,4 @@
-// strict generation only: no patching, no cleaning, enforce structure + syntax at source
+// strict generation only: enforce tighter headline length to avoid overflow at source
 import { z } from "zod";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
 import { getCustomer } from "./index";
@@ -95,128 +95,44 @@ export async function generateSearchCampaign(location = "Oakland CA") {
         content: `
 ${GOC_LEGAL_BRAND_CONTEXT}
 
-Generate Google Search Ads with strict rules:
+Generate Google Search Ads with strict rules.
+
+HEADLINES (CRITICAL):
+- EXACTLY 4 per ad group
+- HARD TARGET: 20–26 characters (not 30)
+- NEVER exceed 28 characters (safety buffer)
+- If near 28, shorten wording BEFORE returning
+- Prefer 3–5 words max
+
+- must include one of:
+  lawyer, attorney, injury, accident, claim, case
+
+ROLES:
+1. Authority
+2. Outcome
+3. Process
+4. Risk (max 1)
+
+- no filler words
+- no commas
+- natural phrasing only
 
 KEYWORDS:
+- 6–8 per group
+- <= 40 chars
+- <= 6 words
+- include oakland
+- high intent only
 
-Generate EXACTLY 6–8 keywords per ad group.
+DESCRIPTIONS:
+- EXACTLY 3 per group
+- 40–90 chars
+- full sentences
+- 1 authority, 1 outcome, 1 process or risk
 
-ROLE DISTRIBUTION:
-- Core (2–3): direct hire intent; must include "lawyer" or "attorney"
-- Variant (2–3): close variations of core terms; still high intent
-- Situation (2): specific accident or legal scenarios; must still imply hiring intent
-
-STRUCTURE RULES:
-- lowercase only
-- include location "oakland"
-- <= 40 characters per keyword
-- 3–5 words preferred
-- concise phrasing (avoid long or stacked terms)
-
-INTENT RULES:
-- high intent only: include at least one of "lawyer", "attorney", "injury", "accident", or "claim"
-- no informational queries
-
-RELEVANCE RULES:
-- must match the ad group topic exactly
-- do not include general personal injury terms in specific groups
-
-DEDUPLICATION RULES:
-- no duplicates or near-duplicates
-- each keyword must introduce distinct search intent (not simple rewording)
-
-FORMATTING RULES:
-- no match types (no [], "", +)
-- no special symbols
-
-HEADLINES:
-
-Generate EXACTLY 4 headlines per ad group.
-
-ROLE ASSIGNMENT:
-Each headline MUST serve one unique role:
-1. Authority — credibility (e.g., Former DA, years)
-2. Outcome — results or case strength
-3. Process — how the case is handled
-4. Risk — urgency with consequence (MAX 1)
-
-STRUCTURE RULES:
-- 12–30 characters per headline
-- target 22–28 characters
-- Title Case
-- natural, complete phrases (no truncation, no awkward wording)
-- avoid comma fragments (e.g., "Proof Lost, Call Attorney")
-- keep phrasing concise; remove unnecessary words
-- if a headline exceeds 30 characters, rewrite it shorter before returning
-
-INTENT RULES:
-- each headline must include at least one of:
-  lawyer, attorney, injury, accident, claim, or case
-
-ROLE-SPECIFIC RULES:
-
-AUTHORITY:
-- must signal credibility (e.g., Former DA, 20+ Years)
-- keep phrasing short and compressed (avoid long titles)
-
-OUTCOME:
-- must clearly express results or case strength
-- use natural phrasing (no shorthand like "lawyer results")
-
-PROCESS:
-- must describe how the case is handled (access, strategy, or evidence)
-- avoid repeating the same phrasing across groups
-
-RISK:
-- must include urgency AND consequence (e.g., deadlines, evidence loss)
-- only ONE risk headline per group
-
-DEDUPLICATION:
-- no repeated roles within a group
-- no repeated phrasing within a group
-
-AVOID:
-- generic filler words like "help"DESCRIPTIONS:
-
-Generate EXACTLY 3 descriptions per ad group.
-
-ROLE ASSIGNMENT:
-Each description MUST serve one unique role:
-1. Authority — credibility
-2. Outcome — case strength or results (no guarantees)
-3. Process OR Risk — handling approach OR urgency (not both)
-
-STRUCTURE RULES:
-- 40–90 characters per description
-- complete sentences ending with punctuation
-- natural, fluent English (no truncation or broken grammar)
-
-ROLE-SPECIFIC RULES:
-
-AUTHORITY:
-- clearly convey credibility (e.g., former DA, experience, boutique firm)
-
-OUTCOME:
-- describe results or case strength without guarantees
-- use clear, neutral phrasing (no hype)
-
-PROCESS:
-- explain how the case is handled (evidence, strategy, or access)
-
-RISK:
-- include urgency with consequence (deadline, evidence loss)
-
-PROOF CONSTRAINT:
-- max ONE numeric proof statement per campaign
-
-DEDUPLICATION:
-- each description must express a different idea
-- no repeated concepts or rewording
-
-GENERAL:
-- no brand mixing unless intentional
-- tone: professional, credible, calm
-- avoid generic filler phrases (e.g., "call now", "get help today")
+IMPORTANT:
+- prioritize staying UNDER limits over creativity
+- shorter is better than longer
 `,
       },
       {
