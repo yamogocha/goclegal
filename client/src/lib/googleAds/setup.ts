@@ -236,7 +236,8 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
   }
 }
 
-// define input shape once
+// normalize + preserve real Google Ads errors + consistent response
+
 type CreateCampaignOpts = {
   location?: string;
   lat?: number;
@@ -244,6 +245,34 @@ type CreateCampaignOpts = {
   radiusMiles?: number;
   dryRun?: boolean;
 };
+
+function normalizeError(e: any) {
+  // Google Ads structured error
+  if (e?.errors && Array.isArray(e.errors)) {
+    return {
+      error: "google_ads_error",
+      details: e.errors.map((err: any) => ({
+        message: err.message,
+        code: Object.keys(err.error_code || {})[0],
+        trigger: err.trigger?.string_value,
+      })),
+    };
+  }
+
+  // standard Error
+  if (e instanceof Error) {
+    return {
+      error: e.message,
+      details: [],
+    };
+  }
+
+  // fallback
+  return {
+    error: "unknown_error",
+    details: [{ raw: JSON.stringify(e, null, 2) }],
+  };
+}
 
 export async function createSearchCampaign(
   opts: CreateCampaignOpts = {}
@@ -259,10 +288,9 @@ export async function createSearchCampaign(
   const customer = getCustomer();
 
   const logs: any[] = [];
-  const details: any[] = [];
+  let details: any[] = [];
 
   try {
-    // ✅ now safe
     const data = await generateSearchCampaign(location);
 
     if (dryRun) {
@@ -296,7 +324,6 @@ export async function createSearchCampaign(
 
     logs.push({ step: "campaign_created", campaignRes });
 
-    // use destructured values
     await customer.campaignCriteria.create([{
       campaign: campaignRes,
       proximity: {
@@ -322,28 +349,39 @@ export async function createSearchCampaign(
         const agRes = adGroup.results?.[0]?.resource_name;
         if (!agRes) throw new Error("adgroup failed");
 
-        await customer.adGroupCriteria.create(
-          ag.keywords.map(k => ({
-            ad_group: agRes,
-            status: "ENABLED",
-            keyword: { text: k, match_type: "PHRASE" },
-          }))
-        ).catch(e => details.push({ step: "keywords", ag: ag.name, error: e.message }));
+        try {
+          await customer.adGroupCriteria.create(
+            ag.keywords.map(k => ({
+              ad_group: agRes,
+              status: "ENABLED",
+              keyword: { text: k, match_type: "PHRASE" },
+            }))
+          );
+        } catch (e: any) {
+          const norm = normalizeError(e);
+          details.push({ step: "keywords", ag: ag.name, ...norm });
+        }
 
-        await customer.adGroupAds.create([{
-          ad_group: agRes,
-          status: "PAUSED",
-          ad: {
-            final_urls: ["https://www.goclegal.com/auto-accidents"],
-            responsive_search_ad: {
-              headlines: ag.headlines.map(h => ({ text: h })),
-              descriptions: ag.descriptions.map(d => ({ text: d })),
+        try {
+          await customer.adGroupAds.create([{
+            ad_group: agRes,
+            status: "PAUSED",
+            ad: {
+              final_urls: ["https://www.goclegal.com/auto-accidents"],
+              responsive_search_ad: {
+                headlines: ag.headlines.map(h => ({ text: h })),
+                descriptions: ag.descriptions.map(d => ({ text: d })),
+              },
             },
-          },
-        }]).catch(e => details.push({ step: "ads", ag: ag.name, error: e.message }));
+          }]);
+        } catch (e: any) {
+          const norm = normalizeError(e);
+          details.push({ step: "ads", ag: ag.name, ...norm });
+        }
 
       } catch (e: any) {
-        details.push({ step: "adgroup", ag: ag.name, error: e.message });
+        const norm = normalizeError(e);
+        details.push({ step: "adgroup", ag: ag.name, ...norm });
       }
     }
 
@@ -358,10 +396,12 @@ export async function createSearchCampaign(
     };
 
   } catch (e: any) {
+    const norm = normalizeError(e);
+
     return {
       ok: false,
-      error: e?.message || "fatal_error",
-      details: [],
+      error: norm.error,
+      details: norm.details,
       logs,
       result: null,
     };
