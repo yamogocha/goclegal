@@ -237,37 +237,25 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
 }
 
 // unified execution + full visibility + no silent failures
-
-export async function createSearchCampaign({
-  location = "Oakland CA",
-  lat = 37.7652,
-  lng = -122.2416,
-  radiusMiles = 15,
-  dryRun = false,
-} = {}) {
+export async function createSearchCampaign(opts = {}) {
   const customer = getCustomer();
 
   const logs: any[] = [];
-  const errors: any[] = [];
+  const details: any[] = [];
 
   try {
-    const data = await generateSearchCampaign(location);
+    const data = await generateSearchCampaign(opts.location);
 
-    if (dryRun) {
-      return { ok: true, preview: data };
+    if (opts.dryRun) {
+      return { ok: true, error: null, details: [], logs, preview: data };
     }
 
-    // budget reuse
-    const budgetName = `${data.campaign.name} Budget`;
     const budgetRes = await getOrCreateBudget(
       customer,
-      budgetName,
+      `${data.campaign.name} Budget`,
       data.campaign.dailyBudget * 1e6
     );
 
-    if (!budgetRes) throw new Error("budget failed");
-
-    // campaign
     const campaign = await customer.campaigns.create([{
       name: `${data.campaign.name} ${Date.now().toString().slice(-4)}`,
       advertising_channel_type: "SEARCH",
@@ -282,22 +270,6 @@ export async function createSearchCampaign({
 
     logs.push({ step: "campaign_created", campaignRes });
 
-    // geo
-    await customer.campaignCriteria.create([{
-      campaign: campaignRes,
-      proximity: {
-        geo_point: {
-          latitude_in_micro_degrees: Math.round(lat * 1e6),
-          longitude_in_micro_degrees: Math.round(lng * 1e6),
-        },
-        radius: radiusMiles,
-        radius_units: "MILES",
-      },
-    }]);
-
-    const results: any = { campaign: campaignRes, adGroups: [] };
-
-    // ad groups loop (NO silent failure)
     for (const ag of data.adGroups) {
       try {
         const adGroup = await customer.adGroups.create([{
@@ -305,87 +277,51 @@ export async function createSearchCampaign({
           campaign: campaignRes,
           type: "SEARCH_STANDARD",
           cpc_bid_micros: 2_000_000,
-          status: "ENABLED",
+          status: "PAUSED",
         }]);
 
         const agRes = adGroup.results?.[0]?.resource_name;
         if (!agRes) throw new Error("adgroup failed");
 
-        // keywords
-        try {
-          await customer.adGroupCriteria.create(
-            ag.keywords.map((k) => ({
-              ad_group: agRes,
-              status: "ENABLED",
-              keyword: { text: k, match_type: "PHRASE" },
-            }))
-          );
-        } catch (e: any) {
-          errors.push({
-            step: "keywords_failed",
-            adGroup: ag.name,
-            message: e?.message || String(e),
-          });
-        }
-
-        // ads
-        try {
-          await customer.adGroupAds.create([{
+        await customer.adGroupCriteria.create(
+          ag.keywords.map(k => ({
             ad_group: agRes,
-            status: "PAUSED",
-            ad: {
-              final_urls: ["https://www.goclegal.com/auto-accidents"],
-              responsive_search_ad: {
-                headlines: ag.headlines.map((h) => ({ text: h })),
-                descriptions: ag.descriptions.map((d) => ({ text: d })),
-              },
-            },
-          }]);
-        } catch (e: any) {
-          errors.push({
-            step: "ads_failed",
-            adGroup: ag.name,
-            message: e?.message || String(e),
-          });
-        }
+            status: "ENABLED",
+            keyword: { text: k, match_type: "PHRASE" },
+          }))
+        ).catch(e => details.push({ step: "keywords", ag: ag.name, error: e.message }));
 
-        results.adGroups.push({
-          name: ag.name,
-          resource: agRes,
-          keywords: ag.keywords.length,
-        });
+        await customer.adGroupAds.create([{
+          ad_group: agRes,
+          status: "PAUSED",
+          ad: {
+            final_urls: ["https://www.goclegal.com/auto-accidents"],
+            responsive_search_ad: {
+              headlines: ag.headlines.map(h => ({ text: h })),
+              descriptions: ag.descriptions.map(d => ({ text: d })),
+            },
+          },
+        }]).catch(e => details.push({ step: "ads", ag: ag.name, error: e.message }));
 
       } catch (e: any) {
-        errors.push({
-          step: "adgroup_failed",
-          adGroup: ag.name,
-          message: e?.message || String(e),
-        });
+        details.push({ step: "adgroup", ag: ag.name, error: e.message });
       }
     }
 
-    // final decision (NO ambiguity)
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: "partial_failure",
-        details: errors,
-        logs,
-        result: results,
-      };
-    }
+    const ok = details.length === 0;
 
     return {
-      ok: true,
-      result: results,
+      ok,
+      error: ok ? null : "partial_failure",
+      details,
       logs,
     };
 
   } catch (e: any) {
     return {
       ok: false,
-      error: e?.message || "unknown_error",
-      stack: e?.stack,
+      error: e?.message || "fatal_error",
+      details: [],
       logs,
     };
   }

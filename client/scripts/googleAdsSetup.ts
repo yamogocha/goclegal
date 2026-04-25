@@ -5,9 +5,7 @@ async function run() {
   try {
     console.log("=== GOOGLE ADS SETUP ===");
 
-    const URL = process.env.BASE_URL + "/api/cron/googleAdsSetup";
-
-    const res = await fetch(URL, {
+    const res = await fetch(process.env.BASE_URL + "/api/cron/googleAdsSetup", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -21,29 +19,26 @@ async function run() {
     });
 
     const contentType = res.headers.get("content-type") || "";
+    const text = await res.text();
 
     let data: any;
-
-    // parse response safely
-    if (contentType.includes("application/json")) {
-      data = await res.json();
-    } else {
-      const text = await res.text();
-
-      console.error("\n=== NON-JSON RESPONSE ===");
-      console.error("status:", res.status);
-      console.error("body:", text.slice(0, 1000)); // avoid huge dumps
-
-      process.exit(1);
+    try {
+      data = contentType.includes("application/json")
+        ? JSON.parse(text)
+        : { ok: false, error: "non_json_response", raw: text };
+    } catch {
+      data = { ok: false, error: "invalid_json", raw: text };
     }
 
     console.dir(data, { depth: null });
 
     if (!data.ok) {
       console.error("\n=== SETUP FAILED ===");
-      console.error("error:", data.error ?? "none");
-      console.error("stack:", data.stack ?? "none");
-      console.error("logs:", JSON.stringify(data.logs, null, 2));
+
+      console.error("error:", data.error || "unknown");
+      console.error("details:", JSON.stringify(data.details || [], null, 2));
+      console.error("logs:", JSON.stringify(data.logs || [], null, 2));
+
       process.exit(1);
     }
 
@@ -52,7 +47,6 @@ async function run() {
   } catch (err: any) {
     console.error("\n=== SCRIPT CRASHED ===");
     console.error(err?.message || err);
-    console.error(err?.stack);
     process.exit(1);
   }
 }
