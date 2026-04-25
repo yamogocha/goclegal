@@ -1,5 +1,6 @@
 // scripts/googleAdsSetup.ts
-// show full failure payload including logs
+// robust fetch + safe parsing + full visibility
+
 async function run() {
   try {
     console.log("=== GOOGLE ADS SETUP ===");
@@ -19,18 +20,30 @@ async function run() {
       }),
     });
 
-    const data = await res.json();
+    const contentType = res.headers.get("content-type") || "";
+
+    let data: any;
+
+    // parse response safely
+    if (contentType.includes("application/json")) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+
+      console.error("\n=== NON-JSON RESPONSE ===");
+      console.error("status:", res.status);
+      console.error("body:", text.slice(0, 1000)); // avoid huge dumps
+
+      process.exit(1);
+    }
 
     console.dir(data, { depth: null });
 
     if (!data.ok) {
       console.error("\n=== SETUP FAILED ===");
-
-      // // print all possible failure surfaces
       console.error("error:", data.error ?? "none");
       console.error("stack:", data.stack ?? "none");
       console.error("logs:", JSON.stringify(data.logs, null, 2));
-
       process.exit(1);
     }
 
