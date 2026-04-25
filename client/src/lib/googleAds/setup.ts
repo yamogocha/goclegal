@@ -236,26 +236,36 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
   }
 }
 
-// enforce consistent return shape
-type CampaignResponse = {
-  ok: boolean;
-  error: string | null;
-  details: any[];
-  logs: any[];
-  result: { campaign: string | null } | null;
-  preview?: any;
+// define input shape once
+type CreateCampaignOpts = {
+  location?: string;
+  lat?: number;
+  lng?: number;
+  radiusMiles?: number;
+  dryRun?: boolean;
 };
 
-export async function createSearchCampaign(opts = {}): Promise<CampaignResponse> {
+export async function createSearchCampaign(
+  opts: CreateCampaignOpts = {}
+) {
+  const {
+    location = "Oakland CA",
+    lat = 37.7652,
+    lng = -122.2416,
+    radiusMiles = 15,
+    dryRun = false,
+  } = opts;
+
   const customer = getCustomer();
 
   const logs: any[] = [];
   const details: any[] = [];
 
   try {
-    const data = await generateSearchCampaign(opts.location);
+    // ✅ now safe
+    const data = await generateSearchCampaign(location);
 
-    if (opts.dryRun) {
+    if (dryRun) {
       return {
         ok: true,
         error: null,
@@ -285,6 +295,19 @@ export async function createSearchCampaign(opts = {}): Promise<CampaignResponse>
     if (!campaignRes) throw new Error("campaign failed");
 
     logs.push({ step: "campaign_created", campaignRes });
+
+    // use destructured values
+    await customer.campaignCriteria.create([{
+      campaign: campaignRes,
+      proximity: {
+        geo_point: {
+          latitude_in_micro_degrees: Math.round(lat * 1e6),
+          longitude_in_micro_degrees: Math.round(lng * 1e6),
+        },
+        radius: radiusMiles,
+        radius_units: "MILES",
+      },
+    }]);
 
     for (const ag of data.adGroups) {
       try {
@@ -331,7 +354,7 @@ export async function createSearchCampaign(opts = {}): Promise<CampaignResponse>
       error: ok ? null : "partial_failure",
       details,
       logs,
-      result: { campaign: campaignRes }, // ✅ ALWAYS PRESENT
+      result: { campaign: campaignRes },
     };
 
   } catch (e: any) {
@@ -340,7 +363,7 @@ export async function createSearchCampaign(opts = {}): Promise<CampaignResponse>
       error: e?.message || "fatal_error",
       details: [],
       logs,
-      result: null, // ✅ ALWAYS PRESENT
+      result: null,
     };
   }
 }
