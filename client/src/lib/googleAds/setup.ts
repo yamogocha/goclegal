@@ -236,7 +236,8 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
   }
 }
 
-// fix required field + keep minimal + safe defaults
+// unified execution + full visibility + no silent failures
+
 export async function createSearchCampaign({
   location = "Oakland CA",
   lat = 37.7652,
@@ -245,89 +246,149 @@ export async function createSearchCampaign({
   dryRun = false,
 } = {}) {
   const customer = getCustomer();
-  const data = await generateSearchCampaign(location);
 
-  if (dryRun) return { ok: true, preview: data };
+  const logs: any[] = [];
+  const errors: any[] = [];
 
-  // stable budget reuse
-  const budgetName = `${data.campaign.name} Budget`;
-  const budgetRes = await getOrCreateBudget(
-    customer,
-    budgetName,
-    data.campaign.dailyBudget * 1e6
-  );
+  try {
+    const data = await generateSearchCampaign(location);
 
-  if (!budgetRes) throw new Error("budget failed");
+    if (dryRun) {
+      return { ok: true, preview: data };
+    }
 
-  // campaign create (required field added)
-  const campaign = await customer.campaigns.create([{
-    name: `${data.campaign.name} ${Date.now().toString().slice(-4)}`,
-    advertising_channel_type: "SEARCH",
-    status: "PAUSED",
-    campaign_budget: budgetRes,
-    manual_cpc: {},
-
-    // REQUIRED by API (fix)
-    contains_eu_political_advertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
-  }]);
-
-  const campaignRes = campaign.results?.[0]?.resource_name;
-  if (!campaignRes) throw new Error("campaign failed");
-
-  await customer.campaignCriteria.create([{
-    campaign: campaignRes,
-    proximity: {
-      geo_point: {
-        latitude_in_micro_degrees: Math.round(lat * 1e6),
-        longitude_in_micro_degrees: Math.round(lng * 1e6),
-      },
-      radius: radiusMiles,
-      radius_units: "MILES",
-    },
-  }]);
-
-  const results: any = { campaign: campaignRes, adGroups: [] };
-
-  for (const ag of data.adGroups) {
-    const adGroup = await customer.adGroups.create([{
-      name: `${ag.name} ${Date.now().toString().slice(-3)}`,
-      campaign: campaignRes,
-      type: "SEARCH_STANDARD",
-      cpc_bid_micros: 2_000_000,
-      status: "ENABLED",
-    }]);
-
-    const agRes = adGroup.results?.[0]?.resource_name;
-    if (!agRes) continue;
-
-    await customer.adGroupCriteria.create(
-      ag.keywords.map((k) => ({
-        ad_group: agRes,
-        status: "ENABLED",
-        keyword: { text: k, match_type: "PHRASE" },
-      }))
+    // budget reuse
+    const budgetName = `${data.campaign.name} Budget`;
+    const budgetRes = await getOrCreateBudget(
+      customer,
+      budgetName,
+      data.campaign.dailyBudget * 1e6
     );
 
-    await customer.adGroupAds.create([{
-      ad_group: agRes,
+    if (!budgetRes) throw new Error("budget failed");
+
+    // campaign
+    const campaign = await customer.campaigns.create([{
+      name: `${data.campaign.name} ${Date.now().toString().slice(-4)}`,
+      advertising_channel_type: "SEARCH",
       status: "PAUSED",
-      ad: {
-        final_urls: ["https://www.goclegal.com/auto-accidents"],
-        responsive_search_ad: {
-          headlines: ag.headlines.map((h) => ({ text: h })),
-          descriptions: ag.descriptions.map((d) => ({ text: d })),
+      campaign_budget: budgetRes,
+      manual_cpc: {},
+      contains_eu_political_advertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+    }]);
+
+    const campaignRes = campaign.results?.[0]?.resource_name;
+    if (!campaignRes) throw new Error("campaign failed");
+
+    logs.push({ step: "campaign_created", campaignRes });
+
+    // geo
+    await customer.campaignCriteria.create([{
+      campaign: campaignRes,
+      proximity: {
+        geo_point: {
+          latitude_in_micro_degrees: Math.round(lat * 1e6),
+          longitude_in_micro_degrees: Math.round(lng * 1e6),
         },
+        radius: radiusMiles,
+        radius_units: "MILES",
       },
     }]);
 
-    results.adGroups.push({
-      name: ag.name,
-      resource: agRes,
-      keywords: ag.keywords.length,
-    });
-  }
+    const results: any = { campaign: campaignRes, adGroups: [] };
 
-  return { ok: true, result: results };
+    // ad groups loop (NO silent failure)
+    for (const ag of data.adGroups) {
+      try {
+        const adGroup = await customer.adGroups.create([{
+          name: `${ag.name} ${Date.now().toString().slice(-3)}`,
+          campaign: campaignRes,
+          type: "SEARCH_STANDARD",
+          cpc_bid_micros: 2_000_000,
+          status: "ENABLED",
+        }]);
+
+        const agRes = adGroup.results?.[0]?.resource_name;
+        if (!agRes) throw new Error("adgroup failed");
+
+        // keywords
+        try {
+          await customer.adGroupCriteria.create(
+            ag.keywords.map((k) => ({
+              ad_group: agRes,
+              status: "ENABLED",
+              keyword: { text: k, match_type: "PHRASE" },
+            }))
+          );
+        } catch (e: any) {
+          errors.push({
+            step: "keywords_failed",
+            adGroup: ag.name,
+            message: e?.message || String(e),
+          });
+        }
+
+        // ads
+        try {
+          await customer.adGroupAds.create([{
+            ad_group: agRes,
+            status: "PAUSED",
+            ad: {
+              final_urls: ["https://www.goclegal.com/auto-accidents"],
+              responsive_search_ad: {
+                headlines: ag.headlines.map((h) => ({ text: h })),
+                descriptions: ag.descriptions.map((d) => ({ text: d })),
+              },
+            },
+          }]);
+        } catch (e: any) {
+          errors.push({
+            step: "ads_failed",
+            adGroup: ag.name,
+            message: e?.message || String(e),
+          });
+        }
+
+        results.adGroups.push({
+          name: ag.name,
+          resource: agRes,
+          keywords: ag.keywords.length,
+        });
+
+      } catch (e: any) {
+        errors.push({
+          step: "adgroup_failed",
+          adGroup: ag.name,
+          message: e?.message || String(e),
+        });
+      }
+    }
+
+    // final decision (NO ambiguity)
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: "partial_failure",
+        details: errors,
+        logs,
+        result: results,
+      };
+    }
+
+    return {
+      ok: true,
+      result: results,
+      logs,
+    };
+
+  } catch (e: any) {
+    return {
+      ok: false,
+      error: e?.message || "unknown_error",
+      stack: e?.stack,
+      logs,
+    };
+  }
 }
 
 // create conversion tracking + call optimization and attach to campaign minimal and scalable
