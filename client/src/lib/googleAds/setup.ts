@@ -1,7 +1,8 @@
 // strict generation only: enforce tighter headline length to avoid overflow at source
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { getOpenAI, GOC_LEGAL_BRAND_CONTEXT } from "@/lib/openai";
 import { getCustomer } from "./index";
+import { NextResponse } from "next/server";
 
 const openai = getOpenAI();
 
@@ -117,12 +118,48 @@ ROLES:
 - no commas
 - natural phrasing only
 
-KEYWORDS:
-- 6–8 per group
-- <= 40 chars
+KEYWORDS (STRICT + POLICY SAFE):
+
+Generate 6–8 keywords per ad group.
+
+ALLOWED INTENT (REQUIRED):
+- must include one of:
+  lawyer, attorney
+
+SAFE PHRASES:
+- accident lawyer
+- personal injury attorney
+- injury lawyer
+
+POLICY RULES (CRITICAL):
+- DO NOT combine "injury" with "accident"
+- DO NOT combine "injury" with specific events
+- DO NOT use phrases like:
+  injury claim, accident injury, fall injury
+- DO NOT imply a person’s condition
+
+SAFE STRUCTURE:
+- use EITHER:
+  [location] + accident lawyer
+  OR
+  [location] + personal injury attorney
+  OR
+  [location] + injury lawyer
+
+FORMAT:
+- include "oakland"
 - <= 6 words
-- include oakland
-- high intent only
+- <= 40 characters
+- lowercase only
+
+SELF-CHECK (REQUIRED):
+Reject and rewrite if:
+- contains "accident injury"
+- contains "injury claim"
+- contains event + injury combo
+- exceeds 40 characters
+
+If ANY keyword fails, rewrite it before returning.
 
 DESCRIPTIONS:
 
@@ -169,6 +206,37 @@ IMPORTANT:
   return CampaignSchema.parse(res.output_parsed);
 }
 
+// handle duplicate budget by reuse or create
+async function getOrCreateBudget(customer: any, name: string, amountMicros: number) {
+  try {
+    const res = await customer.campaignBudgets.create([{
+      name,
+      amount_micros: amountMicros,
+      delivery_method: "STANDARD",
+    }]);
+
+    return res.results?.[0]?.resource_name;
+  } catch (e: any) {
+    const msg = JSON.stringify(e);
+
+    // duplicate -> fetch existing
+    if (msg.includes("DUPLICATE_NAME")) {
+      const query = `
+        SELECT campaign_budget.resource_name
+        FROM campaign_budget
+        WHERE campaign_budget.name = '${name}'
+        LIMIT 1
+      `;
+
+      const found = await customer.query(query);
+      return found?.[0]?.campaign_budget?.resource_name;
+    }
+
+    throw e;
+  }
+}
+
+// fix required field + keep minimal + safe defaults
 export async function createSearchCampaign({
   location = "Oakland CA",
   lat = 37.7652,
@@ -181,18 +249,26 @@ export async function createSearchCampaign({
 
   if (dryRun) return { ok: true, preview: data };
 
-  const budget = await customer.campaignBudgets.create([{
-    name: `${data.campaign.name} Budget`,
-    amount_micros: data.campaign.dailyBudget * 1e6,
-    delivery_method: "STANDARD",
-  }]);
+  // stable budget reuse
+  const budgetName = `${data.campaign.name} Budget`;
+  const budgetRes = await getOrCreateBudget(
+    customer,
+    budgetName,
+    data.campaign.dailyBudget * 1e6
+  );
 
+  if (!budgetRes) throw new Error("budget failed");
+
+  // campaign create (required field added)
   const campaign = await customer.campaigns.create([{
-    name: data.campaign.name,
+    name: `${data.campaign.name} ${Date.now().toString().slice(-4)}`,
     advertising_channel_type: "SEARCH",
     status: "PAUSED",
-    campaign_budget: budget.results?.[0]?.resource_name,
+    campaign_budget: budgetRes,
     manual_cpc: {},
+
+    // REQUIRED by API (fix)
+    contains_eu_political_advertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
   }]);
 
   const campaignRes = campaign.results?.[0]?.resource_name;
@@ -214,7 +290,7 @@ export async function createSearchCampaign({
 
   for (const ag of data.adGroups) {
     const adGroup = await customer.adGroups.create([{
-      name: ag.name,
+      name: `${ag.name} ${Date.now().toString().slice(-3)}`,
       campaign: campaignRes,
       type: "SEARCH_STANDARD",
       cpc_bid_micros: 2_000_000,
@@ -253,7 +329,6 @@ export async function createSearchCampaign({
 
   return { ok: true, result: results };
 }
-
 
 // create conversion tracking + call optimization and attach to campaign minimal and scalable
 export async function setupConversionsAndCalls(opts: {
@@ -384,3 +459,63 @@ export async function setupCallExtension(opts: {
       },
     };
   }
+
+
+const isDev = process.env.VERCEL_ENV !== "production";
+
+function formatError(err: unknown) {
+  if (err instanceof ZodError) {
+    return {
+      type: "ZOD",
+      issues: err.issues.map(i => ({
+        path: i.path.join("."),
+        message: i.message,
+      })),
+    };
+  }
+
+  if (err instanceof Error) {
+    return {
+      type: "GENERIC",
+      message: err.message,
+      stack: isDev ? err.stack : undefined,
+    };
+  }
+
+  return {
+    type: "UNKNOWN",
+    error: JSON.stringify(err, null, 2), // 👈 FIXED
+  };
+}
+
+export async function runWithLogging(label: string, fn: () => Promise<any>) {
+  const start = Date.now();
+
+  try {
+    const result = await fn();
+
+    const payload = {
+      tag: label,
+      ok: true,
+      duration: Date.now() - start,
+      result,
+    };
+
+    console.log(JSON.stringify(payload));
+
+    return NextResponse.json(payload); // ✅ ALWAYS return Response
+  } catch (err) {
+    const formatted = formatError(err);
+
+    const payload = {
+      tag: label,
+      ok: false,
+      duration: Date.now() - start,
+      error: formatted,
+    };
+
+    console.error(JSON.stringify(payload, null, isDev ? 2 : 0));
+
+    return NextResponse.json(payload, { status: 500 }); // ✅ FIX
+  }
+}

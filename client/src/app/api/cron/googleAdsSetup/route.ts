@@ -4,6 +4,7 @@ import {
   createSearchCampaign,
   setupConversionsAndCalls,
   setupCallExtension,
+  runWithLogging,
 } from "@/lib/googleAds/setup";
 import { verifyCronAuth } from "@/lib/oauth";
 
@@ -75,4 +76,12 @@ export async function POST(req: NextRequest) {
       stack: err.stack,
     });
   }
+}
+
+
+export async function GET() {
+  
+  return runWithLogging("GOOGLE_ADS_SETUP", async () => {
+    return await createSearchCampaign({ dryRun: false });
+  });
 }
