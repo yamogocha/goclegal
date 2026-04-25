@@ -236,8 +236,17 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
   }
 }
 
-// unified execution + full visibility + no silent failures
-export async function createSearchCampaign(opts = {}) {
+// enforce consistent return shape
+type CampaignResponse = {
+  ok: boolean;
+  error: string | null;
+  details: any[];
+  logs: any[];
+  result: { campaign: string | null } | null;
+  preview?: any;
+};
+
+export async function createSearchCampaign(opts = {}): Promise<CampaignResponse> {
   const customer = getCustomer();
 
   const logs: any[] = [];
@@ -247,7 +256,14 @@ export async function createSearchCampaign(opts = {}) {
     const data = await generateSearchCampaign(opts.location);
 
     if (opts.dryRun) {
-      return { ok: true, error: null, details: [], logs, preview: data };
+      return {
+        ok: true,
+        error: null,
+        details: [],
+        logs,
+        result: null,
+        preview: data,
+      };
     }
 
     const budgetRes = await getOrCreateBudget(
@@ -315,6 +331,7 @@ export async function createSearchCampaign(opts = {}) {
       error: ok ? null : "partial_failure",
       details,
       logs,
+      result: { campaign: campaignRes }, // ✅ ALWAYS PRESENT
     };
 
   } catch (e: any) {
@@ -323,6 +340,7 @@ export async function createSearchCampaign(opts = {}) {
       error: e?.message || "fatal_error",
       details: [],
       logs,
+      result: null, // ✅ ALWAYS PRESENT
     };
   }
 }
