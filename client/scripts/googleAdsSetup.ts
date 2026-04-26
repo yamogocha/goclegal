@@ -1,58 +1,66 @@
-// scripts/googleAdsSetup.ts
-// robust fetch + safe parsing + full visibility
-
+// // 2-phase execution script (no timeout)
 
 async function run() {
-  try {
-    console.log("=== GOOGLE ADS SETUP ===");
+  const URL = process.env.BASE_URL + "/api/cron/googleAdsSetup";
 
-    const res = await fetch(process.env.BASE_URL + "/api/cron/googleAdsSetup", {
+  try {
+    console.log("=== STEP 1: GENERATE ===");
+
+    const genRes = await fetch(URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.CRON_SECRET}`,
       },
       body: JSON.stringify({
+        mode: "generate",
         location: "Oakland CA",
-        phoneNumber: "+15108460928",
-        dryRun: false,
       }),
     });
 
-    const text = await res.text(); // // ALWAYS read raw first
+    const genData = await genRes.json();
 
-    let data: any;
+    if (!genData.ok) {
+      console.error("GEN FAILED", genData);
+      process.exit(1);
+    }
+
+    console.log("=== STEP 2: EXECUTE ===");
+
+    const execRes = await fetch(URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+      },
+      body: JSON.stringify({
+        mode: "execute",
+        data: genData.data, // // pass payload
+        phoneNumber: "+15108460928",
+      }),
+    });
+
+    const text = await execRes.text();
+
+    let execData;
     try {
-      data = JSON.parse(text);
+      execData = JSON.parse(text);
     } catch {
-      console.error("\n=== NON JSON RESPONSE ===");
-      console.error(text.slice(0, 2000));
+      console.error("NON JSON:", text.slice(0, 1000));
       process.exit(1);
     }
 
-    console.dir(data, { depth: null });
+    console.dir(execData, { depth: null });
 
-    if (!data.ok) {
-      console.error("\n=== SETUP FAILED ===");
-
-      console.error("error:", data.error || "missing_error");
-      console.error("details:", JSON.stringify(data.details || [], null, 2));
-      console.error("logs:", JSON.stringify(data.logs || [], null, 2));
-
-      // // CRITICAL: fallback visibility
-      if (!data.error && (!data.details || data.details.length === 0)) {
-        console.error("\n=== FALLBACK RAW ===");
-        console.error(text.slice(0, 2000));
-      }
-
+    if (!execData.ok) {
+      console.error("EXEC FAILED", execData);
       process.exit(1);
     }
 
-    console.log("\n=== SETUP COMPLETE ===");
+    console.log("=== COMPLETE ===");
 
-  } catch (err: any) {
-    console.error("\n=== SCRIPT CRASHED ===");
-    console.error(err?.message || err);
+  } catch (e: any) {
+    console.error("CRASH", e.message);
     process.exit(1);
   }
 }

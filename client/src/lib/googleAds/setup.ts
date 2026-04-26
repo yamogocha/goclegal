@@ -243,14 +243,15 @@ async function getOrCreateBudget(customer: any, name: string, amountMicros: numb
   }
 }
 
-// normalize + preserve real Google Ads errors + consistent response
-
+// // allow pre-generated campaign payload to skip AI (timeout-safe)
 type CreateCampaignOpts = {
   location?: string;
   lat?: number;
   lng?: number;
   radiusMiles?: number;
   dryRun?: boolean;
+
+  data?: z.infer<typeof CampaignSchema>; // ✅ FIX
 };
 
 // harden error extraction + guarantee visibility
@@ -312,7 +313,8 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   const details: any[] = [];
 
   try {
-    const data = await generateSearchCampaign(location);
+    // // allow external payload to skip AI (prevents timeout)
+    const data = opts.data || await generateSearchCampaign(location);
 
     if (dryRun) {
       return {

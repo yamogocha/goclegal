@@ -5,123 +5,105 @@ import {
   setupConversionsAndCalls,
   setupCallExtension,
   runWithLogging,
-  extractError,
+  generateSearchCampaign,
 } from "@/lib/googleAds/setup";
 import { verifyCronAuth } from "@/lib/oauth";
 
 
-// // production-safe route with guaranteed error visibility
+// // phase-based execution to avoid timeout
 export async function POST(req: NextRequest) {
   const logs: any = {
-    step1_campaign: null,
-    step2_conversions: null,
-    step3_callExtension: null,
+    step1_generate: null,
+    step2_execute: null,
+    step3_conversions: null,
+    step4_callExtension: null,
   };
 
   try {
     verifyCronAuth(req);
 
-    // // safe parse (never throw)
-    let body: any = {};
-    try {
-      const raw = await req.text();
-      body = raw ? JSON.parse(raw) : {};
-    } catch (e: any) {
-      return NextResponse.json({
-        ok: false,
-        error: "invalid_json_body",
-        details: [{ raw: String(e) }],
-        logs,
-      }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
 
     const {
       location = "Oakland CA",
       phoneNumber = "+15108460928",
-      dryRun = false,
+      mode = "generate", // // NEW
+      data = null,       // // NEW
     } = body;
 
-    // // 1) campaign
-    const campaignRes = await createSearchCampaign({ location, dryRun });
-    logs.step1_campaign = campaignRes;
+    // // STEP 1: GENERATE ONLY (fast enough)
+    if (mode === "generate") {
+      const generated = await generateSearchCampaign(location);
 
-    if (dryRun) {
+      logs.step1_generate = {
+        ok: true,
+        adGroups: generated.adGroups.length,
+      };
+
       return NextResponse.json({
         ok: true,
-        dryRun: true,
+        mode: "generate",
+        data: generated, // // return to script
         logs,
       });
     }
 
-    // // propagate real failure (THIS was missing)
-    if (!campaignRes?.ok || !campaignRes?.result?.campaign) {
+    // // STEP 2: EXECUTE ONLY (NO AI)
+    if (mode === "execute") {
+      if (!data) {
+        return NextResponse.json({
+          ok: false,
+          error: "missing_data",
+          logs,
+        });
+      }
+
+      const campaignRes = await createSearchCampaign({
+        location,
+        data, // // skip AI
+      });
+
+      logs.step2_execute = campaignRes;
+
+      if (!campaignRes?.ok || !campaignRes?.result?.campaign) {
+        return NextResponse.json({
+          ok: false,
+          error: campaignRes?.error || "campaign_failed",
+          details: campaignRes?.details,
+          logs,
+        });
+      }
+
+      const campaignResourceName = campaignRes.result.campaign;
+
+      // conversions
+      const convRes = await setupConversionsAndCalls({ campaignResourceName });
+      logs.step3_conversions = convRes;
+
+      // call extension
+      const callRes = await setupCallExtension({
+        campaignResourceName,
+        phoneNumber,
+      });
+      logs.step4_callExtension = callRes;
+
       return NextResponse.json({
-        ok: false,
-        error: campaignRes?.error || "campaign_failed",
-        details: campaignRes?.details || [{ fallback: "no_details" }],
+        ok: true,
+        campaignResourceName,
         logs,
       });
     }
 
-    const campaignResourceName = campaignRes.result.campaign;
-
-    // // enable campaign + full visibility for conversions and call extension
-
-  // 2) FIX ROUTE ERROR VISIBILITY (replace step2 + step3 blocks)
-
-  try {
-    const convRes = await setupConversionsAndCalls({
-      campaignResourceName,
-    });
-    logs.step2_conversions = convRes;
-  } catch (e: any) {
-    const err = extractError(e);
-    logs.step2_conversions = {
-      ok: false,
-      error: err.error,
-      details: err.details,
-    };
-  }
-
-  try {
-    const callRes = await setupCallExtension({
-      campaignResourceName,
-      phoneNumber,
-    });
-    logs.step3_callExtension = callRes;
-  } catch (e: any) {
-    const err = extractError(e);
-    logs.step3_callExtension = {
-      ok: false,
-      error: err.error,
-      details: err.details,
-    };
-  }
-
-    return NextResponse.json({
-      ok: true,
-      campaignResourceName,
-      logs,
-    });
+    return NextResponse.json({ ok: false, error: "invalid_mode" });
 
   } catch (err: any) {
-    // // final fallback (never empty)
-    let raw: any;
-    try {
-      raw = JSON.stringify(err, null, 2);
-    } catch {
-      raw = String(err);
-    }
-
     return NextResponse.json({
       ok: false,
       error: err?.message || "route_crash",
-      details: [{ raw }],
       logs,
     }, { status: 500 });
   }
 }
-
 
 export async function GET() {
   
