@@ -5,6 +5,7 @@ import {
   setupConversionsAndCalls,
   setupCallExtension,
   runWithLogging,
+  extractError,
 } from "@/lib/googleAds/setup";
 import { verifyCronAuth } from "@/lib/oauth";
 
@@ -64,32 +65,38 @@ export async function POST(req: NextRequest) {
 
     const campaignResourceName = campaignRes.result.campaign;
 
-    // // 2) conversions
-    try {
-      const convRes = await setupConversionsAndCalls({
-        campaignResourceName,
-      });
-      logs.step2_conversions = convRes;
-    } catch (e: any) {
-      logs.step2_conversions = {
-        ok: false,
-        error: e?.message || "conversion_failed",
-      };
-    }
+    // // enable campaign + full visibility for conversions and call extension
 
-    // // 3) call extension
-    try {
-      const callRes = await setupCallExtension({
-        campaignResourceName,
-        phoneNumber,
-      });
-      logs.step3_callExtension = callRes;
-    } catch (e: any) {
-      logs.step3_callExtension = {
-        ok: false,
-        error: e?.message || "call_extension_failed",
-      };
-    }
+  // 2) FIX ROUTE ERROR VISIBILITY (replace step2 + step3 blocks)
+
+  try {
+    const convRes = await setupConversionsAndCalls({
+      campaignResourceName,
+    });
+    logs.step2_conversions = convRes;
+  } catch (e: any) {
+    const err = extractError(e);
+    logs.step2_conversions = {
+      ok: false,
+      error: err.error,
+      details: err.details,
+    };
+  }
+
+  try {
+    const callRes = await setupCallExtension({
+      campaignResourceName,
+      phoneNumber,
+    });
+    logs.step3_callExtension = callRes;
+  } catch (e: any) {
+    const err = extractError(e);
+    logs.step3_callExtension = {
+      ok: false,
+      error: err.error,
+      details: err.details,
+    };
+  }
 
     return NextResponse.json({
       ok: true,

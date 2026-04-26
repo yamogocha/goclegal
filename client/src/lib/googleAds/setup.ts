@@ -248,7 +248,7 @@ type CreateCampaignOpts = {
 
 // harden error extraction + guarantee visibility
 
-function extractError(e: any) {
+export function extractError(e: any) {
   // google ads structured
   if (e?.errors && Array.isArray(e.errors)) {
     return {
@@ -327,7 +327,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
     const campaign = await customer.campaigns.create([{
       name: `${data.campaign.name} ${Date.now().toString().slice(-4)}`,
       advertising_channel_type: "SEARCH",
-      status: "PAUSED",
+      status: "ENABLED",
       campaign_budget: budgetRes,
       manual_cpc: {},
       contains_eu_political_advertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
@@ -359,7 +359,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
             campaign: campaignRes,
             type: "SEARCH_STANDARD",
             cpc_bid_micros: 2_000_000,
-            status: "PAUSED",
+            status: "ENABLED",
           }]);
 
           const agRes = adGroup.results?.[0]?.resource_name;
