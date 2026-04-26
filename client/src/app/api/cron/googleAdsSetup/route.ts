@@ -8,12 +8,31 @@ import {
 } from "@/lib/googleAds/setup";
 import { verifyCronAuth } from "@/lib/oauth";
 
+
+// // production-safe route with guaranteed error visibility
 export async function POST(req: NextRequest) {
+  const logs: any = {
+    step1_campaign: null,
+    step2_conversions: null,
+    step3_callExtension: null,
+  };
+
   try {
     verifyCronAuth(req);
 
-    const raw = await req.text();
-    const body = raw ? JSON.parse(raw) : {};
+    // // safe parse (never throw)
+    let body: any = {};
+    try {
+      const raw = await req.text();
+      body = raw ? JSON.parse(raw) : {};
+    } catch (e: any) {
+      return NextResponse.json({
+        ok: false,
+        error: "invalid_json_body",
+        details: [{ raw: String(e) }],
+        logs,
+      }, { status: 400 });
+    }
 
     const {
       location = "Oakland CA",
@@ -21,17 +40,10 @@ export async function POST(req: NextRequest) {
       dryRun = false,
     } = body;
 
-    const logs: any = {
-      step1_campaign: null,
-      step2_conversions: null,
-      step3_callExtension: null,
-    };
-
-    // 1) campaign (generate or create)
+    // // 1) campaign
     const campaignRes = await createSearchCampaign({ location, dryRun });
     logs.step1_campaign = campaignRes;
 
-    // correct dryRun handling (this is what was broken)
     if (dryRun) {
       return NextResponse.json({
         ok: true,
@@ -40,28 +52,44 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // real run requires result
-    const campaignResourceName = campaignRes?.result?.campaign;
-    if (!campaignResourceName) {
+    // // propagate real failure (THIS was missing)
+    if (!campaignRes?.ok || !campaignRes?.result?.campaign) {
       return NextResponse.json({
         ok: false,
-        error: "Campaign creation failed",
+        error: campaignRes?.error || "campaign_failed",
+        details: campaignRes?.details || [{ fallback: "no_details" }],
         logs,
       });
     }
 
-    // 2) conversions
-    const convRes = await setupConversionsAndCalls({
-      campaignResourceName,
-    });
-    logs.step2_conversions = convRes;
+    const campaignResourceName = campaignRes.result.campaign;
 
-    // 3) call extension
-    const callRes = await setupCallExtension({
-      campaignResourceName,
-      phoneNumber,
-    });
-    logs.step3_callExtension = callRes;
+    // // 2) conversions
+    try {
+      const convRes = await setupConversionsAndCalls({
+        campaignResourceName,
+      });
+      logs.step2_conversions = convRes;
+    } catch (e: any) {
+      logs.step2_conversions = {
+        ok: false,
+        error: e?.message || "conversion_failed",
+      };
+    }
+
+    // // 3) call extension
+    try {
+      const callRes = await setupCallExtension({
+        campaignResourceName,
+        phoneNumber,
+      });
+      logs.step3_callExtension = callRes;
+    } catch (e: any) {
+      logs.step3_callExtension = {
+        ok: false,
+        error: e?.message || "call_extension_failed",
+      };
+    }
 
     return NextResponse.json({
       ok: true,
@@ -70,11 +98,20 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
+    // // final fallback (never empty)
+    let raw: any;
+    try {
+      raw = JSON.stringify(err, null, 2);
+    } catch {
+      raw = String(err);
+    }
+
     return NextResponse.json({
       ok: false,
-      error: err.message,
-      stack: err.stack,
-    });
+      error: err?.message || "route_crash",
+      details: [{ raw }],
+      logs,
+    }, { status: 500 });
   }
 }
 

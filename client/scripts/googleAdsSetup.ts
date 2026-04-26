@@ -1,6 +1,7 @@
 // scripts/googleAdsSetup.ts
 // robust fetch + safe parsing + full visibility
 
+
 async function run() {
   try {
     console.log("=== GOOGLE ADS SETUP ===");
@@ -18,16 +19,15 @@ async function run() {
       }),
     });
 
-    const contentType = res.headers.get("content-type") || "";
-    const text = await res.text();
+    const text = await res.text(); // // ALWAYS read raw first
 
     let data: any;
     try {
-      data = contentType.includes("application/json")
-        ? JSON.parse(text)
-        : { ok: false, error: "non_json_response", raw: text };
+      data = JSON.parse(text);
     } catch {
-      data = { ok: false, error: "invalid_json", raw: text };
+      console.error("\n=== NON JSON RESPONSE ===");
+      console.error(text.slice(0, 2000));
+      process.exit(1);
     }
 
     console.dir(data, { depth: null });
@@ -35,9 +35,15 @@ async function run() {
     if (!data.ok) {
       console.error("\n=== SETUP FAILED ===");
 
-      console.error("error:", data.error || "unknown");
+      console.error("error:", data.error || "missing_error");
       console.error("details:", JSON.stringify(data.details || [], null, 2));
       console.error("logs:", JSON.stringify(data.logs || [], null, 2));
+
+      // // CRITICAL: fallback visibility
+      if (!data.error && (!data.details || data.details.length === 0)) {
+        console.error("\n=== FALLBACK RAW ===");
+        console.error(text.slice(0, 2000));
+      }
 
       process.exit(1);
     }
