@@ -474,19 +474,9 @@ export async function setupConversionsAndCalls(opts: {
   }
 
   try {
-    const callConversion = await getExistingConversion(customer, "Phone call lead", {
-      type: "AD_CALL",
-      category: "DEFAULT",
-      status: "ENABLED",
-      value_settings: { default_value: 1, always_use_default_value: true },
-    });
+    const callConversion = await getExistingConversion(customer, "Phone call lead");
 
-    const formConversion = await getExistingConversion(customer, "Submit lead form", {
-      type: "WEBPAGE",
-      category: "DEFAULT",
-      status: "ENABLED",
-      value_settings: { default_value: 1, always_use_default_value: true },
-    });
+    const formConversion = await getExistingConversion(customer, "Submit lead form");
 
     if (!callConversion || !formConversion) {
       throw new Error("conversion_setup_failed");
