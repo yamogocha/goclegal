@@ -474,9 +474,9 @@ export async function setupConversionsAndCalls(opts: {
   }
 
   try {
-    const callConversion = await getExistingConversion(customer, "Phone call lead");
+    const callConversion = await getExistingConversion(customer, "Calls from ads");
 
-    const formConversion = await getExistingConversion(customer, "Submit lead form");
+    const formConversion = await getExistingConversion(customer, "Lead form - Submit");
 
     if (!callConversion || !formConversion) {
       throw new Error("conversion_setup_failed");
