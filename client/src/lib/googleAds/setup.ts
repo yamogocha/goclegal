@@ -246,37 +246,17 @@ type CreateCampaignOpts = {
   dryRun?: boolean;
 };
 
-function normalizeError(e: any) {
-  // Google Ads structured error
-  if (e?.errors && Array.isArray(e.errors)) {
-    return {
-      error: "google_ads_error",
-      details: e.errors.map((err: any) => ({
-        message: err.message,
-        code: Object.keys(err.error_code || {})[0],
-        trigger: err.trigger?.string_value,
-      })),
-    };
-  }
 
-  // standard Error
-  if (e instanceof Error) {
-    return {
-      error: e.message,
-      details: [],
-    };
-  }
+// prevent Vercel timeout + always return JSON
 
-  // fallback
-  return {
-    error: "unknown_error",
-    details: [{ raw: JSON.stringify(e, null, 2) }],
-  };
+const MAX_DURATION_MS = 8000; // keep safely under Vercel limit (~10s hobby)
+
+function createTimer() {
+  const start = Date.now();
+  return () => Date.now() - start > MAX_DURATION_MS;
 }
 
-export async function createSearchCampaign(
-  opts: CreateCampaignOpts = {}
-) {
+export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   const {
     location = "Oakland CA",
     lat = 37.7652,
@@ -285,8 +265,9 @@ export async function createSearchCampaign(
     dryRun = false,
   } = opts;
 
-  const customer = getCustomer();
+  const isTimedOut = createTimer();
 
+  const customer = getCustomer();
   const logs: any[] = [];
   let details: any[] = [];
 
@@ -303,6 +284,8 @@ export async function createSearchCampaign(
         preview: data,
       };
     }
+
+    if (isTimedOut()) throw new Error("timeout_before_campaign");
 
     const budgetRes = await getOrCreateBudget(
       customer,
@@ -337,6 +320,16 @@ export async function createSearchCampaign(
     }]);
 
     for (const ag of data.adGroups) {
+      if (isTimedOut()) {
+        return {
+          ok: false,
+          error: "timeout_partial",
+          details,
+          logs,
+          result: { campaign: campaignRes },
+        };
+      }
+
       try {
         const adGroup = await customer.adGroups.create([{
           name: `${ag.name} ${Date.now().toString().slice(-3)}`,
@@ -358,8 +351,7 @@ export async function createSearchCampaign(
             }))
           );
         } catch (e: any) {
-          const norm = normalizeError(e);
-          details.push({ step: "keywords", ag: ag.name, ...norm });
+          details.push({ step: "keywords", ag: ag.name, error: e.message });
         }
 
         try {
@@ -375,13 +367,11 @@ export async function createSearchCampaign(
             },
           }]);
         } catch (e: any) {
-          const norm = normalizeError(e);
-          details.push({ step: "ads", ag: ag.name, ...norm });
+          details.push({ step: "ads", ag: ag.name, error: e.message });
         }
 
       } catch (e: any) {
-        const norm = normalizeError(e);
-        details.push({ step: "adgroup", ag: ag.name, ...norm });
+        details.push({ step: "adgroup", ag: ag.name, error: e.message });
       }
     }
 
@@ -396,12 +386,10 @@ export async function createSearchCampaign(
     };
 
   } catch (e: any) {
-    const norm = normalizeError(e);
-
     return {
       ok: false,
-      error: norm.error,
-      details: norm.details,
+      error: e?.message || "fatal_error",
+      details,
       logs,
       result: null,
     };
