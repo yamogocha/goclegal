@@ -527,7 +527,6 @@ export async function setupConversionsAndCalls(opts: {
   }
 }
 
-
 // // create call extension with safe phone + visibility
 export async function setupCallExtension(opts: {
   campaignResourceName: string;
@@ -595,63 +594,6 @@ export async function setupCallExtension(opts: {
     };
   }
 }
-
-// create call extension (asset) and attach to campaign minimal and scalable
-export async function setupCallExtension(opts: {
-    campaignResourceName: string;
-    phoneNumber: string;
-    countryCode?: string;
-    dryRun?: boolean;
-  }) {
-    const {
-      campaignResourceName,
-      phoneNumber,
-      countryCode = "US",
-      dryRun = false,
-    } = opts;
-  
-    const customer = getCustomer();
-  
-    if (dryRun) {
-      return {
-        ok: true,
-        preview: {
-          phoneNumber,
-          countryCode,
-          attachedTo: campaignResourceName,
-        },
-      };
-    }
-  
-    // 1) create call asset
-    const callAsset = await customer.assets.create([
-      {
-        call_asset: {
-          phone_number: phoneNumber,
-          country_code: countryCode,
-        },
-      },
-    ]);
-    const callAssetResourceName = callAsset.results?.[0]?.resource_name;
-    if (!callAssetResourceName) throw new Error("Failed to create call asset");
-  
-    // 2) attach asset to campaign
-    await customer.campaignAssets.create([
-      {
-        campaign: campaignResourceName,
-        asset: callAssetResourceName,
-        field_type: "CALL",
-      },
-    ]);
-  
-    return {
-      ok: true,
-      result: {
-        asset: callAssetResourceName,
-        campaign: campaignResourceName,
-      },
-    };
-  }
 
 
 const isDev = process.env.VERCEL_ENV !== "production";
