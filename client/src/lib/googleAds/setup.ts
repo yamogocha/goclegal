@@ -246,7 +246,50 @@ type CreateCampaignOpts = {
   dryRun?: boolean;
 };
 
-// parallelize ad group + keyword + ad creation for speed
+// harden error extraction + guarantee visibility
+
+function extractError(e: any) {
+  // google ads structured
+  if (e?.errors && Array.isArray(e.errors)) {
+    return {
+      error: "google_ads_error",
+      details: e.errors.map((x: any) => ({
+        message: x.message,
+        code: Object.keys(x.error_code || {})[0],
+        trigger: x.trigger?.string_value,
+      })),
+    };
+  }
+
+  // standard Error
+  if (e instanceof Error) {
+    return {
+      error: e.message || "error",
+      details: [{ stack: e.stack }],
+    };
+  }
+
+  // string error
+  if (typeof e === "string") {
+    return {
+      error: e,
+      details: [{ raw: e }],
+    };
+  }
+
+  // unknown object
+  try {
+    return {
+      error: "unknown_error",
+      details: [{ raw: JSON.stringify(e, null, 2) }],
+    };
+  } catch {
+    return {
+      error: "unknown_error",
+      details: [{ raw: String(e) }],
+    };
+  }
+}
 
 export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   const {
@@ -307,7 +350,6 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
       },
     }]);
 
-    // // parallel ad group processing
     await Promise.all(
       data.adGroups.map(async (ag) => {
         try {
@@ -322,7 +364,6 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
           const agRes = adGroup.results?.[0]?.resource_name;
           if (!agRes) throw new Error("adgroup failed");
 
-          // // parallel keywords + ads
           await Promise.all([
             customer.adGroupCriteria.create(
               ag.keywords.map(k => ({
@@ -330,9 +371,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
                 status: "ENABLED",
                 keyword: { text: k, match_type: "PHRASE" },
               }))
-            ).catch(e => {
-              details.push({ step: "keywords", ag: ag.name, error: e.message });
-            }),
+            ).catch(e => details.push({ step: "keywords", ag: ag.name, ...extractError(e) })),
 
             customer.adGroupAds.create([{
               ad_group: agRes,
@@ -344,13 +383,11 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
                   descriptions: ag.descriptions.map(d => ({ text: d })),
                 },
               },
-            }]).catch(e => {
-              details.push({ step: "ads", ag: ag.name, error: e.message });
-            })
+            }]).catch(e => details.push({ step: "ads", ag: ag.name, ...extractError(e) }))
           ]);
 
         } catch (e: any) {
-          details.push({ step: "adgroup", ag: ag.name, error: e.message });
+          details.push({ step: "adgroup", ag: ag.name, ...extractError(e) });
         }
       })
     );
@@ -360,16 +397,18 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
     return {
       ok,
       error: ok ? null : "partial_failure",
-      details,
+      details: ok ? [] : details,
       logs,
       result: { campaign: campaignRes },
     };
 
   } catch (e: any) {
+    const err = extractError(e);
+
     return {
       ok: false,
-      error: e?.message || "fatal_error",
-      details,
+      error: err.error,
+      details: err.details.length ? err.details : [{ fallback: "no_details_available" }],
       logs,
       result: null,
     };
