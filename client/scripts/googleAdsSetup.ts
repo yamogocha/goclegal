@@ -14,7 +14,7 @@ async function run() {
       },
       body: JSON.stringify({
         location: "Oakland CA",
-        phoneNumber: "+1510XXXXXXX",
+        phoneNumber: "+15108460928",
         dryRun: false,
       }),
     });

@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 const openai = getOpenAI();
 
+// // UPDATE schema (stronger RSA requirements)
 const CampaignSchema = z.object({
   campaign: z.object({
     name: z.string(),
@@ -16,38 +17,11 @@ const CampaignSchema = z.object({
   adGroups: z.array(
     z.object({
       name: z.string().min(5).max(100),
-      keywords: z
-        .array(
-          z
-            .string()
-            .min(3)
-            .max(40)
-            .refine(k => !/[\[\]"+]/.test(k), "no match types")
-            .refine(k => k.split(" ").length <= 6, "max 6 words")
-            .refine(k => /(lawyer|attorney|injury|accident|claim)/i.test(k), "high intent")
-        )
-        .min(5)
-        .max(10),
-      headlines: z
-        .array(
-          z
-            .string()
-            .min(12)
-            .max(30)
-            .refine(h => /(lawyer|attorney|injury|accident|claim|case)/i.test(h), "must be relevant")
-        )
-        .min(3)
-        .max(5),
-      descriptions: z
-        .array(
-          z
-            .string()
-            .min(40)
-            .max(90)
-            .refine(d => /[.!?]$/.test(d), "must end with punctuation")
-        )
-        .min(2)
-        .max(3),
+      keywords: z.array(z.string()).min(5).max(10),
+
+      // // upgraded counts
+      headlines: z.array(z.string().min(12).max(30)).length(7),
+      descriptions: z.array(z.string().min(40).max(90)).length(4),
     })
   ).min(1).max(3),
 });
@@ -87,6 +61,21 @@ const jsonSchema = {
   },
 };
 
+// map ad group → landing page (minimal + deterministic)
+function resolveFinalUrl(name: string) {
+  const n = name.toLowerCase();
+
+  if (n.includes("slip")) return "https://www.goclegal.com/slip-and-fall-injuries";
+  if (n.includes("truck")) return "https://www.goclegal.com/trucking-accidents";
+  if (n.includes("bicycle")) return "https://www.goclegal.com/bicycle-accidents";
+  if (n.includes("construction")) return "https://www.goclegal.com/construction-site-accidents";
+  if (n.includes("brain")) return "https://www.goclegal.com/traumatic-brain-injury";
+  if (n.includes("death")) return "https://www.goclegal.com/wrongful-death";
+
+  return "https://www.goclegal.com/auto-accidents";
+}
+
+
 export async function generateSearchCampaign(location = "Oakland CA") {
   const res = await openai.responses.parse({
     model: "gpt-5",
@@ -96,14 +85,22 @@ export async function generateSearchCampaign(location = "Oakland CA") {
         content: `
 ${GOC_LEGAL_BRAND_CONTEXT}
 
+RELEVANCE (CRITICAL):
+- Headlines MUST reflect ad group name topic
+- Avoid generic phrasing across groups
+
 Generate Google Search Ads with strict rules.
 
 HEADLINES (CRITICAL):
-- EXACTLY 4 per ad group
 - HARD TARGET: 20–26 characters (not 30)
 - NEVER exceed 28 characters (safety buffer)
 - If near 28, shorten wording BEFORE returning
 - Prefer 3–5 words max
+- Generate EXACTLY 7 headlines per ad group
+- First 4 MUST follow existing strict rules
+- Remaining 3 can be more flexible but MUST:
+  - include ad group topic keyword
+  - improve variation (CTA, location, urgency)
 
 - must include one of:
   lawyer, attorney, injury, accident, claim, case
@@ -161,7 +158,9 @@ If ANY rule fails → regenerate ENTIRE keyword set.
 
 DESCRIPTIONS:
 
-Generate EXACTLY 3 descriptions per ad group.
+- Generate EXACTLY 4 descriptions per ad group
+- First 3 follow existing strict rules
+- 4th adds variation (CTA or urgency)
 
 HARD LENGTH RULE (CRITICAL):
 - TARGET 55–75 characters
@@ -376,21 +375,34 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
             details.push({ step: "keywords", ag: ag.name, error: e.message });
           }
 
-          try {
-            await customer.adGroupAds.create([{
-              ad_group: agRes,
-              status: "PAUSED",
-              ad: {
-                final_urls: ["https://www.goclegal.com/auto-accidents"],
-                responsive_search_ad: {
-                  headlines: ag.headlines.map(h => ({ text: h })),
-                  descriptions: ag.descriptions.map(d => ({ text: d })),
-                },
+          // // improved RSA: enabled + more assets + correct URL
+          await customer.adGroupAds.create([{
+            ad_group: agRes,
+            status: "ENABLED", // ✅ FIX paused ads
+            ad: {
+              final_urls: [resolveFinalUrl(ag.name)], // ✅ FIX landing page
+              responsive_search_ad: {
+                headlines: ag.headlines.slice(0, 7).map(h => ({ text: h })), // ✅ 7 headlines
+                descriptions: ag.descriptions.slice(0, 4).map(d => ({ text: d })), // ✅ 4 descriptions
               },
-            }]);
-          } catch (e: any) {
-            details.push({ step: "ads", ag: ag.name, error: e.message });
-          }
+            },
+          }]).then(() => {
+            logs.push({
+              step: "rsa_created",
+              adGroup: ag.name,
+              url: resolveFinalUrl(ag.name),
+              headlines: ag.headlines.length,
+              descriptions: ag.descriptions.length,
+            });
+          }).catch(e => {
+            const err = extractError(e);
+            details.push({
+              step: "ads",
+              ag: ag.name,
+              error: err.error,
+              details: err.details,
+            });
+          });
 
         } catch (e: any) {
           details.push({ step: "adgroup", ag: ag.name, error: e.message });
@@ -445,13 +457,6 @@ async function getOrCreateConversion(customer: any, name: string, payload: any) 
 
     throw e;
   }
-}
-
-// normalize phone (remove vanity / non-digits)
-function normalizePhone(phone: string) {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 10) throw new Error("invalid_phone_number");
-  return digits;
 }
 
 // // create conversion tracking + attach safely
@@ -527,7 +532,7 @@ export async function setupConversionsAndCalls(opts: {
   }
 }
 
-// // create call extension with safe phone + visibility
+// // strict phone validation + clear error + no mutation
 export async function setupCallExtension(opts: {
   campaignResourceName: string;
   phoneNumber: string;
@@ -543,6 +548,20 @@ export async function setupCallExtension(opts: {
 
   const customer = getCustomer();
 
+  // // strict E.164 validation (production safe)
+  const isValidPhone = /^\+?[1-9]\d{9,14}$/.test(phoneNumber);
+
+  if (!isValidPhone) {
+    return {
+      ok: false,
+      error: "invalid_phone_number",
+      details: [{
+        message: "Phone must be valid E.164 format (e.g. +15101234567)",
+        input: phoneNumber,
+      }],
+    };
+  }
+
   if (dryRun) {
     return {
       ok: true,
@@ -555,32 +574,26 @@ export async function setupCallExtension(opts: {
   }
 
   try {
-    const cleanPhone = normalizePhone(phoneNumber);
-
-    const callAsset = await customer.assets.create([
-      {
-        call_asset: {
-          phone_number: cleanPhone,
-          country_code: countryCode,
-        },
+    const callAsset = await customer.assets.create([{
+      call_asset: {
+        phone_number: phoneNumber, // // no mutation
+        country_code: countryCode,
       },
-    ]);
+    }]);
 
-    const callAssetResourceName = callAsset.results?.[0]?.resource_name;
-    if (!callAssetResourceName) throw new Error("call_asset_failed");
+    const asset = callAsset.results?.[0]?.resource_name;
+    if (!asset) throw new Error("call_asset_failed");
 
-    await customer.campaignAssets.create([
-      {
-        campaign: campaignResourceName,
-        asset: callAssetResourceName,
-        field_type: "CALL",
-      },
-    ]);
+    await customer.campaignAssets.create([{
+      campaign: campaignResourceName,
+      asset,
+      field_type: "CALL",
+    }]);
 
     return {
       ok: true,
       result: {
-        asset: callAssetResourceName,
+        asset,
         campaign: campaignResourceName,
       },
     };

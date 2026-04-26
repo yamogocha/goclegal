@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const {
       location = "Oakland CA",
-      phoneNumber = "5108460928",
+      phoneNumber = "+15108460928",
       dryRun = false,
     } = body;
 
