@@ -246,15 +246,7 @@ type CreateCampaignOpts = {
   dryRun?: boolean;
 };
 
-
-// prevent Vercel timeout + always return JSON
-
-const MAX_DURATION_MS = 8000; // keep safely under Vercel limit (~10s hobby)
-
-function createTimer() {
-  const start = Date.now();
-  return () => Date.now() - start > MAX_DURATION_MS;
-}
+// parallelize ad group + keyword + ad creation for speed
 
 export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   const {
@@ -265,11 +257,9 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
     dryRun = false,
   } = opts;
 
-  const isTimedOut = createTimer();
-
   const customer = getCustomer();
   const logs: any[] = [];
-  let details: any[] = [];
+  const details: any[] = [];
 
   try {
     const data = await generateSearchCampaign(location);
@@ -284,8 +274,6 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
         preview: data,
       };
     }
-
-    if (isTimedOut()) throw new Error("timeout_before_campaign");
 
     const budgetRes = await getOrCreateBudget(
       customer,
@@ -319,61 +307,53 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
       },
     }]);
 
-    for (const ag of data.adGroups) {
-      if (isTimedOut()) {
-        return {
-          ok: false,
-          error: "timeout_partial",
-          details,
-          logs,
-          result: { campaign: campaignRes },
-        };
-      }
-
-      try {
-        const adGroup = await customer.adGroups.create([{
-          name: `${ag.name} ${Date.now().toString().slice(-3)}`,
-          campaign: campaignRes,
-          type: "SEARCH_STANDARD",
-          cpc_bid_micros: 2_000_000,
-          status: "PAUSED",
-        }]);
-
-        const agRes = adGroup.results?.[0]?.resource_name;
-        if (!agRes) throw new Error("adgroup failed");
-
+    // // parallel ad group processing
+    await Promise.all(
+      data.adGroups.map(async (ag) => {
         try {
-          await customer.adGroupCriteria.create(
-            ag.keywords.map(k => ({
-              ad_group: agRes,
-              status: "ENABLED",
-              keyword: { text: k, match_type: "PHRASE" },
-            }))
-          );
-        } catch (e: any) {
-          details.push({ step: "keywords", ag: ag.name, error: e.message });
-        }
-
-        try {
-          await customer.adGroupAds.create([{
-            ad_group: agRes,
+          const adGroup = await customer.adGroups.create([{
+            name: `${ag.name} ${Date.now().toString().slice(-3)}`,
+            campaign: campaignRes,
+            type: "SEARCH_STANDARD",
+            cpc_bid_micros: 2_000_000,
             status: "PAUSED",
-            ad: {
-              final_urls: ["https://www.goclegal.com/auto-accidents"],
-              responsive_search_ad: {
-                headlines: ag.headlines.map(h => ({ text: h })),
-                descriptions: ag.descriptions.map(d => ({ text: d })),
-              },
-            },
           }]);
-        } catch (e: any) {
-          details.push({ step: "ads", ag: ag.name, error: e.message });
-        }
 
-      } catch (e: any) {
-        details.push({ step: "adgroup", ag: ag.name, error: e.message });
-      }
-    }
+          const agRes = adGroup.results?.[0]?.resource_name;
+          if (!agRes) throw new Error("adgroup failed");
+
+          // // parallel keywords + ads
+          await Promise.all([
+            customer.adGroupCriteria.create(
+              ag.keywords.map(k => ({
+                ad_group: agRes,
+                status: "ENABLED",
+                keyword: { text: k, match_type: "PHRASE" },
+              }))
+            ).catch(e => {
+              details.push({ step: "keywords", ag: ag.name, error: e.message });
+            }),
+
+            customer.adGroupAds.create([{
+              ad_group: agRes,
+              status: "PAUSED",
+              ad: {
+                final_urls: ["https://www.goclegal.com/auto-accidents"],
+                responsive_search_ad: {
+                  headlines: ag.headlines.map(h => ({ text: h })),
+                  descriptions: ag.descriptions.map(d => ({ text: d })),
+                },
+              },
+            }]).catch(e => {
+              details.push({ step: "ads", ag: ag.name, error: e.message });
+            })
+          ]);
+
+        } catch (e: any) {
+          details.push({ step: "adgroup", ag: ag.name, error: e.message });
+        }
+      })
+    );
 
     const ok = details.length === 0;
 
