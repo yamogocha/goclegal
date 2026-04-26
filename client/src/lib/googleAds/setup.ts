@@ -96,9 +96,9 @@ HEADLINES (CRITICAL):
 - NEVER exceed 28 characters (safety buffer)
 - If near 28, shorten wording BEFORE returning
 - Prefer 3–5 words max
-- Generate EXACTLY 7 headlines per ad group
-- First 4 MUST follow existing strict rules
-- Remaining 3 can be more flexible but MUST:
+- Generate EXACTLY 15 headlines per ad group
+- First 8 MUST follow existing strict rules
+- Remaining 7 can be more flexible but MUST:
   - include ad group topic keyword
   - improve variation (CTA, location, urgency)
 
@@ -124,7 +124,7 @@ CORE RULE:
 - Extract the main topic from the ad group name and use it in keywords
 
 EXAMPLES:
-- "Slip and Fall" → must include: slip, fall
+- "Slip and Fall" → must include: slip OR fall OR "slip & fall"
 - "Auto Accidents" → must include: auto, car, accident
 - "Lowball Insurance Offers" → must include: insurance
 
