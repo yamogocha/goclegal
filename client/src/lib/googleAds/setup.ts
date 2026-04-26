@@ -350,6 +350,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
       },
     }]);
 
+    // // parallel ad groups, sequential operations inside each (fix database_error)
     await Promise.all(
       data.adGroups.map(async (ag) => {
         try {
@@ -364,16 +365,21 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
           const agRes = adGroup.results?.[0]?.resource_name;
           if (!agRes) throw new Error("adgroup failed");
 
-          await Promise.all([
-            customer.adGroupCriteria.create(
+          // // SEQUENTIAL (critical fix)
+          try {
+            await customer.adGroupCriteria.create(
               ag.keywords.map(k => ({
                 ad_group: agRes,
                 status: "ENABLED",
                 keyword: { text: k, match_type: "PHRASE" },
               }))
-            ).catch(e => details.push({ step: "keywords", ag: ag.name, ...extractError(e) })),
+            );
+          } catch (e: any) {
+            details.push({ step: "keywords", ag: ag.name, error: e.message });
+          }
 
-            customer.adGroupAds.create([{
+          try {
+            await customer.adGroupAds.create([{
               ad_group: agRes,
               status: "PAUSED",
               ad: {
@@ -383,11 +389,13 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
                   descriptions: ag.descriptions.map(d => ({ text: d })),
                 },
               },
-            }]).catch(e => details.push({ step: "ads", ag: ag.name, ...extractError(e) }))
-          ]);
+            }]);
+          } catch (e: any) {
+            details.push({ step: "ads", ag: ag.name, error: e.message });
+          }
 
         } catch (e: any) {
-          details.push({ step: "adgroup", ag: ag.name, ...extractError(e) });
+          details.push({ step: "adgroup", ag: ag.name, error: e.message });
         }
       })
     );
