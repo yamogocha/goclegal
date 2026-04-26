@@ -85,62 +85,69 @@ export async function generateSearchCampaign(location = "Oakland CA") {
         content: `
 ${GOC_LEGAL_BRAND_CONTEXT}
 
-RELEVANCE (CRITICAL):
-- Headlines MUST reflect ad group name topic
-- Avoid generic phrasing across groups
-
 Generate Google Search Ads with strict rules.
 
-HEADLINES (CRITICAL):
-- HARD TARGET: 20–26 characters (not 30)
-- NEVER exceed 28 characters (safety buffer)
-- If near 28, shorten wording BEFORE returning
-- Prefer 3–5 words max
+HEADLINES (CRITICAL + RELEVANT):
 - Generate EXACTLY 15 headlines per ad group
-- First 8 MUST follow existing strict rules
-- Remaining 7 can be more flexible but MUST:
-  - include ad group topic keyword
-  - improve variation (CTA, location, urgency)
+- HARD TARGET: 20–26 characters
+- NEVER exceed 28 characters
+- Prefer 3–5 words max
 
+RELEVANCE:
+- MUST directly reflect ad group name topic
+- MUST align with final landing page intent
+- Avoid generic phrasing across ad groups
+
+CONTENT RULES:
 - must include one of:
   lawyer, attorney, injury, accident, claim, case
 
-ROLES:
-1. Authority
-2. Outcome
-3. Process
-4. Risk (max 1)
+STRUCTURE:
+- First 8 headlines follow strict format
+- Remaining 7 increase variation (CTA, urgency, trust)
 
-- no filler words
-- no commas
-- natural phrasing only
+VARIATION REQUIREMENTS:
+- include at least:
+  - 3 keyword-based headlines
+  - 3 benefit/outcome headlines
+  - 3 CTA headlines (call today, free consult, etc.)
+  - 2 trust/authority headlines
 
-KEYWORDS (STRICT + TIED TO AD GROUP):
+DIVERSITY:
+- ALL 15 must be unique
+- no repeated phrasing or templates
 
-Generate 10 keywords per ad group.
+SELF-CHECK:
+- if any headlines are similar → rewrite
+- ensure strong variation before returning
 
-CORE RULE:
-- Keywords MUST directly reflect the ad group name
-- Extract the main topic from the ad group name and use it in keywords
+
+KEYWORDS (STRICT + RELEVANT TO AD GROUP):
+
+Generate EXACTLY 10 keywords per ad group.
+
+RELEVANCE:
+- MUST directly reflect ad group name topic
+- MUST align with landing page topic
 
 EXAMPLES:
-- "Slip and Fall" → must include: slip OR fall OR "slip & fall"
+- "Slip and Fall" → must include: slip OR fall OR "slip and fall"
 - "Auto Accidents" → must include: auto, car, accident
-- "Lowball Insurance Offers" → must include: insurance
 
 HARD REQUIREMENTS:
-- each keyword MUST include:
+- include:
   1. "oakland"
-  2. one intent word: lawyer or attorney
-  3. at least one word from the ad group name topic
+  2. lawyer OR attorney
+  3. ad group topic word
 
+FORMAT:
 - <= 6 words
 - <= 40 characters
 - lowercase only
 
 STRICT SEPARATION:
-- keywords across ad groups MUST be different
-- DO NOT reuse the same keyword in multiple groups
+- keywords MUST be unique across ad groups
+- no reuse across groups
 
 POLICY:
 - avoid "injury claim"
@@ -148,34 +155,37 @@ POLICY:
 - no health condition targeting
 
 SELF-CHECK:
-For each keyword:
-1. matches ad group topic → else REWRITE
-2. contains "oakland" → else REWRITE
-3. contains lawyer/attorney → else REWRITE
-4. not used in other groups → else REWRITE
+- if keyword not tied to ad group → rewrite
+- if duplicate across groups → rewrite
+- if violates policy → rewrite
+- if ANY fails → regenerate ALL keywords
 
-If ANY rule fails → regenerate ENTIRE keyword set.
 
-DESCRIPTIONS:
+DESCRIPTIONS (CRITICAL + RELEVANT):
 
-- Generate EXACTLY 4 descriptions per ad group
-- First 3 follow existing strict rules
-- 4th adds variation (CTA or urgency)
+Generate EXACTLY 4 descriptions per ad group.
 
-HARD LENGTH RULE (CRITICAL):
-- TARGET 55–75 characters
-- NEVER go below 45 characters
-- If under 45, expand before returning
-
-ROLE ASSIGNMENT:
-1. Authority
-2. Outcome
-3. Process OR Risk
+RELEVANCE:
+- MUST match ad group topic
+- MUST align with landing page messaging
 
 STRUCTURE:
 - full sentences
 - must end with punctuation
 - natural phrasing
+
+LENGTH:
+- TARGET 55–75 characters
+- NEVER below 45
+
+ROLE ASSIGNMENT:
+1. Authority
+2. Outcome
+3. Process
+4. CTA / urgency
+
+DIVERSITY:
+- all 4 must be different in intent and phrasing
 
 CONSTRAINTS:
 - max ONE numeric proof per campaign
@@ -183,7 +193,7 @@ CONSTRAINTS:
 - no truncation
 
 IMPORTANT:
-- prioritize meeting minimum length over brevity
+- prioritize minimum length and clarity over brevity
 `,
       },
       {
@@ -382,7 +392,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
             ad: {
               final_urls: [resolveFinalUrl(ag.name)], // ✅ FIX landing page
               responsive_search_ad: {
-                headlines: ag.headlines.slice(0, 7).map(h => ({ text: h })), // ✅ 7 headlines
+                headlines: ag.headlines.slice(0, 15).map(h => ({ text: h })), // ✅ 15 headlines
                 descriptions: ag.descriptions.slice(0, 4).map(d => ({ text: d })), // ✅ 4 descriptions
               },
             },
@@ -433,30 +443,16 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   }
 }
 
-// // idempotent conversion + phone normalization + full visibility
-
-// reuse or create conversion by name
-async function getOrCreateConversion(customer: any, name: string, payload: any) {
-  try {
-    const res = await customer.conversionActions.create([{ name, ...payload }]);
-    return res.results?.[0]?.resource_name;
-  } catch (e: any) {
-    const msg = JSON.stringify(e);
-
-    // duplicate -> fetch existing
-    if (msg.includes("DUPLICATE") || msg.includes("already exists")) {
-      const query = `
-        SELECT conversion_action.resource_name
-        FROM conversion_action
-        WHERE conversion_action.name = '${name}'
-        LIMIT 1
-      `;
-      const found = await customer.query(query);
-      return found?.[0]?.conversion_action?.resource_name;
-    }
-
-    throw e;
-  }
+// // reuse existing conversions only
+async function getExistingConversion(customer: any, name: string) {
+  const query = `
+    SELECT conversion_action.resource_name
+    FROM conversion_action
+    WHERE conversion_action.name = '${name}'
+    LIMIT 1
+  `;
+  const found = await customer.query(query);
+  return found?.[0]?.conversion_action?.resource_name || null;
 }
 
 // // create conversion tracking + attach safely
@@ -478,14 +474,14 @@ export async function setupConversionsAndCalls(opts: {
   }
 
   try {
-    const callConversion = await getOrCreateConversion(customer, "Calls from Ads", {
+    const callConversion = await getExistingConversion(customer, "Phone call lead", {
       type: "AD_CALL",
       category: "DEFAULT",
       status: "ENABLED",
       value_settings: { default_value: 1, always_use_default_value: true },
     });
 
-    const formConversion = await getOrCreateConversion(customer, "Form Submissions", {
+    const formConversion = await getExistingConversion(customer, "Submit lead form", {
       type: "WEBPAGE",
       category: "DEFAULT",
       status: "ENABLED",
