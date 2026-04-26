@@ -118,48 +118,46 @@ ROLES:
 - no commas
 - natural phrasing only
 
-KEYWORDS (STRICT + POLICY SAFE):
+KEYWORDS (STRICT + TIED TO AD GROUP):
 
 Generate 6–8 keywords per ad group.
 
-ALLOWED INTENT (REQUIRED):
-- must include one of:
-  lawyer, attorney
+CORE RULE:
+- Keywords MUST directly reflect the ad group name
+- Extract the main topic from the ad group name and use it in keywords
 
-SAFE PHRASES:
-- accident lawyer
-- personal injury attorney
-- injury lawyer
+EXAMPLES:
+- "Slip and Fall" → must include: slip, fall
+- "Auto Accidents" → must include: auto, car, accident
+- "Lowball Insurance Offers" → must include: insurance
 
-POLICY RULES (CRITICAL):
-- DO NOT combine "injury" with "accident"
-- DO NOT combine "injury" with specific events
-- DO NOT use phrases like:
-  injury claim, accident injury, fall injury
-- DO NOT imply a person’s condition
+HARD REQUIREMENTS:
+- each keyword MUST include:
+  1. "oakland"
+  2. one intent word: lawyer or attorney
+  3. at least one word from the ad group name topic
 
-SAFE STRUCTURE:
-- use EITHER:
-  [location] + accident lawyer
-  OR
-  [location] + personal injury attorney
-  OR
-  [location] + injury lawyer
-
-FORMAT:
-- include "oakland"
 - <= 6 words
 - <= 40 characters
 - lowercase only
 
-SELF-CHECK (REQUIRED):
-Reject and rewrite if:
-- contains "accident injury"
-- contains "injury claim"
-- contains event + injury combo
-- exceeds 40 characters
+STRICT SEPARATION:
+- keywords across ad groups MUST be different
+- DO NOT reuse the same keyword in multiple groups
 
-If ANY keyword fails, rewrite it before returning.
+POLICY:
+- avoid "injury claim"
+- avoid "accident injury"
+- no health condition targeting
+
+SELF-CHECK:
+For each keyword:
+1. matches ad group topic → else REWRITE
+2. contains "oakland" → else REWRITE
+3. contains lawyer/attorney → else REWRITE
+4. not used in other groups → else REWRITE
+
+If ANY rule fails → regenerate ENTIRE keyword set.
 
 DESCRIPTIONS:
 
@@ -423,78 +421,180 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   }
 }
 
-// create conversion tracking + call optimization and attach to campaign minimal and scalable
-export async function setupConversionsAndCalls(opts: {
-    campaignResourceName: string;
-    dryRun?: boolean;
-  } ) {
-    const { campaignResourceName, dryRun = false } = opts;
-    const customer = getCustomer();
-  
-    if (dryRun) {
-      return {
-        ok: true,
-        preview: {
-          conversions: ["CALL", "FORM"],
-          callReporting: true,
-        },
-      };
+// // idempotent conversion + phone normalization + full visibility
+
+// reuse or create conversion by name
+async function getOrCreateConversion(customer: any, name: string, payload: any) {
+  try {
+    const res = await customer.conversionActions.create([{ name, ...payload }]);
+    return res.results?.[0]?.resource_name;
+  } catch (e: any) {
+    const msg = JSON.stringify(e);
+
+    // duplicate -> fetch existing
+    if (msg.includes("DUPLICATE") || msg.includes("already exists")) {
+      const query = `
+        SELECT conversion_action.resource_name
+        FROM conversion_action
+        WHERE conversion_action.name = '${name}'
+        LIMIT 1
+      `;
+      const found = await customer.query(query);
+      return found?.[0]?.conversion_action?.resource_name;
     }
-  
-    // 1) create call conversion (primary)
-    const callConversion = await customer.conversionActions.create([
-      {
-        name: "Calls from Ads",
-        type: "AD_CALL",
-        category: "DEFAULT",
-        status: "ENABLED",
-        value_settings: { default_value: 1, always_use_default_value: true },
+
+    throw e;
+  }
+}
+
+// normalize phone (remove vanity / non-digits)
+function normalizePhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10) throw new Error("invalid_phone_number");
+  return digits;
+}
+
+// // create conversion tracking + attach safely
+export async function setupConversionsAndCalls(opts: {
+  campaignResourceName: string;
+  dryRun?: boolean;
+}) {
+  const { campaignResourceName, dryRun = false } = opts;
+  const customer = getCustomer();
+
+  if (dryRun) {
+    return {
+      ok: true,
+      preview: {
+        conversions: ["CALL", "FORM"],
+        callReporting: true,
       },
-    ]);
-    const callConversionResourceName = callConversion.results?.[0]?.resource_name;
-    if (!callConversionResourceName) throw new Error("Failed to create call conversion");
-  
-    // 2) create website form conversion (secondary)
-    const formConversion = await customer.conversionActions.create([
-      {
-        name: "Form Submissions",
-        type: "WEBPAGE",
-        category: "DEFAULT",
-        status: "ENABLED",
-        value_settings: { default_value: 1, always_use_default_value: true },
-      },
-    ]);
-    const formConversionResourceName = formConversion.results?.[0]?.resource_name;
-    if (!formConversionResourceName) throw new Error("Failed to create form conversion");
-  
-    // 3) enable call reporting at campaign level
+    };
+  }
+
+  try {
+    const callConversion = await getOrCreateConversion(customer, "Calls from Ads", {
+      type: "AD_CALL",
+      category: "DEFAULT",
+      status: "ENABLED",
+      value_settings: { default_value: 1, always_use_default_value: true },
+    });
+
+    const formConversion = await getOrCreateConversion(customer, "Form Submissions", {
+      type: "WEBPAGE",
+      category: "DEFAULT",
+      status: "ENABLED",
+      value_settings: { default_value: 1, always_use_default_value: true },
+    });
+
+    if (!callConversion || !formConversion) {
+      throw new Error("conversion_setup_failed");
+    }
+
     await customer.campaigns.update([
       {
         resource_name: campaignResourceName,
         call_reporting_setting: {
           call_reporting_enabled: true,
-          call_conversion_action: callConversionResourceName,
+          call_conversion_action: callConversion,
         },
       },
     ] as any);
-  
-    // 4) (optional but recommended) switch to maximize conversions
+
     await customer.campaigns.update([
       {
         resource_name: campaignResourceName,
         maximize_conversions: {},
       },
     ]);
-  
+
     return {
       ok: true,
       result: {
-        callConversion: callConversionResourceName,
-        formConversion: formConversionResourceName,
+        callConversion,
+        formConversion,
         campaign: campaignResourceName,
       },
     };
+
+  } catch (e: any) {
+    const err = extractError(e);
+    return {
+      ok: false,
+      error: err.error,
+      details: err.details,
+    };
   }
+}
+
+
+// // create call extension with safe phone + visibility
+export async function setupCallExtension(opts: {
+  campaignResourceName: string;
+  phoneNumber: string;
+  countryCode?: string;
+  dryRun?: boolean;
+}) {
+  const {
+    campaignResourceName,
+    phoneNumber,
+    countryCode = "US",
+    dryRun = false,
+  } = opts;
+
+  const customer = getCustomer();
+
+  if (dryRun) {
+    return {
+      ok: true,
+      preview: {
+        phoneNumber,
+        countryCode,
+        attachedTo: campaignResourceName,
+      },
+    };
+  }
+
+  try {
+    const cleanPhone = normalizePhone(phoneNumber);
+
+    const callAsset = await customer.assets.create([
+      {
+        call_asset: {
+          phone_number: cleanPhone,
+          country_code: countryCode,
+        },
+      },
+    ]);
+
+    const callAssetResourceName = callAsset.results?.[0]?.resource_name;
+    if (!callAssetResourceName) throw new Error("call_asset_failed");
+
+    await customer.campaignAssets.create([
+      {
+        campaign: campaignResourceName,
+        asset: callAssetResourceName,
+        field_type: "CALL",
+      },
+    ]);
+
+    return {
+      ok: true,
+      result: {
+        asset: callAssetResourceName,
+        campaign: campaignResourceName,
+      },
+    };
+
+  } catch (e: any) {
+    const err = extractError(e);
+    return {
+      ok: false,
+      error: err.error,
+      details: err.details,
+    };
+  }
+}
 
 // create call extension (asset) and attach to campaign minimal and scalable
 export async function setupCallExtension(opts: {
