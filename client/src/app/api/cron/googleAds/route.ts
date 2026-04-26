@@ -1,5 +1,5 @@
-// client/src/app/api/cron/googleAds/route.ts
-import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "@/lib/googleAds/optimize";
+// api route (single execution)
+import { runCoreOptimization } from "@/lib/googleAds/optimize";
 import { verifyCronAuth } from "@/lib/oauth";
 
 export const runtime = "nodejs";
@@ -12,15 +12,12 @@ export async function POST(req: Request): Promise<Response> {
   const dryRun = searchParams.get("dryRun") === "true";
 
   try {
+    const result = await runCoreOptimization({ dryRun });
 
-    const keywordExpansion = await runKeywordExpansion({ dryRun });
-    const negativeKeyword = await runNegativeKeywordStrategy({ dryRun });
-    const budgetAllocation = await runBudgetAllocation();
-
-    return Response.json({ ok: true, 
-      keywordExpansion, 
-      negativeKeyword,
-      budgetAllocation,
+    return Response.json({
+      ok: true,
+      dryRun,
+      ...result,
     });
   } catch (err) {
     console.error("[GOOGLE ADS ERROR]", err);

@@ -171,173 +171,6 @@ async function addExactMatchKeyword(params: {
   ]);
 }
 
-// ai generation helper
-async function decideKeywords(
-  terms: string[]
-): Promise<KeywordDecision[]> {
-  const prompt = `
-You convert search terms into Google Ads keywords.
-
-ONLY return JSON.
-
-GOAL:
-Compress each term into ONE short, high-intent keyword.
-
-RULES:
-- 2 to 4 words ONLY
-- Must represent hiring intent
-- Remove filler words (how, to, handle, need, etc.)
-- Prefer "lawyer" or "attorney"
-- Add location if useful (oakland)
-- No explanations
-
-EXAMPLES:
-
-Input: how to handle a personal injury case from start to finish
-Output: personal injury lawyer
-
-Input: i need a personal injury lawyer
-Output: personal injury lawyer
-
-Input: legal aid oakland
-Output: personal injury lawyer oakland
-
-FORMAT:
-[
-  {
-    "term": "input",
-    "keyword": "compressed keyword"
-  }
-]
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5",
-    input: `${GOC_LEGAL_BRAND_CONTEXT}
-
-TERMS:
-${terms.join("\n")}
-
-${prompt}`,
-  });
-
-  try {
-    const parsed = JSON.parse(res.output_text || "[]");
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter((x): x is KeywordDecision => {
-      return (
-        x &&
-        typeof x.term === "string" &&
-        typeof x.keyword === "string"
-      );
-    });
-  } catch {
-    console.error("AI parse error");
-    return [];
-  }
-}
-
-// types
-type KeywordDecision = {
-  term: string;
-  keyword: string;
-};
-
-export async function runKeywordExpansion({ dryRun = false } = {}) {
-
-  const results: Array<{ action: string; keyword: string }> = [];
-  const added = new Set<string>();
-
-  const normalize = (s: string) =>
-    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
-
-  // enforce google-friendly keyword length
-  const isValidLength = (kw: string) => {
-    const words = kw.split(/\s+/);
-    return words.length >= 2 && words.length <= 4;
-  };
-
-  // dedupe by simplified root
-  const getRoot = (kw: string) =>
-    kw
-      .replace(/\b(near me|oakland|california)\b/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  // -------------------------
-  // FETCH
-  // -------------------------
-  const terms = await getSearchTermWinners();
-
-  const candidates = terms
-    .filter((t: any) => t.score >= 2 && t.term)
-    .slice(0, 5);
-
-  if (!candidates.length) return results;
-
-  const inputTerms = candidates.map((t: any) =>
-    normalize(String(t.term))
-  );
-
-  // -------------------------
-  // AI (single call)
-  // -------------------------
-  const decisions = await decideKeywords(inputTerms);
-
-  const map = new Map<string, KeywordDecision>(
-    decisions.map((d) => [normalize(d.term), d])
-  );
-
-  const rootSet = new Set<string>();
-  const MAX_TOTAL = 5;
-
-  // -------------------------
-  // PROCESS
-  // -------------------------
-  for (const term of inputTerms) {
-    if (results.length >= MAX_TOTAL) break;
-
-    const d = map.get(term);
-    if (!d) continue;
-
-    const kw = normalize(d.keyword);
-
-    if (!isValidLength(kw)) {
-      console.log("[SKIP LENGTH]", kw);
-      continue;
-    }
-
-    const root = getRoot(kw);
-
-    if (rootSet.has(root)) {
-      console.log("[SKIP DUP]", kw);
-      continue;
-    }
-
-    rootSet.add(root);
-
-    if (!dryRun) {
-      try {
-        await addExactMatchKeyword({
-          adGroupId: candidates[0].adGroupId,
-          keyword: kw,
-        });
-        console.log("[ADDED]", kw);
-        results.push({ action: "add_keyword", keyword: kw });
-      } catch (err) {
-        console.error("[FAILED]", kw, err);
-      }
-    }
-    results.push({ action: "add_keyword", keyword: kw });
-  }
-
-  return results;
-}
-
-
-
 async function addNegativeKeyword(params: {
   campaignId: string;
   keyword: string;
@@ -368,174 +201,6 @@ async function addNegativeKeyword(params: {
     },
   ]);
 }
-
-// ai generation helper
-async function decideNegatives(
-  terms: string[]
-): Promise<NegativeDecision[]> {
-  const prompt = `
-You analyze search terms for Google Ads.
-
-ONLY return JSON.
-
-GOAL:
-Identify low-intent or irrelevant searches and convert them into clean negative keywords.
-
-RULES:
-- If NOT likely to hire a lawyer → negative = true
-- If high intent → negative = false
-
-NEGATIVE KEYWORD RULES:
-- Must be natural phrase (not awkward fragments)
-- 2 to 4 words
-- Keep meaning of original term
-- Remove filler but keep clarity
-- Avoid overly broad words
-
-BAD:
-"how to"
-"what is"
-"free"
-
-GOOD:
-"how to handle injury claim"
-"legal aid services"
-"injury claim process"
-
-FORMAT:
-[
-  {
-    "term": "input",
-    "negative": true/false,
-    "keyword": "clean phrase"
-  }
-]
-`;
-
-  const res = await openai.responses.create({
-    model: "gpt-5",
-    input: `${GOC_LEGAL_BRAND_CONTEXT}
-
-TERMS:
-${terms.join("\n")}
-
-${prompt}`,
-  });
-
-  try {
-    const parsed = JSON.parse(res.output_text || "[]");
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter((x): x is NegativeDecision => {
-      return (
-        x &&
-        typeof x.term === "string" &&
-        typeof x.negative === "boolean" &&
-        typeof x.keyword === "string"
-      );
-    });
-  } catch {
-    console.error("AI parse error");
-    return [];
-  }
-}
-
-// types
-type NegativeDecision = {
-  term: string;
-  negative: boolean;
-  keyword: string;
-};
-
-export async function runNegativeKeywordStrategy({ dryRun = false } = {}) {
-
-  const results: Array<{ action: string; keyword: string }> = [];
-  const added = new Set<string>();
-
-  const normalize = (s: string) =>
-    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
-
-  const isValid = (kw: string) => {
-    if (!kw) return false;
-
-    const words = kw.split(/\s+/);
-
-    // allow slightly more natural phrases
-    if (words.length < 2 || words.length > 4) return false;
-
-    return true;
-  };
-
-  // -------------------------
-  // FETCH
-  // -------------------------
-  const terms = await getSearchTermWinners();
-
-  const candidates = terms
-    .filter((t: any) => t.term)
-    .slice(0, 10);
-
-  if (!candidates.length) return results;
-
-  const inputTerms = candidates.map((t: any) =>
-    normalize(String(t.term))
-  );
-
-  // -------------------------
-  // AI
-  // -------------------------
-  const decisions = await decideNegatives(inputTerms);
-
-  const map = new Map<string, NegativeDecision>(
-    decisions.map((d) => [normalize(d.term), d])
-  );
-
-  const MAX_TOTAL = 8;
-
-  // -------------------------
-  // PROCESS
-  // -------------------------
-  for (const term of inputTerms) {
-    if (results.length >= MAX_TOTAL) break;
-
-    const d = map.get(term);
-    if (!d || !d.negative) continue;
-
-    const kw = normalize(d.keyword);
-
-    if (!isValid(kw)) {
-      console.log("[SKIP INVALID]", kw);
-      continue;
-    }
-
-    if (added.has(kw)) {
-      console.log("[SKIP DUP]", kw);
-      continue;
-    }
-
-    added.add(kw);
-
-    if (!dryRun) {
-      try {
-        await addNegativeKeyword({
-          campaignId: candidates[0].campaignId,
-          keyword: kw,
-        });
-        console.log("[NEGATIVE ADDED]", kw);
-      } catch (err) {
-        console.error("[NEGATIVE FAILED]", kw, err);
-        continue;
-      }
-    }
-
-    // ✅ ALWAYS push result (fix)
-    results.push({ action: "add_negative", keyword: kw });
-  }
-
-  return results;
-}
-
 
 
 export async function getCampaignStats(): Promise<CampaignStat[]> {
@@ -618,7 +283,6 @@ export async function updateCampaignBudget({
     },
   ]);
 }
-
 // types
 type CampaignStat = {
   campaignId: string;
@@ -627,160 +291,6 @@ type CampaignStat = {
   clicks: number;
   conversions: number;
 };
-type BudgetDecision = {
-  campaignId: string;
-  action: "increase" | "decrease" | "none";
-  oldBudget: number;
-  newBudget: number;
-
-  performance: {
-    clicks: number;
-    conversions: number;
-    cost: number;
-    cpa: number;
-  };
-
-  topKeywords: {
-    term: string;
-    clicks: number;
-    conversions: number;
-    cpa: number;
-    score: number;
-  }[];
-
-  reason: string[];
-};
-
-export async function runBudgetAllocation() {
-  console.log("[BUDGET] Starting allocation");
-
-  // -------------------------
-  // CONFIG (minimal + safe)
-  // -------------------------
-  const MIN_CLICKS = 20;
-  const MIN_COST = 50;
-
-  const INCREASE_RATE = 0.15;
-  const DECREASE_RATE = 0.15;
-
-  const MIN_BUDGET = 5;
-  const MAX_CHANGE = 0.2;
-
-  // -------------------------
-  // FETCH (ONLY ONCE)
-  // -------------------------
-  const [campaigns, terms] = await Promise.all([
-    getCampaignStats(),
-    getSearchTermWinners(), // reuse existing engine
-  ]);
-
-  if (!campaigns.length) return [];
-
-  const results: BudgetDecision[] = [];
-
-  // -------------------------
-  // PROCESS
-  // -------------------------
-  for (const c of campaigns) {
-    const { campaignId, budget, cost, clicks, conversions } = c;
-
-    // 🚫 skip low data
-    if (clicks < MIN_CLICKS && cost < MIN_COST) {
-      continue;
-    }
-
-    let newBudget = budget;
-    let action: "increase" | "decrease" | "none" = "none";
-
-    // -------------------------
-    // DECISION
-    // -------------------------
-    if (conversions > 0) {
-      newBudget = budget * (1 + INCREASE_RATE);
-      action = "increase";
-    } else if (cost >= MIN_COST && conversions === 0) {
-      newBudget = budget * (1 - DECREASE_RATE);
-      action = "decrease";
-    } else {
-      continue;
-    }
-
-    // -------------------------
-    // GUARDRAILS
-    // -------------------------
-    const maxUp = budget * (1 + MAX_CHANGE);
-    const maxDown = budget * (1 - MAX_CHANGE);
-
-    if (newBudget > maxUp) newBudget = maxUp;
-    if (newBudget < maxDown) newBudget = maxDown;
-    if (newBudget < MIN_BUDGET) newBudget = MIN_BUDGET;
-
-    newBudget = Math.round(newBudget * 100) / 100;
-
-    if (Math.abs(newBudget - budget) < 0.5) {
-      continue;
-    }
-
-    // -------------------------
-    // CONTEXT (cheap + powerful)
-    // -------------------------
-    const cpa = conversions > 0 ? cost / conversions : cost;
-
-    const topKeywords = terms
-      .filter(t => t.campaignId === campaignId)
-      .slice(0, 3)
-      .map(t => ({
-        term: t.term,
-        clicks: t.clicks,
-        conversions: t.conversions,
-        cpa: t.cpa,
-        score: t.score,
-      }));
-
-    const reason: string[] = [];
-
-    if (conversions > 0) reason.push("has_conversions");
-    else reason.push("no_conversions");
-
-    if (cpa > 0 && cpa < 50) reason.push("good_cpa");
-    if (cost >= MIN_COST) reason.push("enough_data");
-
-    // -------------------------
-    // APPLY
-    // -------------------------
-    try {
-      await updateCampaignBudget({
-        campaignId,
-        budget: newBudget,
-      });
-
-      console.log("[UPDATED]", campaignId, budget, "→", newBudget);
-
-      results.push({
-        campaignId,
-        action,
-        oldBudget: budget,
-        newBudget,
-
-        performance: {
-          clicks,
-          conversions,
-          cost,
-          cpa,
-        },
-
-        topKeywords,
-        reason,
-      });
-    } catch (err) {
-      console.error("[FAILED]", campaignId, err);
-    }
-  }
-
-  return results;
-}
-
-
 
 // Fetch Low-Performance Assets
 async function getLowPerformingAssets() {
@@ -1100,4 +610,167 @@ export async function runAdCopyOptimization({ dryRun = false } = {}) {
   }
 
   return results;
+}
+
+
+// core optimization (single pass, no duplication)
+export async function runCoreOptimization({ dryRun = false } = {}) {
+  const customer = getCustomer();
+
+  const results = {
+    keyword: [] as any[],
+    negative: [] as any[],
+    pause: [] as any[],
+    budget: [] as any[],
+    ad: [] as any[],
+    errors: [] as any[],
+  };
+
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+  try {
+    // fetch once
+    const [terms, campaigns, ads] = await Promise.all([
+      getSearchTermWinners(),
+      customer.query(`
+        SELECT campaign.id, campaign.status,
+               campaign_budget.amount_micros,
+               metrics.cost_micros, metrics.clicks, metrics.conversions
+        FROM campaign
+        WHERE segments.date DURING LAST_30_DAYS
+      `),
+      getLowPerformingAssets(),
+    ]);
+
+    if (!terms.length) return results;
+
+    const addedKw = new Set<string>();
+    const addedNeg = new Set<string>();
+
+    // =========================
+    // KEYWORD + NEGATIVE + PAUSE
+    // =========================
+    for (const t of terms.slice(0, 15)) {
+      const kw = normalize(t.term);
+      const words = kw.split(/\s+/);
+
+      if (words.length < 2 || words.length > 4) continue;
+
+      try {
+        // high intent → add exact
+        if (t.score >= 2 && t.conversions > 0 && !addedKw.has(kw)) {
+          if (!dryRun) {
+            await addExactMatchKeyword({
+              adGroupId: t.adGroupId,
+              keyword: kw,
+            });
+          }
+          addedKw.add(kw);
+          results.keyword.push({ keyword: kw });
+        }
+
+        // low intent → negative
+        else if (
+          (t.score <= -1 || (t.clicks >= 3 && t.conversions === 0)) &&
+          !addedNeg.has(kw)
+        ) {
+          if (!dryRun) {
+            await addNegativeKeyword({
+              campaignId: t.campaignId,
+              keyword: kw,
+            });
+          }
+          addedNeg.add(kw);
+          results.negative.push({ keyword: kw });
+        }
+
+        // waste → pause (signal only, safe skip if invalid resource)
+        if (t.cost > 20 && t.conversions === 0) {
+          results.pause.push({ keyword: kw, reason: "waste" });
+        }
+      } catch (err) {
+        results.errors.push({ type: "keyword_loop", kw, err: String(err) });
+      }
+    }
+
+    // =========================
+    // BUDGET (skip paused)
+    // =========================
+    for (const r of campaigns) {
+      try {
+        const status = r.campaign?.status;
+        if (status !== "ENABLED") continue; // critical fix
+
+        const campaignId = String(r.campaign?.id);
+        const budget = (r.campaign_budget?.amount_micros ?? 0) / 1e6;
+        const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
+        const conversions = r.metrics?.conversions ?? 0;
+
+        if (cost < 50) continue;
+
+        let newBudget = budget;
+
+        if (conversions > 0) newBudget = budget * 1.15;
+        else if (conversions === 0) newBudget = budget * 0.85;
+
+        newBudget = Math.max(5, Math.round(newBudget * 100) / 100);
+
+        if (Math.abs(newBudget - budget) < 0.5) continue;
+
+        if (!dryRun) {
+          await updateCampaignBudget({ campaignId, budget: newBudget });
+        }
+
+        results.budget.push({
+          campaignId,
+          from: budget,
+          to: newBudget,
+        });
+      } catch (err) {
+        results.errors.push({ type: "budget", err: String(err) });
+      }
+    }
+
+    // =========================
+    // AD COPY (1 ONLY)
+    // =========================
+    const ad = ads?.[0];
+
+    if (ad) {
+      try {
+        const adId = ad.ad_group_ad?.ad?.id;
+        const adGroupId = ad.ad_group_ad?.ad_group?.split("/").pop();
+
+        if (adId && adGroupId) {
+          const keyword = normalize(extractTopKeyword(ad));
+          const decision = (await decideAdCopy([keyword]))?.[0];
+
+          if (decision) {
+            const headlines = decision.headlines.slice(0, 3);
+            const descriptions = decision.descriptions.slice(0, 2);
+
+            if (!dryRun) {
+              await updateAdAssets({
+                adGroupId,
+                adId,
+                assets: { headlines, descriptions },
+              });
+            }
+
+            results.ad.push({ adId, keyword });
+          }
+        }
+      } catch (err) {
+        results.errors.push({ type: "ad", err: String(err) });
+      }
+    }
+
+    return results;
+  } catch (err) {
+    return {
+      ...results,
+      errors: [{ type: "fatal", err: String(err) }],
+    };
+  }
 }

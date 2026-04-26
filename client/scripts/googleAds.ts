@@ -1,38 +1,26 @@
-// scripts/googleAds.ts
-import { runKeywordExpansion, runNegativeKeywordStrategy, runBudgetAllocation } from "../src/lib/googleAds/optimize";
+// script (single execution)
+import { runCoreOptimization } from "../src/lib/googleAds/optimize";
 
 async function main() {
-  console.log("ENV KEY EXISTS:", !!process.env.OPENAI_API_KEY);
   const dryRun = process.env.DRY_RUN === "true";
-
-  console.log("[GOOGLE ADS] Starting job");
-  console.log("[GOOGLE ADS] dryRun:", dryRun);
 
   const start = Date.now();
 
   try {
-    const keywordExpansion = await runKeywordExpansion({ dryRun });
-    const negativeKeyword = await runNegativeKeywordStrategy({ dryRun });
-    const budgetAllocation = await runBudgetAllocation();
+    const result = await runCoreOptimization({ dryRun });
 
-    console.log("[GOOGLE ADS] Success");
-
-    console.log("::group::Google Ads Result");
     console.log(
       JSON.stringify(
         {
           ok: true,
           dryRun,
           durationMs: Date.now() - start,
-          keywordExpansion,
-          negativeKeyword,
-          budgetAllocation,
+          ...result,
         },
         null,
         2
       )
     );
-    console.log("::endgroup::");
 
     process.exit(0);
   } catch (err) {
