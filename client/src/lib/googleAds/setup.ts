@@ -17,10 +17,10 @@ const CampaignSchema = z.object({
   adGroups: z.array(
     z.object({
       name: z.string().min(5).max(100),
-      keywords: z.array(z.string()).min(5).max(10),
+      keywords: z.array(z.string()).min(5).max(10).length(10),
 
       // // upgraded counts
-      headlines: z.array(z.string().min(12).max(30)).length(7),
+      headlines: z.array(z.string().min(12).max(30)).length(15),
       descriptions: z.array(z.string().min(40).max(90)).length(4),
     })
   ).min(1).max(3),
@@ -117,7 +117,7 @@ ROLES:
 
 KEYWORDS (STRICT + TIED TO AD GROUP):
 
-Generate 6–8 keywords per ad group.
+Generate 10 keywords per ad group.
 
 CORE RULE:
 - Keywords MUST directly reflect the ad group name
