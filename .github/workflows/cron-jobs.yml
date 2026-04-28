@@ -6,6 +6,7 @@ on:
     - cron: "0 17 * * 1" # Weekly ad → Monday 10:00 AM PST
     - cron: "0 15 * * 1" # Weekly Google Ads Ajustiments → Monday 8:00 AM PST
     - cron: "0 16 */2 * *" # Google Ads Optimization → Every 2 days @ 9:00 AM PST
+    - cron: "0 10 * * *" # // Daily Google Ads Budget Control at 10 UTC
 
   workflow_dispatch:
     inputs:
@@ -21,6 +22,7 @@ on:
           - setup
           - optimize
           - adjust
+          - budget
 
 jobs:
   run-crons:
@@ -67,3 +69,7 @@ jobs:
       - name: Google Ads Optimization
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'optimize' || github.event.inputs.job == 'all'
         run: npx tsx scripts/googleAds/optimize.ts
+
+      - name: Google Ads Budget Control
+        if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
+        run: npx tsx scripts/googleAds/budget.ts
