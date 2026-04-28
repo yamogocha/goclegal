@@ -143,11 +143,15 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
 
     const totalConversions = active.reduce((sum: number, c: any) => {
       const id = c.campaign?.id != null ? String(c.campaign.id) : null;
+      if (!id) return sum;
+    
       return sum + toNumber(perfMap.get(id)?.metrics?.conversions);
     }, 0);
 
     const totalClicks = active.reduce((sum: number, c: any) => {
       const id = c.campaign?.id != null ? String(c.campaign.id) : null;
+      if (!id) return sum;
+    
       return sum + toNumber(perfMap.get(id)?.metrics?.clicks);
     }, 0);
 
