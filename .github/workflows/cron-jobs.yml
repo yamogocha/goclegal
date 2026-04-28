@@ -56,7 +56,7 @@ jobs:
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: npx tsx scripts/weeklyAd.ts
 
-      - name: Weekly Google Ads tune
+      - name: Weekly Google Ads Adjustments
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'adjust' || github.event.inputs.job == 'all'
         run: npx tsx scripts/googleAds/adjust.ts
       
@@ -64,6 +64,6 @@ jobs:
         if: github.event.inputs.job == 'setup'
         run: npx tsx scripts/googleAds/setup.ts
 
-      - name: Google Ads
+      - name: Google Ads Optimization
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'optimize' || github.event.inputs.job == 'all'
         run: npx tsx scripts/googleAds/optimize.ts
