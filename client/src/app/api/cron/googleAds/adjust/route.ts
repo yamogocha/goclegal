@@ -1,6 +1,6 @@
 // client/src/app/api/cron/weeklyGoogleAdsTune/route.ts
 // adjusts ad schedule, device bids
-import { weeklyGoogleAdsTune } from "@/lib/googleAds/adjustment";
+import { weeklyGoogleAdsTune } from "@/lib/googleAds/adjust";
 import { runAdCopyOptimization } from "@/lib/googleAds/optimize";
 import { verifyCronAuth } from "@/lib/oauth";
 

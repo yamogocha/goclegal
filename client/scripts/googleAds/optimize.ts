@@ -1,5 +1,5 @@
 // script (single execution)
-import { runCoreOptimization } from "../src/lib/googleAds/optimize";
+import { runCoreOptimization } from "../../src/lib/googleAds/optimize";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";

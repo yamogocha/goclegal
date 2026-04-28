@@ -1,7 +1,7 @@
 // // 2-phase execution script (no timeout)
 
 async function run() {
-  const URL = process.env.BASE_URL + "/api/cron/googleAdsSetup";
+  const URL = process.env.BASE_URL + "/api/cron/googleAds/setup";
 
   try {
     console.log("=== STEP 1: GENERATE ===");

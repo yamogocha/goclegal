@@ -1,6 +1,6 @@
 // scripts/weeklyGoogleAdsTune.ts
 import { runAdCopyOptimization } from "@/lib/googleAds/optimize";
-import { weeklyGoogleAdsTune } from "../src/lib/googleAds/adjustment";
+import { weeklyGoogleAdsTune } from "../../src/lib/googleAds/adjust";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
