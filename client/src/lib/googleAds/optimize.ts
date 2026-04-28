@@ -5,97 +5,134 @@ import { type services  } from "google-ads-api";
 
 const openai = getOpenAI();
 
-// core optimization (2-day engine: keyword, negatives, pause, ad)
+// error extractor
+function extractError(err: any) {
+  try {
+    if (!err) return "unknown";
+    if (err instanceof Error) return err.message;
+    if (err?.errors) return err.errors;
+    return JSON.stringify(err);
+  } catch {
+    return "parse_failed";
+  }
+}
+
+const normalize = (s: string) =>
+  s.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+function toKeyword(s: string) {
+  return normalize(s)
+    .split(/\s+/)
+    .filter(w => !/^(how|what|why|to|a|the|i|need|finding|handle)$/.test(w))
+    .slice(0, 4)
+    .join(" ");
+}
+
+const isHighIntent = (s: string) =>
+  /\b(lawyer|attorney)\b/.test(s);
+
 export async function runCoreOptimization({ dryRun = false } = {}) {
   const customer = getCustomer();
 
   const results = {
     keyword_add: [] as any[],
-    keyword_pause: [] as any[],
+    keyword_skipped: [] as any[],
     negative_add: [] as any[],
     ad_update: [] as any[],
+    skipped: [] as any[],
     errors: [] as any[],
   };
 
-  const normalize = (s: string) =>
-    s.toLowerCase().replace(/[^\w\s]/g, "").trim();
-
-  const isHighIntent = (s: string) =>
-    /\b(lawyer|attorney|injury|accident)\b/.test(s) &&
-    !/\b(how|what|why|guide|process|steps|free)\b/.test(s);
-
   try {
     // =========================
-    // FETCH (single pass)
+    // EXISTING KEYWORDS (DEDUP)
     // =========================
-    const rows = await customer.query(`
+    const existingRows = await customer.query(`
+      SELECT
+        ad_group.id,
+        ad_group_criterion.keyword.text
+      FROM keyword_view
+    `);
+
+    const existingSet = new Set<string>();
+
+    for (const r of existingRows) {
+      const text = normalize(r.ad_group_criterion?.keyword?.text || "");
+      const adGroupId = String(r.ad_group?.id);
+      if (text && adGroupId) {
+        existingSet.add(`${adGroupId}_${text}`);
+      }
+    }
+
+    // =========================
+    // SEARCH TERMS
+    // =========================
+    const termRows = await customer.query(`
       SELECT
         search_term_view.search_term,
         ad_group.id,
         campaign.id,
-        ad_group_criterion.criterion_id,
         metrics.clicks,
-        metrics.conversions,
         metrics.cost_micros
       FROM search_term_view
       WHERE segments.date DURING LAST_30_DAYS
     `);
 
-    const terms = rows.map((r: any) => ({
-      term: r.search_term_view?.search_term,
-      adGroupId: String(r.ad_group?.id),
-      campaignId: String(r.campaign?.id),
-      criterionId: r.ad_group_criterion?.criterion_id,
-      clicks: r.metrics?.clicks ?? 0,
-      conversions: r.metrics?.conversions ?? 0,
-      cost: (r.metrics?.cost_micros ?? 0) / 1e6,
-    })).filter((t: any) => t.term && t.adGroupId && t.campaignId);
-
-    const addedKw = new Set<string>();
-    const addedNeg = new Set<string>();
-
     const SHARED_NEG_LIST = process.env.GOOGLE_ADS_SHARED_NEGATIVE_LIST_ID;
 
-    // =========================
-    // LOOP (single pass logic)
-    // =========================
-    for (const t of terms.slice(0, 20)) {
-      const kw = normalize(t.term);
-      const words = kw.split(/\s+/);
+    for (const r of termRows.slice(0, 20)) {
+      const raw = r.search_term_view?.search_term || "";
+      const kw = toKeyword(raw);
 
-      if (words.length < 2 || words.length > 4) continue;
+      const adGroupId = String(r.ad_group?.id);
+      const campaignId = String(r.campaign?.id);
 
+      const clicks = r.metrics?.clicks ?? 0;
+      const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
+
+      if (!kw || kw.split(/\s+/).length < 2) {
+        results.skipped.push({ keyword: raw, reason: "invalid_after_clean" });
+        continue;
+      }
+
+      const key = `${adGroupId}_${kw}`;
       const intent = isHighIntent(kw);
-      const hasClicks = t.clicks >= 3;
-      const hasSpend = t.cost > 0;
 
       try {
-        // -------------------------
-        // ADD HIGH-INTENT KEYWORD
-        // -------------------------
-        if (intent && hasClicks && !addedKw.has(kw)) {
+        // =========================
+        // ADD KEYWORD (SAFE)
+        // =========================
+        if (intent && clicks >= 2) {
+          if (existingSet.has(key)) {
+            results.keyword_skipped.push({
+              keyword: kw,
+              adGroupId,
+              reason: "already_exists",
+            });
+            continue;
+          }
+
           if (!dryRun) {
             await customer.adGroupCriteria.create([{
-              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${t.adGroupId}`,
+              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
               status: "ENABLED",
               keyword: { text: `[${kw}]`, match_type: "EXACT" },
             }]);
           }
 
-          addedKw.add(kw);
-
           results.keyword_add.push({
             keyword: kw,
-            reason: "high_intent",
+            from: raw,
+            adGroupId,
           });
 
           continue;
         }
 
-        // -------------------------
-        // NEGATIVE (SHARED LIST)
-        // -------------------------
-        if (!intent && (hasClicks || hasSpend) && !addedNeg.has(kw)) {
+        // =========================
+        // NEGATIVE
+        // =========================
+        if (!intent && cost > 25) {
           if (!dryRun && SHARED_NEG_LIST) {
             await customer.sharedCriteria.create([{
               shared_set: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/sharedSets/${SHARED_NEG_LIST}`,
@@ -103,52 +140,27 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
             }]);
           }
 
-          addedNeg.add(kw);
-
-          results.negative_add.push({
-            keyword: kw,
-            reason: "low_intent",
-          });
-
-          continue;
-        }
-
-        // -------------------------
-        // PAUSE WASTE (REAL FIX)
-        // -------------------------
-        if (hasSpend && t.conversions === 0 && t.criterionId) {
-          if (!dryRun) {
-            await customer.adGroupCriteria.update([{
-              resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupCriteria/${t.adGroupId}~${t.criterionId}`,
-              status: "PAUSED",
-            }]);
-          }
-
-          results.keyword_pause.push({
-            keyword: kw,
-            reason: "spend_no_conversion",
-          });
+          results.negative_add.push({ keyword: kw });
         }
 
       } catch (err) {
-        results.errors.push({
-          keyword: kw,
-          err: String(err),
-        });
+        results.errors.push({ keyword: raw, err: extractError(err) });
       }
     }
 
     // =========================
-    // AD COPY (1 variation)
+    // AD UPDATE (CONTROLLED)
     // =========================
     try {
       const ads = await customer.query(`
         SELECT
           ad_group_ad.ad.id,
           ad_group_ad.ad_group,
-          ad_group_ad.ad.responsive_search_ad.headlines
+          ad_group_ad.ad.responsive_search_ad.headlines,
+          metrics.impressions,
+          metrics.clicks
         FROM ad_group_ad
-        WHERE metrics.impressions > 20
+        WHERE metrics.impressions > 50
         LIMIT 1
       `);
 
@@ -158,52 +170,62 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
         const adId = ad.ad_group_ad?.ad?.id;
         const adGroupId = ad.ad_group_ad?.ad_group?.split("/").pop();
 
-        if (adId && adGroupId) {
-          const keyword = normalize(
-            ad.ad_group_ad?.ad?.responsive_search_ad?.headlines?.[0]?.text ||
-            "personal injury lawyer"
-          );
+        const impressions = ad.metrics?.impressions ?? 0;
+        const clicks = ad.metrics?.clicks ?? 0;
+        const ctr = impressions > 0 ? clicks / impressions : 0;
 
-          const ai = await openai.responses.create({
-            model: "gpt-5",
-            input: `${GOC_LEGAL_BRAND_CONTEXT}\nKEYWORD: ${keyword}`,
-          });
+        // only update if underperforming
+        if (ctr < 0.02) {
+          const old =
+            ad.ad_group_ad?.ad?.responsive_search_ad?.headlines?.map((h: any) => h.text) || [];
 
-          let parsed: any = null;
+          const improved = [
+            ...old.slice(0, 12),
+            "Personal Injury Lawyer",
+            "No Fee Unless You Win",
+            "Free Consultation Today",
+          ].slice(0, 15);
 
-          try {
-            parsed = JSON.parse(ai.output_text || "[]")[0];
-          } catch {}
-
-          if (parsed?.headlines && parsed?.descriptions) {
-            if (!dryRun) {
-              await customer.adGroupAds.create([{
-                ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
-                status: "ENABLED",
-                ad: {
-                  responsive_search_ad: {
-                    headlines: parsed.headlines.slice(0, 3).map((h: string) => ({ text: h })),
-                    descriptions: parsed.descriptions.slice(0, 2).map((d: string) => ({ text: d })),
-                  },
-                  final_urls: ["https://www.goclegal.com"],
+          if (!dryRun) {
+            await customer.adGroupAds.create([{
+              ad_group: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+              status: "ENABLED",
+              ad: {
+                responsive_search_ad: {
+                  headlines: improved.map(h => ({ text: h })),
+                  descriptions: [
+                    { text: "Speak directly with an attorney today." },
+                    { text: "No upfront fees. Real results." }
+                  ],
                 },
-              }]);
+                final_urls: ["https://www.goclegal.com"],
+              },
+            }]);
 
-              await customer.adGroupAds.update([{
-                resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adGroupId}~${adId}`,
-                status: "PAUSED",
-              }]);
-            }
-
-            results.ad_update.push({
-              adId,
-              keyword,
-            });
+            await customer.adGroupAds.update([{
+              resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adGroupId}~${adId}`,
+              status: "PAUSED",
+            }]);
           }
+
+          results.ad_update.push({
+            adId,
+            adGroupId,
+            ctr,
+            before: old,
+            after: improved,
+          });
+        } else {
+          results.skipped.push({
+            type: "ad",
+            reason: "good_performance",
+            ctr,
+          });
         }
       }
+
     } catch (err) {
-      results.errors.push({ type: "ad", err: String(err) });
+      results.errors.push({ type: "ad", err: extractError(err) });
     }
 
     return results;
@@ -211,7 +233,7 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
   } catch (err) {
     return {
       ...results,
-      errors: [{ type: "fatal", err: String(err) }],
+      errors: [{ type: "fatal", err: extractError(err) }],
     };
   }
 }
@@ -253,7 +275,6 @@ async function updateAdAssets(params: {
 
   console.log("Replaced ad:", { adGroupId, adId });
 }
-
 // types
 type AdDecision = {
   keyword: string;
