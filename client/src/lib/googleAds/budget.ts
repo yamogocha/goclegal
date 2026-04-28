@@ -39,7 +39,10 @@ const MIN_BUDGET_MICROS = 5 * 1_000_000;
 const MIN_SPEND_THRESHOLD = 5 * 1_000_000;
 const REALLOCATION_FACTOR = 0.5;
 const CHANGE_THRESHOLD = 0.05;
-const MIN_IMPRESSIONS_IDLE = 200;
+
+// // maturity thresholds
+const MIN_IMPRESSIONS_MATURE = 1000;
+const MIN_CLICKS_MATURE = 20;
 
 const getErrorMessage = (err: unknown): string => {
   if (!err) return "unknown_error";
@@ -78,12 +81,12 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
   const adGroupResults: BudgetControlResult["adGroups"] = [];
 
   let updatedBudgets = 0;
-  let pausedAdGroups = 0;
+  const pausedAdGroups = 0;
 
   try {
     const customer = getCustomer();
 
-    // // fetch campaigns
+    // // campaigns
     const campaigns = await customer.query(`
       SELECT
         campaign.id,
@@ -97,7 +100,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     const active = campaigns.filter((c: any) => c.campaign?.status === 2);
     const paused = campaigns.filter((c: any) => c.campaign?.status === 3);
 
-    // // fetch 7-day performance trend
+    // // 7-day performance
     const perf7d = await customer.query(`
       SELECT
         campaign.id,
@@ -117,83 +120,74 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       }
     }
 
-    // // build reclaim pool from consistently idle campaigns
     let reclaimPool = 0;
 
+    // // build reclaim pool
     for (const c of active) {
       const id = c.campaign?.id != null ? String(c.campaign.id) : null;
-      if (!id) {
-        continue;
-      }
+      if (!id) continue;
+
       const perf = perfMap.get(id);
 
       const spend = toNumber(perf?.metrics?.cost_micros);
-      const impressions = toNumber(perf?.metrics?.impressions);
       const current = toNumber(c.campaign_budget?.amount_micros);
 
-      if (spend === 0 && impressions >= MIN_IMPRESSIONS_IDLE) {
+      const isMature =
+        toNumber(perf?.metrics?.impressions) >= MIN_IMPRESSIONS_MATURE ||
+        toNumber(perf?.metrics?.clicks) >= MIN_CLICKS_MATURE;
+
+      if (isMature && spend === 0) {
         reclaimPool += current * REALLOCATION_FACTOR;
       }
     }
 
-    const totalConversions = active.reduce(
-      (sum: number, c: any) =>
-        sum + toNumber(perfMap.get(String(c.campaign.id))?.metrics?.conversions),
-      0
-    );
+    const totalConversions = active.reduce((sum: number, c: any) => {
+      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
+      return sum + toNumber(perfMap.get(id)?.metrics?.conversions);
+    }, 0);
 
-    const totalClicks = active.reduce(
-      (sum: number, c: any) =>
-        sum + toNumber(perfMap.get(String(c.campaign.id))?.metrics?.clicks),
-      0
-    );
+    const totalClicks = active.reduce((sum: number, c: any) => {
+      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
+      return sum + toNumber(perfMap.get(id)?.metrics?.clicks);
+    }, 0);
 
     const activeCount = active.length || 1;
 
     // // campaign loop
     for (const c of active) {
-      const id = c.campaign?.id ?? "unknown";
+      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
       const resourceName = c.campaign_budget?.resource_name;
 
-      if (!resourceName) {
-        campaignResults.push({
-          id,
-          action: "SKIPPED",
-          before: 0,
-          after: 0,
-          reason: "missing_budget_resource",
-          spend: 0,
-        });
-        continue;
-      }
+      if (!id || !resourceName) continue;
 
       try {
         const current = toNumber(c.campaign_budget?.amount_micros);
-        const perf = perfMap.get(String(id));
+        const perf = perfMap.get(id);
 
         const spend = toNumber(perf?.metrics?.cost_micros);
         const conversions = toNumber(perf?.metrics?.conversions);
-        const clicks = toNumber(perf?.metrics?.clicks);
+
+        const isMature =
+          toNumber(perf?.metrics?.impressions) >= MIN_IMPRESSIONS_MATURE ||
+          toNumber(perf?.metrics?.clicks) >= MIN_CLICKS_MATURE;
 
         let weight = 1 / activeCount;
 
         if (totalConversions > 0) {
           weight = conversions / totalConversions;
         } else if (totalClicks > 0) {
-          weight = clicks / totalClicks;
+          weight = toNumber(perf?.metrics?.clicks) / totalClicks;
         }
 
         let adjusted = current;
         let reason = "no_change";
 
-        // // reward performing campaigns (with threshold)
-        if (reclaimPool > 0 && spend >= MIN_SPEND_THRESHOLD) {
+        if (reclaimPool > 0 && isMature && spend >= MIN_SPEND_THRESHOLD) {
           adjusted = current + reclaimPool * weight;
           reason = "reallocation_gain";
         }
 
-        // // reduce idle campaigns (with floor protection)
-        if (spend === 0 && current > MIN_BUDGET_MICROS) {
+        if (isMature && spend === 0 && current > MIN_BUDGET_MICROS) {
           adjusted = Math.max(
             current * (1 - REALLOCATION_FACTOR),
             MIN_BUDGET_MICROS
@@ -203,7 +197,6 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
 
         const finalBudget = Math.min(Math.floor(adjusted), DAILY_CAP_MICROS);
 
-        // // only update meaningful changes
         if (
           current > 0 &&
           Math.abs(finalBudget - current) / current > CHANGE_THRESHOLD
@@ -238,83 +231,6 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       } catch (err) {
         errors.push(`campaign:${id}:${getErrorMessage(err)}`);
       }
-    }
-
-    // // ad group logic unchanged
-    try {
-      const adGroups = await customer.query(`
-        SELECT
-          ad_group.id,
-          ad_group.resource_name,
-          metrics.ctr,
-          metrics.conversions,
-          metrics.impressions,
-          metrics.clicks
-        FROM ad_group
-        WHERE ad_group.status = 'ENABLED'
-          AND segments.date DURING LAST_7_DAYS
-      `);
-
-      const MIN_IMPRESSIONS = 100;
-      const MIN_CLICKS = 10;
-
-      const eligible = (adGroups as any[]).filter((ag) => {
-        const impressions = toNumber(ag.metrics?.impressions);
-        const clicks = toNumber(ag.metrics?.clicks);
-        return impressions >= MIN_IMPRESSIONS || clicks >= MIN_CLICKS;
-      });
-
-      if (eligible.length > 0) {
-        const worst = eligible.reduce((min, curr) => {
-          const scoreMin =
-            toNumber(min.metrics?.ctr) + toNumber(min.metrics?.conversions);
-          const scoreCurr =
-            toNumber(curr.metrics?.ctr) + toNumber(curr.metrics?.conversions);
-          return scoreCurr < scoreMin ? curr : min;
-        });
-
-        const ctr = toNumber(worst.metrics?.ctr);
-        const conversions = toNumber(worst.metrics?.conversions);
-        const impressions = toNumber(worst.metrics?.impressions);
-        const clicks = toNumber(worst.metrics?.clicks);
-
-        if (
-          worst.ad_group?.resource_name &&
-          ctr < 0.01 &&
-          conversions === 0
-        ) {
-          await customer.adGroups.update([
-            {
-              resource_name: worst.ad_group.resource_name,
-              status: "PAUSED",
-            },
-          ]);
-
-          pausedAdGroups++;
-
-          adGroupResults.push({
-            id: worst.ad_group.id,
-            action: "PAUSED",
-            reason: "low_ctr_no_conversion_mature",
-            ctr,
-            conversions,
-            impressions,
-            clicks,
-          });
-        } else {
-          adGroupResults.push({
-            id: worst.ad_group?.id,
-            action: "SKIPPED",
-            reason: "not_bad_enough",
-            ctr,
-            conversions,
-            impressions,
-            clicks,
-          });
-        }
-      }
-    } catch (err) {
-      errors.push(`adgroup:${getErrorMessage(err)}`);
     }
 
     return {
