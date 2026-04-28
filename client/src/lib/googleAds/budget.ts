@@ -121,7 +121,10 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     let reclaimPool = 0;
 
     for (const c of active) {
-      const id = String(c.campaign.id);
+      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
+      if (!id) {
+        continue;
+      }
       const perf = perfMap.get(id);
 
       const spend = toNumber(perf?.metrics?.cost_micros);
