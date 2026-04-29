@@ -1,309 +1,363 @@
 import { getCustomer } from "./index";
-import type { resources, services } from "google-ads-api";
+import type { resources } from "google-ads-api";
 
 const LOOKBACK = "LAST_30_DAYS";
-const MIN_COST = 5;
-const TARGET_HOURS = 6;
+const MIN_COST = 10;
 
-// Only allow real Google Ads devices
-const DEVICE = {
-  DESKTOP: "0",
-  MOBILE: "1",
-  TABLET: "2",
-};
+// extract error
+function extractError(err: any) {
+  if (!err) return "unknown_error";
+  if (typeof err === "string") return err;
+  if (err.message) return err.message;
+  if (err.errors) return err.errors.map((e: any) => e.message).join("; ");
+  return "error";
+}
 
-const VALID_DEVICES = new Set([
-  DEVICE.DESKTOP,
-  DEVICE.MOBILE,
-  DEVICE.TABLET,
-]);
-
-// -----------------------------
-// Types
-// -----------------------------
-type HourPerf = {
-  hour: number;
-  cost: number;
-  conversions: number;
-};
-
-type DevicePerf = {
-  device: string;
-  cost: number;
-  conversions: number;
-};
-
-// -----------------------------
-// Fetch performance
-// -----------------------------
+// get hourly performance
 async function getPerformance() {
-  const customer = getCustomer();
-
-  const rows = await customer.query(`
-    SELECT
-      segments.hour,
-      segments.device,
-      metrics.cost_micros,
-      metrics.conversions
+  const rows = await getCustomer().query(`
+    SELECT segments.hour, metrics.cost_micros, metrics.conversions
     FROM campaign
     WHERE segments.date DURING ${LOOKBACK}
   `);
 
-  const hourMap = new Map<number, HourPerf>();
-  const deviceMap = new Map<string, DevicePerf>();
+  const map = new Map<number, { hour: number; cost: number; conv: number }>();
 
   for (const r of rows) {
     const hour = r.segments?.hour ?? 0;
+    const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
+    const conv = r.metrics?.conversions ?? 0;
 
-    const rawDevice = String(r.segments?.device ?? DEVICE.DESKTOP);
-    const device = VALID_DEVICES.has(rawDevice)
-      ? rawDevice
-      : DEVICE.DESKTOP;
+    if (!map.has(hour)) map.set(hour, { hour, cost: 0, conv: 0 });
 
-    const cost = (r.metrics?.cost_micros ?? 0) / 1_000_000;
-    const conversions = r.metrics?.conversions ?? 0;
-
-    // Hours
-    if (!hourMap.has(hour)) {
-      hourMap.set(hour, { hour, cost: 0, conversions: 0 });
-    }
-    const h = hourMap.get(hour)!;
+    const h = map.get(hour)!;
     h.cost += cost;
-    h.conversions += conversions;
-
-    // Devices
-    if (!deviceMap.has(device)) {
-      deviceMap.set(device, { device, cost: 0, conversions: 0 });
-    }
-    const d = deviceMap.get(device)!;
-    d.cost += cost;
-    d.conversions += conversions;
+    h.conv += conv;
   }
 
-  return {
-    hours: Array.from(hourMap.values()),
-    devices: Array.from(deviceMap.values()),
-  };
+  return [...map.values()];
 }
 
-// -----------------------------
-// Select top hours
-// -----------------------------
-function selectTopHours(hours: HourPerf[]) {
-  return hours
+// find bad hours
+function findBadHours(hours: any[]) {
+  const totalCost = hours.reduce((s, h) => s + h.cost, 0);
+  const totalConv = hours.reduce((s, h) => s + h.conv, 0);
+
+  const avgCPA = totalConv > 0 ? totalCost / totalConv : Infinity;
+
+  const bad = hours
     .filter(h => h.cost >= MIN_COST)
-    .map(h => ({
-      ...h,
-      score: h.conversions > 0 ? h.conversions / h.cost : 0,
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, TARGET_HOURS)
+    .filter(h => {
+      const cpa = h.conv > 0 ? h.cost / h.conv : Infinity;
+      return cpa > avgCPA * 2 || h.conv === 0;
+    })
     .map(h => h.hour)
     .sort((a, b) => a - b);
+
+  return { bad, avgCPA };
 }
 
-// -----------------------------
-// Expand hours (±1 smoothing)
-// -----------------------------
-function expandHours(hours: number[]) {
-  const set = new Set<number>();
+// build safe blocks
+function buildBlocks(badHours: number[]) {
+  const badSet = new Set(badHours);
 
-  for (const h of hours) {
-    set.add(h);
-
-    if (h > 0) set.add(h - 1);
-    if (h < 23) set.add(h + 1);
+  const good: number[] = [];
+  for (let h = 0; h < 24; h++) {
+    if (!badSet.has(h)) good.push(h);
   }
 
-  return Array.from(set).sort((a, b) => a - b);
-}
+  if (!good.length) return [];
 
-// -----------------------------
-// Merge to blocks
-// -----------------------------
-function buildHourBlocks(hours: number[]) {
-  const blocks: Array<{ start: number; end: number }> = [];
-  if (!hours.length) return blocks;
+  const blocks: { start: number; end: number }[] = [];
+  let start = good[0];
+  let prev = good[0];
 
-  let start = hours[0];
-  let prev = hours[0];
-
-  for (let i = 1; i < hours.length; i++) {
-    const curr = hours[i];
-
-    if (curr === prev + 1) {
-      prev = curr;
-    } else {
+  for (let i = 1; i < good.length; i++) {
+    if (good[i] === prev + 1) prev = good[i];
+    else {
       blocks.push({ start, end: prev + 1 });
-      start = curr;
-      prev = curr;
+      start = good[i];
+      prev = good[i];
     }
   }
-
   blocks.push({ start, end: prev + 1 });
-  return blocks;
-}
 
-// Device modifiers (robust)
-function selectDeviceModifiers(devices: DevicePerf[]) {
-  const modifiers: Record<string, number> = {};
+  const merged: typeof blocks = [];
 
-  // Always bias mobile
-  modifiers[DEVICE.MOBILE] = 1.25;
-
-  const ranked = devices
-    .filter(d => d.cost >= MIN_COST)
-    .map(d => ({
-      device: d.device,
-      score: d.conversions > 0 ? d.conversions / d.cost : 0,
-    }))
-    .sort((a, b) => b.score - a.score);
-
-  if (ranked.length > 0) {
-    const best = ranked[0]?.device;
-    const worst = ranked[ranked.length - 1]?.device;
-
-    if (best && best !== DEVICE.MOBILE) {
-      modifiers[best] = 1.15;
+  for (const b of blocks) {
+    if (!merged.length) {
+      merged.push(b);
+      continue;
     }
 
-    if (worst) {
-      modifiers[worst] = 0.7;
+    const last = merged[merged.length - 1];
+    if (b.start - last.end <= 2) {
+      last.end = b.end;
+    } else {
+      merged.push(b);
     }
   }
 
-  // Always suppress tablet
-  modifiers[DEVICE.TABLET] = 0.7;
+  if (merged.length > 6) {
+    return [{
+      start: merged[0].start,
+      end: merged[merged.length - 1].end,
+    }];
+  }
 
-  return modifiers;
+  return merged;
 }
 
-async function getCampaignIds(): Promise<string[]> {
-  const customer = getCustomer();
-
-  const rows = await customer.query(`
-    SELECT campaign.id
+// get search campaigns
+async function getSearchCampaigns() {
+  const rows = await getCustomer().query(`
+    SELECT campaign.id, campaign.name, campaign.advertising_channel_type
     FROM campaign
     WHERE campaign.status != 'REMOVED'
   `);
 
   return rows
-    .map((r: services.IGoogleAdsRow) => r.campaign?.id)
-    .filter(Boolean)
-    .map(String);
+    .map((r: any) => ({
+      id: String(r.campaign.id),
+      name: r.campaign.name,
+      type: Number(r.campaign.advertising_channel_type),
+    }))
+    .filter(c => c.type === 2);
 }
 
-async function removeExistingSchedules(campaignIds: string[], dryRun: boolean) {
+// remove schedules
+async function removeSchedules(ids: string[], dryRun: boolean) {
   const customer = getCustomer();
 
   const rows = await customer.query(`
     SELECT campaign_criterion.resource_name
     FROM campaign_criterion
-    WHERE campaign.id IN (${campaignIds.join(",")})
+    WHERE campaign.id IN (${ids.join(",")})
       AND campaign_criterion.type = 'AD_SCHEDULE'
   `);
 
-  const resourceNames = rows
-    .map((r: services.IGoogleAdsRow) => r.campaign_criterion?.resource_name)
-    .filter((name): name is string => Boolean(name));
+  const names = rows.map((r: any) => r.campaign_criterion?.resource_name).filter(Boolean);
 
-  if (!resourceNames.length) return;
+  if (!dryRun && names.length) {
+    await customer.campaignCriteria.remove(names);
+  }
 
-  console.log("[cleanup] removing schedules:", resourceNames.length);
-
-  if (dryRun) return;
-
-  await customer.campaignCriteria.remove(resourceNames);
+  return { removed: names.length };
 }
 
-async function applySchedules(
-  campaignIds: string[],
-  blocks: { start: number; end: number }[],
-  dryRun: boolean
-) {
+// apply schedules
+async function applySchedules(ids: string[], blocks: any[], dryRun: boolean) {
   const customer = getCustomer();
-
-  const days = [
-    "MONDAY",
-    "TUESDAY",
-    "WEDNESDAY",
-    "THURSDAY",
-    "FRIDAY",
-    "SATURDAY",
-    "SUNDAY",
-  ] as const;
 
   const creates: resources.ICampaignCriterion[] = [];
 
-  for (const id of campaignIds) {
-    for (const day of days) {
+  for (const id of ids) {
+    for (const day of ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"]) {
       for (const b of blocks) {
         creates.push({
           campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
           ad_schedule: {
-            day_of_week: day,
+            day_of_week: day as any,
             start_hour: b.start,
             end_hour: b.end,
+            start_minute: "ZERO",
+            end_minute: "ZERO",
           },
         });
       }
     }
   }
 
-  console.log("[apply] schedule ops:", creates.length);
-
-  if (dryRun || !creates.length) return;
-
-  await customer.campaignCriteria.create(creates);
-}
-
-// Upsert device modifiers
-async function upsertDeviceModifiers(
-  campaignIds: string[],
-  modifiers: Record<string, number>,
-  dryRun: boolean
-) {
-  const customer = getCustomer();
-
-  const updates: resources.ICampaignCriterion[] = [];
-
-  for (const id of campaignIds) {
-    for (const [device, bid] of Object.entries(modifiers)) {
-      updates.push({
-        resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaignCriteria/${id}~${device}`,
-        bid_modifier: bid,
-      });
-    }
+  if (!dryRun && creates.length) {
+    await customer.campaignCriteria.create(creates);
   }
 
-  console.log("[apply] device modifiers:", modifiers);
-
-  if (dryRun || !updates.length) return;
-
-  await customer.campaignCriteria.update(updates);
+  return { applied: creates.length };
 }
 
-export async function weeklyGoogleAdsTune({ dryRun = false } = {}) {
-  console.log("=== Ads Weekly Tune (Stable v2) ===");
+// enable smart bidding
+async function enableSmartBidding(ids: string[], dryRun: boolean) {
+  const customer = getCustomer();
 
-  const { hours, devices } = await getPerformance();
+  const updates = ids.map(id => ({
+    resource_name: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
+    maximize_conversions: {},
+  }));
 
-  const baseHours = selectTopHours(hours);
-  const expandedHours = expandHours(baseHours);
-  const blocks = buildHourBlocks(expandedHours);
-  const deviceModifiers = selectDeviceModifiers(devices);
+  if (!dryRun && updates.length) {
+    await customer.campaigns.update(updates);
+  }
 
-  console.log("[baseHours]:", baseHours);
-  console.log("[expandedHours]:", expandedHours);
-  console.log("[blocks]:", blocks);
-  console.log("[deviceModifiers]:", deviceModifiers);
+  return { updated: updates.length };
+}
 
-  const campaignIds = await getCampaignIds();
-  if (!campaignIds.length) return;
+// keyword promotion (with visibility)
+async function promoteKeywords(ids: string[], avgCPA: number, dryRun: boolean) {
+  const customer = getCustomer();
 
-  await removeExistingSchedules(campaignIds, dryRun);
-  await applySchedules(campaignIds, blocks, dryRun);
-  await upsertDeviceModifiers(campaignIds, deviceModifiers, dryRun);
+  const rows = await customer.query(`
+    SELECT
+      ad_group_criterion.resource_name,
+      ad_group_criterion.status,
+      ad_group_criterion.keyword.text,
+      metrics.cost_micros,
+      metrics.conversions
+    FROM keyword_view
+    WHERE campaign.id IN (${ids.join(",")})
+      AND segments.date DURING ${LOOKBACK}
+  `);
 
-  console.log("=== Done ===");
+  const evaluated = rows.length;
+
+  const normalized = rows.map((r: any) => {
+    const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
+    const conv = r.metrics?.conversions ?? 0;
+    const cpa = conv > 0 ? cost / conv : Infinity;
+
+    return {
+      resource: r.ad_group_criterion?.resource_name,
+      text: r.ad_group_criterion?.keyword?.text,
+      status: r.ad_group_criterion?.status,
+      cost,
+      conv,
+      cpa,
+    };
+  });
+
+  const qualified = normalized.filter(k =>
+    k.resource &&
+    k.conv >= 2 &&
+    k.cpa <= avgCPA * 1.5
+  );
+  
+  // NEW: candidate layer
+  const candidates = normalized.filter(k =>
+    k.resource &&
+    k.conv >= 1 &&
+    k.cost >= MIN_COST &&
+    !qualified.includes(k)
+  );
+
+  const toEnable = qualified.filter(k => k.status !== "ENABLED");
+
+  if (!dryRun && toEnable.length) {
+    await customer.adGroupCriteria.update(
+      toEnable.map(k => ({
+        resource_name: k.resource,
+        status: "ENABLED",
+      }))
+    );
+  }
+
+  // 🔍 NEW: visibility layer
+  const candidateDetails = candidates.slice(0, 10).map(k => ({
+    keyword: k.text,
+    conversions: k.conv,
+    cost: Number(k.cost.toFixed(2)),
+    cpa: Number(k.cpa.toFixed(2)),
+    reason: "has conversion but not efficient enough yet",
+  }));
+
+  const topByConv = normalized
+    .filter(k => k.conv > 0)
+    .sort((a, b) => b.conv - a.conv)
+    .slice(0, 5)
+    .map(k => ({
+      keyword: k.text,
+      conversions: k.conv,
+      cost: Number(k.cost.toFixed(2)),
+      cpa: Number(k.cpa.toFixed(2)),
+    }));
+
+  const topByCPA = normalized
+    .filter(k => k.conv > 0)
+    .sort((a, b) => a.cpa - b.cpa)
+    .slice(0, 5)
+    .map(k => ({
+      keyword: k.text,
+      conversions: k.conv,
+      cost: Number(k.cost.toFixed(2)),
+      cpa: Number(k.cpa.toFixed(2)),
+    }));
+
+  return {
+    evaluated,
+    qualified: qualified.length,
+    promoted: toEnable.length,
+    candidates: candidateDetails,
+
+    // what actually passed
+    details: qualified.slice(0, 10).map(k => ({
+      keyword: k.text,
+      conversions: k.conv,
+      cost: Number(k.cost.toFixed(2)),
+      cpa: Number(k.cpa.toFixed(2)),
+    })),
+
+    // 🔍 new debug insight
+    insights: {
+      topByConversions: topByConv,
+      topByEfficiency: topByCPA,
+      avgCPA,
+    },
+  };
+}
+
+// main
+export async function weeklyAdjustments({ dryRun = false } = {}) {
+  const start = Date.now();
+
+  try {
+    const perf = await getPerformance();
+    const { bad, avgCPA } = findBadHours(perf);
+    const blocks = buildBlocks(bad);
+
+    const campaigns = await getSearchCampaigns();
+    const ids = campaigns.map(c => c.id);
+
+    if (!ids.length) {
+      return { ok: true, message: "no search campaigns" };
+    }
+
+    const cleanup = await removeSchedules(ids, dryRun);
+    const schedule = await applySchedules(ids, blocks, dryRun);
+    const smart = await enableSmartBidding(ids, dryRun);
+    const keywords = await promoteKeywords(ids, avgCPA, dryRun);
+
+    return {
+      ok: true,
+      dryRun,
+      durationMs: Date.now() - start,
+
+      explanation: {
+        removedHours: bad.map(h => `${h}:00`),
+        avgCPA,
+        remainingSchedule: blocks.map(b => ({
+          from: `${b.start}:00`,
+          to: `${b.end}:00`,
+        })),
+      },
+
+      campaigns,
+
+      schedule: {
+        removedExisting: cleanup.removed,
+        appliedNew: schedule.applied,
+      },
+
+      smartBidding: {
+        updated: smart.updated,
+        strategy: "MAXIMIZE_CONVERSIONS",
+      },
+
+      keywords,
+    };
+
+  } catch (err) {
+    return {
+      ok: false,
+      error: extractError(err),
+      raw: err,
+    };
+  }
 }

@@ -1,41 +1,19 @@
-// scripts/weeklyGoogleAdsTune.ts
-import { runAdCopyOptimization } from "@/lib/googleAds/optimize";
-import { weeklyGoogleAdsTune } from "../../src/lib/googleAds/adjust";
+import { weeklyAdjustments } from "../../src/lib/googleAds/adjust";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
 
-  console.log("[WEEKLY ADS OPTIMIZER] Starting job");
-  console.log("[WEEKLY ADS OPTIMIZER] dryRun:", dryRun);
+  console.log("[WEEKLY ADS OPTIMIZER] start", { dryRun });
 
-  const start = Date.now();
+  const result = await weeklyAdjustments({ dryRun });
 
-  try {
-    await weeklyGoogleAdsTune({ dryRun });
-    const adCopyOptimization = await runAdCopyOptimization({ dryRun });
-
-    console.log("[WEEKLY ADS OPTIMIZER] Success");
-
-    console.log("::group::Weekly Ads Optimizer Result");
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          dryRun,
-          durationMs: Date.now() - start,
-          adCopyOptimization
-        },
-        null,
-        2
-      )
-    );
-    console.log("::endgroup::");
-
-    process.exit(0);
-  } catch (err) {
-    console.error("[WEEKLY ADS OPTIMIZER ERROR]", err);
+  if (!result.ok) {
+    console.error("[WEEKLY ADS OPTIMIZER ERROR]", result);
     process.exit(1);
   }
+
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
 }
 
 main();
