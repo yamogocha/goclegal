@@ -1,6 +1,5 @@
 import { getCustomer } from "./index";
 
-// // types
 type BudgetControlResult = {
   success: boolean;
   summary: {
@@ -16,77 +15,46 @@ type BudgetControlResult = {
     after: number;
     reason: string;
     spend: number;
-  }[];
-  adGroups: {
-    id: string | number | undefined;
-    action: "PAUSED" | "SKIPPED";
-    reason: string;
-    ctr: number;
-    conversions: number;
-    impressions: number;
     clicks: number;
+    impressions: number;
+    maturity: "learning" | "mature";
   }[];
+  adGroups: any[];
   errors: string[];
 };
 
 type NumericLike = number | string | null | undefined;
-
 const toNumber = (v: NumericLike): number => Number(v ?? 0);
 
-// // guardrails
+// guardrails
 const DAILY_CAP_MICROS = 25 * 1_000_000;
 const MIN_BUDGET_MICROS = 5 * 1_000_000;
-const MIN_SPEND_THRESHOLD = 5 * 1_000_000;
-const REALLOCATION_FACTOR = 0.5;
 const CHANGE_THRESHOLD = 0.05;
 
-// // maturity thresholds
-const MIN_IMPRESSIONS_MATURE = 1000;
-const MIN_CLICKS_MATURE = 20;
+// maturity (aligned with search pipeline)
+const isMature = (impr: number, clicks: number) =>
+  impr >= 1000 || clicks >= 20;
+
+// low data guard (new)
+const isLowData = (spend: number, clicks: number) =>
+  clicks < 5 && spend < 20 * 1_000_000;
 
 const getErrorMessage = (err: unknown): string => {
-  if (!err) return "unknown_error";
+  if (!err) return "unknown";
   if (err instanceof Error) return err.message;
-
-  if (typeof err === "object") {
-    const e = err as any;
-
-    if (typeof e.message === "string") return e.message;
-
-    if (Array.isArray(e.errors)) {
-      return e.errors
-        .map((sub: any) => {
-          const code = sub?.error_code
-            ? Object.values(sub.error_code).join("_")
-            : "unknown_code";
-          return `${code}:${sub.message || "no_message"}`;
-        })
-        .join(" | ");
-    }
-
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return "unserializable_error_object";
-    }
-  }
-
-  return String(err);
+  try { return JSON.stringify(err); } catch { return "parse_failed"; }
 };
 
-// // main
 export async function runBudgetControl(): Promise<BudgetControlResult> {
   const errors: string[] = [];
   const campaignResults: BudgetControlResult["campaigns"] = [];
-  const adGroupResults: BudgetControlResult["adGroups"] = [];
 
   let updatedBudgets = 0;
-  const pausedAdGroups = 0;
 
   try {
     const customer = getCustomer();
 
-    // // campaigns
+    // campaigns
     const campaigns = await customer.query(`
       SELECT
         campaign.id,
@@ -94,13 +62,12 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
         campaign_budget.resource_name,
         campaign_budget.amount_micros
       FROM campaign
-      WHERE segments.date DURING LAST_30_DAYS
     `);
 
     const active = campaigns.filter((c: any) => c.campaign?.status === 2);
     const paused = campaigns.filter((c: any) => c.campaign?.status === 3);
 
-    // // 7-day performance
+    // 7d perf
     const perf7d = await customer.query(`
       SELECT
         campaign.id,
@@ -120,44 +87,8 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       }
     }
 
-    let reclaimPool = 0;
-
-    // // build reclaim pool
-    for (const c of active) {
-      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
-      if (!id) continue;
-
-      const perf = perfMap.get(id);
-
-      const spend = toNumber(perf?.metrics?.cost_micros);
-      const current = toNumber(c.campaign_budget?.amount_micros);
-
-      const isMature =
-        toNumber(perf?.metrics?.impressions) >= MIN_IMPRESSIONS_MATURE ||
-        toNumber(perf?.metrics?.clicks) >= MIN_CLICKS_MATURE;
-
-      if (isMature && spend === 0) {
-        reclaimPool += current * REALLOCATION_FACTOR;
-      }
-    }
-
-    const totalConversions = active.reduce((sum: number, c: any) => {
-      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
-      if (!id) return sum;
-    
-      return sum + toNumber(perfMap.get(id)?.metrics?.conversions);
-    }, 0);
-
-    const totalClicks = active.reduce((sum: number, c: any) => {
-      const id = c.campaign?.id != null ? String(c.campaign.id) : null;
-      if (!id) return sum;
-    
-      return sum + toNumber(perfMap.get(id)?.metrics?.clicks);
-    }, 0);
-
     const activeCount = active.length || 1;
 
-    // // campaign loop
     for (const c of active) {
       const id = c.campaign?.id != null ? String(c.campaign.id) : null;
       const resourceName = c.campaign_budget?.resource_name;
@@ -169,37 +100,47 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
         const perf = perfMap.get(id);
 
         const spend = toNumber(perf?.metrics?.cost_micros);
+        const clicks = toNumber(perf?.metrics?.clicks);
+        const impressions = toNumber(perf?.metrics?.impressions);
         const conversions = toNumber(perf?.metrics?.conversions);
 
-        const isMature =
-          toNumber(perf?.metrics?.impressions) >= MIN_IMPRESSIONS_MATURE ||
-          toNumber(perf?.metrics?.clicks) >= MIN_CLICKS_MATURE;
-
-        let weight = 1 / activeCount;
-
-        if (totalConversions > 0) {
-          weight = conversions / totalConversions;
-        } else if (totalClicks > 0) {
-          weight = toNumber(perf?.metrics?.clicks) / totalClicks;
-        }
+        const mature = isMature(impressions, clicks);
+        const lowData = isLowData(spend, clicks);
 
         let adjusted = current;
         let reason = "no_change";
 
-        if (reclaimPool > 0 && isMature && spend >= MIN_SPEND_THRESHOLD) {
-          adjusted = current + reclaimPool * weight;
-          reason = "reallocation_gain";
+        // =========================
+        // LEARNING: DO NOTHING
+        // =========================
+        if (!mature || lowData) {
+          reason = "learning_phase";
         }
 
-        if (isMature && spend === 0 && current > MIN_BUDGET_MICROS) {
-          adjusted = Math.max(
-            current * (1 - REALLOCATION_FACTOR),
-            MIN_BUDGET_MICROS
-          );
-          reason = "reallocation_from_idle";
+        // =========================
+        // MATURE: LIGHT WEIGHTING
+        // =========================
+        else {
+          let weight = 1 / activeCount;
+
+          if (conversions > 0) {
+            weight = conversions;
+          } else if (clicks > 0) {
+            weight = clicks;
+          }
+
+          // normalize weight
+          weight = Math.min(weight, 1);
+
+          // small controlled adjustment only
+          adjusted = current * (0.9 + 0.2 * weight);
+          reason = "performance_adjust";
         }
 
-        const finalBudget = Math.min(Math.floor(adjusted), DAILY_CAP_MICROS);
+        const finalBudget = Math.min(
+          Math.max(Math.floor(adjusted), MIN_BUDGET_MICROS),
+          DAILY_CAP_MICROS
+        );
 
         if (
           current > 0 &&
@@ -221,6 +162,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
             after: finalBudget,
             reason,
             spend,
+            clicks,
+            impressions,
+            maturity: mature ? "mature" : "learning",
           });
         } else {
           campaignResults.push({
@@ -230,6 +174,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
             after: finalBudget,
             reason,
             spend,
+            clicks,
+            impressions,
+            maturity: mature ? "mature" : "learning",
           });
         }
       } catch (err) {
@@ -243,10 +190,10 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
         activeCampaigns: active.length,
         pausedCampaigns: paused.length,
         updatedBudgets,
-        pausedAdGroups,
+        pausedAdGroups: 0,
       },
       campaigns: campaignResults,
-      adGroups: adGroupResults,
+      adGroups: [],
       errors,
     };
   } catch (err) {

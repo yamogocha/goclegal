@@ -1,4 +1,3 @@
-
 import { getCustomer } from "./index";
 
 // error extractor
@@ -13,19 +12,26 @@ function extractError(err: any) {
   }
 }
 
+// normalize
 const normalize = (s: string) =>
   s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
+// keyword builder
 function toKeyword(s: string) {
   return normalize(s)
     .split(/\s+/)
-    .filter(w => !/^(how|what|why|to|a|the|i|need|finding|handle)$/.test(w))
-    .slice(0, 4)
+    .filter(w => w.length > 2 && !/^(how|what|why|the|and|for|with)$/.test(w))
+    .slice(0, 5)
     .join(" ");
 }
 
+// intent
 const isHighIntent = (s: string) =>
   /\b(lawyer|attorney)\b/.test(s);
+
+// campaign maturity
+const isMatureCampaign = (clicks: number, cost: number) =>
+  clicks >= 25 || cost >= 150;
 
 export async function runCoreOptimization({ dryRun = false } = {}) {
   const customer = getCustomer();
@@ -41,7 +47,7 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
 
   try {
     // =========================
-    // EXISTING KEYWORDS (DEDUP)
+    // EXISTING KEYWORDS
     // =========================
     const existingRows = await customer.query(`
       SELECT
@@ -69,6 +75,7 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
         ad_group.id,
         campaign.id,
         metrics.clicks,
+        metrics.impressions,
         metrics.cost_micros
       FROM search_term_view
       WHERE segments.date DURING LAST_30_DAYS
@@ -76,7 +83,12 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
 
     const SHARED_NEG_LIST = process.env.GOOGLE_ADS_SHARED_NEGATIVE_LIST_ID;
 
-    for (const r of termRows.slice(0, 20)) {
+    // prioritize high-cost terms
+    const rows = termRows
+      .sort((a, b) => (b.metrics?.cost_micros ?? 0) - (a.metrics?.cost_micros ?? 0))
+      .slice(0, 10);
+
+    for (const r of rows) {
       const raw = r.search_term_view?.search_term || "";
       const kw = toKeyword(raw);
 
@@ -84,10 +96,27 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
       const campaignId = String(r.campaign?.id);
 
       const clicks = r.metrics?.clicks ?? 0;
+      const impressions = r.metrics?.impressions ?? 0;
       const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
 
+      const mature = isMatureCampaign(clicks, cost);
+      const ageBucket = mature ? "mature" : "learning";
+
+      // basic validation
       if (!kw || kw.split(/\s+/).length < 2) {
-        results.skipped.push({ keyword: raw, reason: "invalid_after_clean" });
+        results.skipped.push({ k: raw, r: "invalid", ageBucket });
+        continue;
+      }
+
+      // insufficient data
+      if (clicks < 2 && cost < 15) {
+        results.skipped.push({ k: raw, r: "low_data", ageBucket });
+        continue;
+      }
+
+      // low impressions
+      if (impressions < 10) {
+        results.skipped.push({ k: raw, r: "low_impr", ageBucket });
         continue;
       }
 
@@ -96,15 +125,16 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
 
       try {
         // =========================
-        // ADD KEYWORD (SAFE)
+        // ADD KEYWORD
         // =========================
-        if (intent && clicks >= 2) {
+        if (
+          intent &&
+          (
+            (mature && clicks >= 3)
+          )
+        ) {
           if (existingSet.has(key)) {
-            results.keyword_skipped.push({
-              keyword: kw,
-              adGroupId,
-              reason: "already_exists",
-            });
+            results.keyword_skipped.push({ k: kw, r: "exists", ageBucket });
             continue;
           }
 
@@ -116,19 +146,20 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
             }]);
           }
 
-          results.keyword_add.push({
-            keyword: kw,
-            from: raw,
-            adGroupId,
-          });
-
+          results.keyword_add.push({ k: kw, from: raw, ag: adGroupId });
           continue;
         }
 
         // =========================
         // NEGATIVE
         // =========================
-        if (!intent && cost > 25) {
+        if (
+          !intent &&
+          (
+            (mature && cost > 40 && clicks >= 3) ||
+            (!mature && cost > 60)
+          )
+        ) {
           if (!dryRun && SHARED_NEG_LIST) {
             await customer.sharedCriteria.create([{
               shared_set: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/sharedSets/${SHARED_NEG_LIST}`,
@@ -136,16 +167,24 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
             }]);
           }
 
-          results.negative_add.push({ keyword: kw });
+          results.negative_add.push({ k: kw });
+          continue;
         }
 
+        results.skipped.push({ k: raw, r: "no_action", ageBucket });
+
       } catch (err) {
-        results.errors.push({ keyword: raw, err: extractError(err) });
+        results.errors.push({
+          k: raw,
+          ag: adGroupId,
+          c: campaignId,
+          err: extractError(err),
+        });
       }
     }
 
     // =========================
-    // AD UPDATE (CONTROLLED)
+    // AD UPDATE
     // =========================
     try {
       const ads = await customer.query(`
@@ -170,7 +209,6 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
         const clicks = ad.metrics?.clicks ?? 0;
         const ctr = impressions > 0 ? clicks / impressions : 0;
 
-        // only update if underperforming
         if (ctr < 0.02) {
           const old =
             ad.ad_group_ad?.ad?.responsive_search_ad?.headlines?.map((h: any) => h.text) || [];
@@ -190,8 +228,8 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
                 responsive_search_ad: {
                   headlines: improved.map(h => ({ text: h })),
                   descriptions: [
-                    { text: "Speak directly with an attorney today." },
-                    { text: "No upfront fees. Real results." }
+                    { text: "Speak with an attorney today." },
+                    { text: "No upfront fees." }
                   ],
                 },
                 final_urls: ["https://www.goclegal.com"],
@@ -203,20 +241,14 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
               status: "PAUSED",
             }]);
           }
-
+          
           results.ad_update.push({
             adId,
-            adGroupId,
+            ag: adGroupId,
             ctr,
-            before: old,
-            after: improved,
           });
         } else {
-          results.skipped.push({
-            type: "ad",
-            reason: "good_performance",
-            ctr,
-          });
+          results.skipped.push({ type: "ad", r: "ok", ctr });
         }
       }
 
@@ -233,4 +265,3 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
     };
   }
 }
-
