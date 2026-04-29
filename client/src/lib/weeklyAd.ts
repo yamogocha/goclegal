@@ -9,6 +9,7 @@ import { getOpenAI } from "./openai";
 import { toFile } from "openai";
 import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
+import ffmpegPath from "ffmpeg-static";
 
 export const runtime = "nodejs";
 const openai = getOpenAI();
@@ -110,62 +111,87 @@ export async function generateImage({ message, template = "instagram", weekNumbe
   if (!b64) throw new Error("No image returned from image model.");
   return Buffer.from(b64, "base64")
 }
-// Shared ffmpeg renderer: loops image, adds silent audio, outputs H.264 MP4
-export async function renderWithFfmpeg(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    ffmpeg.setFfmpegPath(require("ffmpeg-static"));
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmpDir = os.tmpdir();
-    const imgPath = path.join(tmpDir, `ad-img-${id}.png`);
-    const silentPath = path.join(tmpDir, `ad-silent-${id}.mp3`);
-    const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
-  
-    // Resize image to exact output dimensions first
-    const isVertical = height > width; // YouTube Shorts = true, Instagram = false
-  
-    const resized = await sharp(imageBuffer)
-      .resize(width, height, {
-        fit: isVertical ? "contain" : "fill",  // contain = no stretch, fill = Instagram stays as-is
-        background: { r: 0, g: 48, b: 91, alpha: 1 }, // #00305b
-        kernel: sharp.kernel.lanczos3,
-      })
-      .png()
-      .toBuffer();
-      fs.writeFileSync(imgPath, resized);
-  
-    // Download silent audio
-    const silentRes = await fetch(process.env.SILENT_AUDIO_URL!);
-    fs.writeFileSync(silentPath, Buffer.from(await silentRes.arrayBuffer()));
-  
-    try {
-      const stderrLines: string[] = [];
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg()
-          .input(imgPath).inputOptions(["-loop 1"])
-          .input(silentPath)
-          .outputOptions([
-            "-map 0:v", "-map 1:a",
-            "-c:v libx264", "-preset fast", "-crf 23",
-            "-c:a aac", "-b:a 128k",
-            "-t 15", "-r 30", "-pix_fmt yuv420p",
-            "-movflags +faststart",
-            "-shortest",
-          ])
-          .output(outPath)
-          .on("stderr", (line) => { stderrLines.push(line); console.error("[ffmpeg]", line); })
-          .on("end", () => resolve())
-          .on("error", (err) =>
-            reject(new Error(`ffmpeg error: ${err.message}\n${stderrLines.join("\n")}`))
-          )
-          .run();
-      });
-      return fs.readFileSync(outPath);
-    } finally {
-      for (const f of [imgPath, silentPath, outPath]) {
-        try { fs.unlinkSync(f); } catch {}
-      }
-    }
+
+export async function renderWithFfmpeg(
+  imageBuffer: Buffer,
+  width: number,
+  height: number
+): Promise<Buffer> {
+  ffmpeg.setFfmpegPath(ffmpegPath as string);
+
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const tmpDir = os.tmpdir();
+
+  const imgPath = path.join(tmpDir, `ad-img-${id}.png`);
+  const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
+
+  const resized = await sharp(imageBuffer)
+    .resize(width, height, {
+      fit: "contain",
+      background: { r: 0, g: 48, b: 91, alpha: 1 },
+    })
+    .png()
+    .toBuffer();
+
+  fs.writeFileSync(imgPath, resized);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(imgPath)
+        .inputOptions([
+          "-loop 1",
+          "-framerate 30",
+        ])
+
+        // ✅ stable synthetic audio (important for YouTube)
+        .input("anullsrc=channel_layout=stereo:sample_rate=44100")
+        .inputFormat("lavfi")
+
+        .outputOptions([
+          "-map 0:v",
+          "-map 1:a",
+        
+          "-t 15",
+        
+          "-c:v libx264",
+          "-preset slow",        // 🔥 better quality
+          "-profile:v high",
+          "-pix_fmt yuv420p",
+        
+          "-r 30",
+        
+          "-g 60",
+          "-keyint_min 60",
+          "-sc_threshold 0",
+        
+          // 🔥 QUALITY BOOST
+          "-crf 18",
+          "-b:v 6M",
+          "-maxrate 8M",
+          "-bufsize 12M",
+        
+          "-c:a aac",
+          "-b:a 128k",
+          "-ar 44100",
+          "-af aresample=async=1:first_pts=0",
+        
+          "-movflags +faststart",
+          "-shortest",
+        ])
+
+        .output(outPath)
+        .on("end", () => resolve())
+        .on("error", (err) => reject(err))
+        .run();
+    });
+
+    return fs.readFileSync(outPath);
+  } finally {
+    try { fs.unlinkSync(imgPath); } catch {}
+    try { fs.unlinkSync(outPath); } catch {}
   }
+}
   
   // Instagram: 1080x1080 — image already has text baked in by OpenAI
   export async function generateVideo({ imageBuffer }: { imageBuffer: Buffer }) {
@@ -232,6 +258,33 @@ export async function renderWithFfmpeg(imageBuffer: Buffer, width: number, heigh
     if (!res.ok) throw new Error(`Create REELS container failed: ${JSON.stringify(data)}`);
   
     return data.id as string; // creation_id
+  }
+
+  async function igCreateImagePost(opts: {
+    igUserId: string;
+    accessToken: string;
+    imageUrl: string;
+    caption: string;
+  }) {
+    const url = `https://graph.facebook.com/v20.0/${opts.igUserId}/media`;
+  
+    const form = new URLSearchParams();
+    form.set("image_url", opts.imageUrl);
+    form.set("caption", opts.caption);
+  
+    // ✅ THIS enables IG → Facebook cross-post
+    form.set("published_platforms", '["INSTAGRAM","FACEBOOK"]');
+  
+    form.set("access_token", opts.accessToken);
+  
+    const res = await fetch(url, { method: "POST", body: form });
+    const data = await res.json();
+  
+    if (!res.ok) {
+      throw new Error(`Create image container failed: ${JSON.stringify(data)}`);
+    }
+  
+    return data.id as string;
   }
   
   async function igWaitForContainer(opts: {
@@ -486,27 +539,30 @@ export async function generateWeeklyAd(
 
     // instagram publish
     try {
-      console.log("[IG] creating container");
-      const creationId = await igCreateReelContainer({
+      console.log("[IG] creating image post");
+    
+      const creationId = await igCreateImagePost({
         igUserId: process.env.IG_USER_ID!,
         accessToken: process.env.FB_ACCESS_TOKEN!,
-        videoUrl,
+        imageUrl,
         caption: igCaption,
       });
-
+    
       console.log("[IG] waiting for processing");
+    
       await igWaitForContainer({
         creationId,
         accessToken: process.env.FB_ACCESS_TOKEN!,
       });
-
+    
       console.log("[IG] publishing");
+    
       const postId = await igPublish({
         igUserId: process.env.IG_USER_ID!,
         accessToken: process.env.FB_ACCESS_TOKEN!,
         creationId,
       });
-
+    
       result.postId = postId;
       console.log("[IG] success", postId);
     } catch (err) {
