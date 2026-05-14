@@ -303,139 +303,177 @@ export async function runCoreOptimization({
     // AD OPTIMIZATION
     // =========================
 
-    try {
-      const ads =
-        await customer.query(`
-          SELECT
-            ad_group_ad.ad.id,
-            ad_group_ad.ad_group,
-            ad_group_ad.ad.responsive_search_ad.headlines,
-            metrics.impressions,
-            metrics.clicks
-          FROM ad_group_ad
-          WHERE metrics.impressions > 50
-          LIMIT 1
-        `);
+    // =========================
+// AD OPTIMIZATION
+// =========================
 
-      const ad = ads?.[0];
+try {
+  const ads = await customer.query(`
+    SELECT
+      ad_group_ad.ad.id,
+      ad_group_ad.ad_group,
+      ad_group_ad.status,
+      ad_group_ad.ad.type,
+      ad_group_ad.ad.responsive_search_ad.headlines,
+      metrics.impressions,
+      metrics.clicks
+    FROM ad_group_ad
+    WHERE metrics.impressions > 50
+  `);
 
-      if (ad) {
-        const adId =
-          ad.ad_group_ad?.ad?.id;
+  const grouped = new Map<string, any[]>();
 
-        const adGroupId =
-          ad.ad_group_ad?.ad_group
-            ?.split("/")
-            .pop();
+  for (const ad of ads) {
+    const adGroupId =
+      ad.ad_group_ad?.ad_group
+        ?.split("/")
+        .pop();
 
-        const impressions =
-          ad.metrics?.impressions ?? 0;
+    if (!adGroupId) continue;
 
-        const clicks =
-          ad.metrics?.clicks ?? 0;
+    if (!grouped.has(adGroupId)) {
+      grouped.set(adGroupId, []);
+    }
 
-        const ctr =
-          impressions > 0
-            ? clicks / impressions
-            : 0;
+    grouped.get(adGroupId)!.push(ad);
+  }
 
-        if (ctr < 0.02) {
-          const old =
-            ad.ad_group_ad?.ad
-              ?.responsive_search_ad
-              ?.headlines?.map(
-                (h: any) => h.text
-              ) || [];
+  for (const [adGroupId, adGroupAds] of grouped) {
+    const rsaAds = adGroupAds.filter(
+      (a) =>
+        a.ad_group_ad?.ad?.type ===
+        "RESPONSIVE_SEARCH_AD"
+    );
 
-          const improved = [
-            ...old.slice(0, 12),
-            "Personal Injury Lawyer",
-            "No Fee Unless You Win",
-            "Free Consultation Today",
-          ].slice(0, 15);
+    const activeCount = rsaAds.filter(
+      (a) =>
+        a.ad_group_ad?.status ===
+        "ENABLED"
+    ).length;
 
-          if (!dryRun) {
-            await customer.adGroupAds.create(
-              [
-                {
-                  ad_group:
-                    `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+    const ad = rsaAds[0];
 
-                  status: "ENABLED",
+    if (!ad) continue;
 
-                  ad: {
-                    responsive_search_ad:
-                      {
-                        headlines:
-                          improved.map(
-                            (h) => ({
-                              text: h,
-                            })
-                          ),
+    const adId =
+      ad.ad_group_ad?.ad?.id;
 
-                        descriptions:
-                          [
-                            {
-                              text:
-                                "Speak with an attorney today.",
-                            },
-                            {
-                              text:
-                                "No upfront fees.",
-                            },
-                          ],
-                      },
+    const impressions =
+      ad.metrics?.impressions ?? 0;
 
-                    final_urls: [
-                      "https://www.goclegal.com",
-                    ],
-                  },
-                },
-              ]
-            );
+    const clicks =
+      ad.metrics?.clicks ?? 0;
 
-            await customer.adGroupAds.update(
-              [
-                {
-                  resource_name:
-                    `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adGroupId}~${adId}`,
+    const ctr =
+      impressions > 0
+        ? clicks / impressions
+        : 0;
 
-                  status:
-                    "PAUSED",
-                },
-              ]
-            );
-          }
-
-          results.ad_update.push({
-            adId,
-            ag: adGroupId,
-            ctr,
-          });
-        } else {
-          results.skipped.push({
-            type: "ad",
-            r: "ok",
-            ctr,
-          });
-        }
-      }
-    } catch (err) {
-      results.ok = false;
-
-      const error =
-        getErrorMessage(err);
-
-      results.errors.push({
+    // healthy ad
+    if (ctr >= 0.02) {
+      results.skipped.push({
         type: "ad",
-        err: error,
+        r: "healthy_ctr",
+        ctr,
+        adGroupId,
       });
 
-      await notifySlackError(
-        "Google Ads Ad Optimization Failed",
-        err
-      );
+      continue;
     }
+
+    // already maxed out
+    if (activeCount >= 3) {
+      results.skipped.push({
+        type: "ad",
+        r: "rsa_limit_reached",
+        adGroupId,
+        activeCount,
+      });
+
+      continue;
+    }
+
+    const old =
+      ad.ad_group_ad?.ad
+        ?.responsive_search_ad
+        ?.headlines?.map(
+          (h: any) => h.text
+        ) || [];
+
+    const improved = [
+      ...old.slice(0, 12),
+      "Personal Injury Lawyer",
+      "No Fee Unless You Win",
+      "Free Consultation Today",
+    ].slice(0, 15);
+
+    if (!dryRun) {
+      await customer.adGroupAds.create([
+        {
+          ad_group:
+            `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroups/${adGroupId}`,
+
+          status: "ENABLED",
+
+          ad: {
+            responsive_search_ad: {
+              headlines:
+                improved.map((h) => ({
+                  text: h,
+                })),
+
+              descriptions: [
+                {
+                  text:
+                    "Speak with an attorney today.",
+                },
+                {
+                  text:
+                    "No upfront fees.",
+                },
+              ],
+            },
+
+            final_urls: [
+              "https://www.goclegal.com",
+            ],
+          },
+        },
+      ]);
+
+      await customer.adGroupAds.update([
+        {
+          resource_name:
+            `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/adGroupAds/${adGroupId}~${adId}`,
+
+          status: "PAUSED",
+        },
+      ]);
+    }
+
+    results.ad_update.push({
+      adId,
+      ag: adGroupId,
+      ctr,
+    });
+  }
+
+} catch (err) {
+  results.ok = false;
+
+  const error =
+    getErrorMessage(err);
+
+  results.errors.push({
+    type: "ad",
+    err: error,
+  });
+
+  await notifySlackError(
+    "Google Ads Ad Optimization Failed",
+    err
+  );
+}
 
     results.ok =
       results.errors.length === 0;
