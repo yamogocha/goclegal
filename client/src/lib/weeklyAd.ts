@@ -201,61 +201,143 @@ export async function renderWithFfmpeg(
 
   const tmpDir = os.tmpdir();
 
-  const imgPath = path.join(tmpDir, `ad-img-${id}.png`);
-  const outPath = path.join(tmpDir, `ad-out-${id}.mp4`);
+  const imgPath = path.join(
+    tmpDir,
+    `ad-img-${id}.png`
+  );
+
+  const outPath = path.join(
+    tmpDir,
+    `ad-out-${id}.mp4`
+  );
 
   try {
+    // Resize image to target canvas
     const resized = await sharp(imageBuffer)
       .resize(width, height, {
         fit: "contain",
-        background: { r: 0, g: 48, b: 91, alpha: 1 },
+        background: {
+          r: 0,
+          g: 48,
+          b: 91,
+          alpha: 1,
+        },
       })
       .png()
       .toBuffer();
 
     fs.writeFileSync(imgPath, resized);
 
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg()
-        .input(imgPath)
-        .inputOptions(["-loop 1", "-framerate 30"])
-        .input(
-          "anullsrc=channel_layout=stereo:sample_rate=44100"
-        )
-        .inputFormat("lavfi")
-        .outputOptions([
-          "-map 0:v",
-          "-map 1:a",
-          "-t 15",
-          "-c:v libx264",
-          "-preset slow",
-          "-profile:v high",
-          "-pix_fmt yuv420p",
-          "-r 30",
-          "-g 60",
-          "-keyint_min 60",
-          "-sc_threshold 0",
-          "-crf 18",
-          "-b:v 6M",
-          "-maxrate 8M",
-          "-bufsize 12M",
-          "-c:a aac",
-          "-b:a 128k",
-          "-ar 44100",
-          "-af aresample=async=1:first_pts=0",
-          "-movflags +faststart",
-          "-shortest",
-        ])
-        .output(outPath)
-        .on("end", () => resolve())
-        .on("error", (err) => reject(err))
-        .run();
-    });
+    // Generate MP4 from static image
+    await new Promise<void>(
+      (resolve, reject) => {
+        ffmpeg()
+          .input(imgPath)
 
-    return fs.readFileSync(outPath);
+          .inputOptions([
+            "-loop 1",
+            "-framerate 30",
+          ])
+
+          .outputOptions([
+            // duration
+            "-t 15",
+
+            // video codec
+            "-c:v libx264",
+
+            // quality
+            "-preset slow",
+            "-profile:v high",
+            "-pix_fmt yuv420p",
+
+            // fps
+            "-r 30",
+
+            // GOP structure
+            "-g 60",
+            "-keyint_min 60",
+            "-sc_threshold 0",
+
+            // bitrate / quality tuning
+            "-crf 18",
+            "-b:v 6M",
+            "-maxrate 8M",
+            "-bufsize 12M",
+
+            // streaming optimization
+            "-movflags +faststart",
+          ])
+
+          .output(outPath)
+
+          .on("start", (cmd) => {
+            console.log(
+              "[FFMPEG] start:",
+              cmd
+            );
+          })
+
+          .on("stderr", (line) => {
+            console.log(
+              "[FFMPEG STDERR]",
+              line
+            );
+          })
+
+          .on("end", () => {
+            console.log(
+              "[FFMPEG] render complete"
+            );
+
+            resolve();
+          })
+
+          .on("error", async (err) => {
+            const error =
+              getErrorMessage(err);
+
+            await notifySlackError(
+              "Weekly Ad FFmpeg Render Failed",
+              err,
+              {
+                width,
+                height,
+                ffmpegPath,
+              }
+            );
+
+            reject(
+              new Error(
+                `FFmpeg render failed: ${error}`
+              )
+            );
+          })
+
+          .run();
+      }
+    );
+
+    if (!fs.existsSync(outPath)) {
+      throw new Error(
+        "FFmpeg output file was not created."
+      );
+    }
+
+    const videoBuffer =
+      fs.readFileSync(outPath);
+
+    if (!videoBuffer.length) {
+      throw new Error(
+        "FFmpeg output video is empty."
+      );
+    }
+
+    return videoBuffer;
+
   } catch (err) {
     await notifySlackError(
-      "Weekly Ad FFmpeg Render Failed",
+      "Weekly Ad Video Generation Failed",
       err,
       {
         width,
@@ -264,13 +346,18 @@ export async function renderWithFfmpeg(
     );
 
     throw err;
+
   } finally {
     try {
-      fs.unlinkSync(imgPath);
+      if (fs.existsSync(imgPath)) {
+        fs.unlinkSync(imgPath);
+      }
     } catch {}
 
     try {
-      fs.unlinkSync(outPath);
+      if (fs.existsSync(outPath)) {
+        fs.unlinkSync(outPath);
+      }
     } catch {}
   }
 }
