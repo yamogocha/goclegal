@@ -9,6 +9,9 @@ import {
 type BudgetControlResult = {
   ok: boolean;
 
+  // backward compatibility
+  success: boolean;
+
   durationMs: number;
 
   summary: {
@@ -99,6 +102,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     {
       ok: true,
 
+      // backward compatibility
+      success: true,
+
       durationMs: 0,
 
       summary: {
@@ -152,7 +158,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       paused.length;
 
     // =========================
-    // 7D PERFORMANCE
+    // PERFORMANCE
     // =========================
 
     const perf7d =
@@ -400,6 +406,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
         }
       } catch (err) {
         results.ok = false;
+        results.success = false;
 
         const error =
           getErrorMessage(err);
@@ -425,6 +432,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
 
     results.ok =
       results.errors.length === 0;
+
+    results.success =
+      results.ok;
 
     results.durationMs =
       Date.now() - start;
