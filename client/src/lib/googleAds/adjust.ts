@@ -1,6 +1,6 @@
 import { getCustomer } from "./index";
 import type { resources } from "google-ads-api";
-import { getErrorMessage, notifySlackError } from "@/lib";
+import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
 
 const LOOKBACK = "LAST_30_DAYS";
 const MIN_COST = 5;
@@ -592,6 +592,11 @@ export async function weeklyAdjustments({
 
     results.durationMs =
       Date.now() - start;
+
+    await notifySlackResult(
+      "Google Ads Weekly Adjustment Result",
+      results
+    );
 
     return results;
 

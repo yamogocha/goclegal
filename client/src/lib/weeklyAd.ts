@@ -10,7 +10,7 @@ import { toFile } from "openai";
 import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
 import ffmpegPath from "ffmpeg-static";
-import { getErrorMessage, notifySlackError } from ".";
+import { getErrorMessage, notifySlackError, notifySlackResult } from ".";
 
 export const runtime = "nodejs";
 
@@ -948,6 +948,11 @@ ${hashtags
       !result.gbpError;
 
     result.durationMs = Date.now() - start;
+
+    await notifySlackResult(
+      "Weekly Ad Result",
+      result
+    );
 
     return result;
   } catch (err) {

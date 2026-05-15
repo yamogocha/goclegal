@@ -1,5 +1,5 @@
 import { getCustomer } from "./index";
-import { getErrorMessage, notifySlackError } from "@/lib";
+import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
 
 const normalize = (s: string) =>
   s.toLowerCase()
@@ -477,6 +477,11 @@ try {
 
     results.ok =
       results.errors.length === 0;
+
+    await notifySlackResult(
+      "Google Ads Ad Optimization Result",
+      results
+    );
 
     return results;
 
