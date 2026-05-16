@@ -109,7 +109,7 @@ async function notifySlackAlerts(message: string) {
   
     try {
       await notifySlackReports(
-        `❌ ${title}\n\n${JSON.stringify(payload, null, 2)}`
+        `✅ ${title}\n\n${JSON.stringify(payload, null, 2)}`
       );
     } catch (slackErr) {
       console.error(

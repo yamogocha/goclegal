@@ -453,80 +453,84 @@ export function buildInstagramCaption(
   return `${message}\n\n${tags}`.trim();
 }
 
-async function igCreateImagePost(opts: {
+async function publishInstagramAndFacebook(opts: {
   igUserId: string;
+  fbPageId: string;
   accessToken: string;
+
   imageUrl: string;
   caption: string;
 }) {
-  const url = `https://graph.facebook.com/v20.0/${opts.igUserId}/media`;
+  //
+  // =========================
+  // INSTAGRAM
+  // =========================
+  //
 
-  const form = new URLSearchParams();
+  const igCreateUrl =
+    `https://graph.facebook.com/v20.0/${opts.igUserId}/media`;
 
-  form.set("image_url", opts.imageUrl);
-  form.set("caption", opts.caption);
-  form.set(
-    "published_platforms",
-    '["INSTAGRAM","FACEBOOK"]'
-  );
-  form.set("access_token", opts.accessToken);
+  const igForm = new URLSearchParams();
 
-  const res = await fetch(url, {
+  igForm.set("image_url", opts.imageUrl);
+  igForm.set("caption", opts.caption);
+  igForm.set("access_token", opts.accessToken);
+
+  const igCreateRes = await fetch(igCreateUrl, {
     method: "POST",
-    body: form,
+    body: igForm,
   });
 
-  const data = await res.json();
+  const igCreateData = await igCreateRes.json();
 
-  if (!res.ok) {
+  if (!igCreateRes.ok) {
     throw new Error(
-      `Create IG image container failed: ${JSON.stringify(
-        data,
+      `IG container creation failed: ${JSON.stringify(
+        igCreateData,
         null,
         2
       )}`
     );
   }
 
-  return data.id as string;
-}
+  const creationId = igCreateData.id;
 
-async function igWaitForContainer(opts: {
-  creationId: string;
-  accessToken: string;
-}) {
+  //
+  // Wait for IG processing
+  //
+
   const timeoutMs = 10 * 60_000;
   const started = Date.now();
 
   while (true) {
-    const url =
-      `https://graph.facebook.com/v20.0/${opts.creationId}` +
+    const statusUrl =
+      `https://graph.facebook.com/v20.0/${creationId}` +
       `?fields=status_code,status` +
       `&access_token=${opts.accessToken}`;
 
-    const res = await fetch(url);
-    const data = await res.json();
+    const statusRes = await fetch(statusUrl);
+    const statusData = await statusRes.json();
 
-    if (!res.ok) {
+    if (!statusRes.ok) {
       throw new Error(
-        `Read IG container status failed: ${JSON.stringify(
-          data,
+        `IG container status failed: ${JSON.stringify(
+          statusData,
           null,
           2
         )}`
       );
     }
 
-    const status = data.status_code as string;
+    const status = statusData.status_code;
 
     if (status === "FINISHED") {
-      return;
+      break;
     }
 
     if (status === "ERROR") {
       throw new Error(
-        `IG container processing failed: ${JSON.stringify(
-          data,
+        `IG processing failed: ${JSON.stringify(
+          statusData,
           null,
           2
         )}`
@@ -535,44 +539,79 @@ async function igWaitForContainer(opts: {
 
     if (Date.now() - started > timeoutMs) {
       throw new Error(
-        `IG container timed out. Last status: ${status}`
+        `IG processing timed out. Last status: ${status}`
       );
     }
 
     await new Promise((r) => setTimeout(r, 3000));
   }
-}
 
-async function igPublish({
-  igUserId,
-  accessToken,
-  creationId,
-}: {
-  igUserId: string;
-  accessToken: string;
-  creationId: string;
-}) {
-  const url = `https://graph.facebook.com/v20.0/${igUserId}/media_publish`;
+  //
+  // Publish IG media
+  //
 
-  const form = new URLSearchParams();
+  const igPublishUrl =
+    `https://graph.facebook.com/v20.0/${opts.igUserId}/media_publish`;
 
-  form.set("creation_id", creationId);
-  form.set("access_token", accessToken);
+  const igPublishForm = new URLSearchParams();
 
-  const res = await fetch(url, {
+  igPublishForm.set("creation_id", creationId);
+  igPublishForm.set("access_token", opts.accessToken);
+
+  const igPublishRes = await fetch(igPublishUrl, {
     method: "POST",
-    body: form,
+    body: igPublishForm,
   });
 
-  const data = await res.json();
+  const igPublishData = await igPublishRes.json();
 
-  if (!res.ok) {
+  if (!igPublishRes.ok) {
     throw new Error(
-      `IG publish failed: ${JSON.stringify(data, null, 2)}`
+      `IG publish failed: ${JSON.stringify(
+        igPublishData,
+        null,
+        2
+      )}`
     );
   }
 
-  return data.id as string;
+  //
+  // =========================
+  // FACEBOOK PAGE POST
+  // =========================
+  //
+
+  const fbPostUrl =
+    `https://graph.facebook.com/v20.0/${opts.fbPageId}/photos`;
+
+  const fbForm = new URLSearchParams();
+
+  fbForm.set("url", opts.imageUrl);
+  fbForm.set("caption", opts.caption);
+  fbForm.set("published", "true");
+  fbForm.set("access_token", opts.accessToken);
+
+  const fbRes = await fetch(fbPostUrl, {
+    method: "POST",
+    body: fbForm,
+  });
+
+  const fbData = await fbRes.json();
+
+  if (!fbRes.ok) {
+    throw new Error(
+      `Facebook publish failed: ${JSON.stringify(
+        fbData,
+        null,
+        2
+      )}`
+    );
+  }
+
+  return {
+    instagramPostId: igPublishData.id,
+    facebookPostId: fbData.post_id ?? fbData.id,
+  };
 }
 
 async function youtubeUploadVideo({
@@ -834,28 +873,17 @@ export async function generateWeeklyAd(
 
     // Instagram
     try {
-      const creationId = await igCreateImagePost({
+      const { instagramPostId, facebookPostId } = await publishInstagramAndFacebook({
         igUserId: process.env.IG_USER_ID!,
+        fbPageId: process.env.FB_PAGE_ID!,
         accessToken:
           process.env.FB_ACCESS_TOKEN!,
         imageUrl,
         caption: igCaption,
       });
 
-      await igWaitForContainer({
-        creationId,
-        accessToken:
-          process.env.FB_ACCESS_TOKEN!,
-      });
-
-      const postId = await igPublish({
-        igUserId: process.env.IG_USER_ID!,
-        accessToken:
-          process.env.FB_ACCESS_TOKEN!,
-        creationId,
-      });
-
-      result.postId = postId;
+      result.instagramPostId = instagramPostId;
+      result.facebookPostId = facebookPostId;
     } catch (err) {
       result.ok = false;
 
