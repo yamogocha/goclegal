@@ -24,11 +24,70 @@ on:
           - adjust
           - budget
 
+#
+# ======================================================
+# TOP LEVEL ENV
+# ======================================================
+#
+
+env:
+  NODE_ENV: production
+
+  #
+  # OpenAI
+  #
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  #
+  # Vercel Blob
+  #
+  BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+
+  #
+  # Facebook / Instagram
+  #
+  FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+  FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+  IG_USER_ID: ${{ secrets.IG_USER_ID }}
+
+  #
+  # Google Business Profile
+  #
+  GBP_ACCOUNT_ID: ${{ secrets.GBP_ACCOUNT_ID }}
+  GBP_LOCATION_ID: ${{ secrets.GBP_LOCATION_ID }}
+
+  #
+  # Google OAuth
+  #
+  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+
+  #
+  # Google Ads
+  #
+  GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+  GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+  GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+  GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+  GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+
+  #
+  # Sanity
+  #
+  SANITY_API_READ_TOKEN: ${{ secrets.SANITY_API_READ_TOKEN }}
+  NEXT_PUBLIC_SANITY_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_SANITY_PROJECT_ID }}
+  NEXT_PUBLIC_SANITY_DATASET: ${{ secrets.NEXT_PUBLIC_SANITY_DATASET }}
+
+  #
+  # Slack
+  #
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
 jobs:
   run-crons:
     runs-on: ubuntu-latest
-
-    env: ${{ secrets }}
 
     defaults:
       run:
@@ -45,12 +104,54 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
 
+      - name: Verify required env vars
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            OPENAI_API_KEY
+            BLOB_READ_WRITE_TOKEN
+            FB_ACCESS_TOKEN
+            FB_PAGE_ID
+            IG_USER_ID
+            GBP_ACCOUNT_ID
+            GBP_LOCATION_ID
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            GOOGLE_REFRESH_TOKEN
+            SLACK_WEBHOOK_URL
+          )
+
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "❌ Missing required env var: $var"
+              exit 1
+            fi
+          done
+
+          echo "✅ Environment validation passed"
+
+      - name: Print Blob token debug
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BLOB_READ_WRITE_TOKEN:-}" ]; then
+            echo "❌ BLOB_READ_WRITE_TOKEN missing"
+            exit 1
+          fi
+
+          echo "✅ Blob token exists"
+          echo "Prefix: ${BLOB_READ_WRITE_TOKEN:0:20}"
+          echo "Length: ${#BLOB_READ_WRITE_TOKEN}"
+
       - name: Install deps
         run: npm ci
 
-      # ----------------------------
+      #
+      # ======================================================
       # WEEKLY BLOG
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Weekly blog
         if: github.event.schedule == '0 16 * * 1' || github.event.inputs.job == 'blog' || github.event.inputs.job == 'all'
@@ -61,9 +162,11 @@ jobs:
 
           npx tsx scripts/weeklyBlog.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # WEEKLY AD
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Weekly ad
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
@@ -74,9 +177,11 @@ jobs:
 
           npx tsx scripts/weeklyAd.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # GOOGLE ADS ADJUSTMENTS
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Weekly Google Ads Adjustments
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'adjust' || github.event.inputs.job == 'all'
@@ -87,9 +192,11 @@ jobs:
 
           npx tsx scripts/googleAds/adjust.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # GOOGLE ADS SETUP
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Google Ads Setup (one-time)
         if: github.event.inputs.job == 'setup'
@@ -100,9 +207,11 @@ jobs:
 
           npx tsx scripts/googleAds/setup.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # GOOGLE ADS OPTIMIZATION
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Google Ads Optimization
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'optimize' || github.event.inputs.job == 'all'
@@ -113,9 +222,11 @@ jobs:
 
           npx tsx scripts/googleAds/optimize.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # GOOGLE ADS BUDGET CONTROL
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Google Ads Budget Control
         if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
@@ -126,9 +237,11 @@ jobs:
 
           npx tsx scripts/googleAds/budget.ts
 
-      # ----------------------------
+      #
+      # ======================================================
       # FINAL STATUS
-      # ----------------------------
+      # ======================================================
+      #
 
       - name: Workflow completed
         if: success()
