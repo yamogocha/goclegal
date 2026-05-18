@@ -83,7 +83,8 @@ env:
   #
   # Slack
   #
-  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  SLACK_ALERTS_URL: ${{ secrets.SLACK_ALERTS_URL }}
+  SLACK_REPORTS_URL: ${{ secrets.SLACK_REPORTS_URL }}
 
 jobs:
   run-crons:
