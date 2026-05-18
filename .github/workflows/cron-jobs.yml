@@ -120,7 +120,8 @@ jobs:
             GOOGLE_CLIENT_ID
             GOOGLE_CLIENT_SECRET
             GOOGLE_REFRESH_TOKEN
-            SLACK_WEBHOOK_URL
+            SLACK_ALERTS_URL
+            SLACK_REPORTS_URL
           )
 
           for var in "${required_vars[@]}"; do
