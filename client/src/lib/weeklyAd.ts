@@ -456,8 +456,8 @@ export function buildInstagramCaption(
 async function publishInstagramAndFacebook(opts: {
   igUserId: string;
   fbPageId: string;
-  accessToken: string;
-
+  userAccessToken: string;
+  pageAccessToken: string;
   imageUrl: string;
   caption: string;
 }) {
@@ -474,7 +474,7 @@ async function publishInstagramAndFacebook(opts: {
 
   igForm.set("image_url", opts.imageUrl);
   igForm.set("caption", opts.caption);
-  igForm.set("access_token", opts.accessToken);
+  igForm.set("access_token", opts.userAccessToken);
 
   const igCreateRes = await fetch(igCreateUrl, {
     method: "POST",
@@ -506,7 +506,7 @@ async function publishInstagramAndFacebook(opts: {
     const statusUrl =
       `https://graph.facebook.com/v20.0/${creationId}` +
       `?fields=status_code,status` +
-      `&access_token=${opts.accessToken}`;
+      `&access_token=${opts.userAccessToken}`;
 
     const statusRes = await fetch(statusUrl);
     const statusData = await statusRes.json();
@@ -556,7 +556,7 @@ async function publishInstagramAndFacebook(opts: {
   const igPublishForm = new URLSearchParams();
 
   igPublishForm.set("creation_id", creationId);
-  igPublishForm.set("access_token", opts.accessToken);
+  igPublishForm.set("access_token", opts.userAccessToken);
 
   const igPublishRes = await fetch(igPublishUrl, {
     method: "POST",
@@ -589,7 +589,7 @@ async function publishInstagramAndFacebook(opts: {
   fbForm.set("url", opts.imageUrl);
   fbForm.set("caption", opts.caption);
   fbForm.set("published", "true");
-  fbForm.set("access_token", opts.accessToken);
+  fbForm.set("access_token", opts.pageAccessToken);
 
   const fbRes = await fetch(fbPostUrl, {
     method: "POST",
@@ -876,8 +876,9 @@ export async function generateWeeklyAd(
       const { instagramPostId, facebookPostId } = await publishInstagramAndFacebook({
         igUserId: process.env.IG_USER_ID!,
         fbPageId: process.env.FB_PAGE_ID!,
-        accessToken:
-          process.env.FB_ACCESS_TOKEN!,
+        userAccessToken:
+          process.env.FB_USER_ACCESS_TOKEN!,
+        pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!,
         imageUrl,
         caption: igCaption,
       });
