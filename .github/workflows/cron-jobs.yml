@@ -46,7 +46,8 @@ env:
   #
   # Facebook / Instagram
   #
-  FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+  FB_USER_ACCESS_TOKEN: ${{ secrets.FB_USER_ACCESS_TOKEN }}
+  FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
   FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
   IG_USER_ID: ${{ secrets.IG_USER_ID }}
 
@@ -112,7 +113,8 @@ jobs:
           required_vars=(
             OPENAI_API_KEY
             BLOB_READ_WRITE_TOKEN
-            FB_ACCESS_TOKEN
+            FB_USER_ACCESS_TOKEN
+            FB_PAGE_ACCESS_TOKEN
             FB_PAGE_ID
             IG_USER_ID
             GBP_ACCOUNT_ID
