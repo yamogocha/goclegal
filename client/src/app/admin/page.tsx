@@ -1,704 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
-type Interrogatory = {
-  number: string;
-  question: string;
+type SearchResult = {
+  plaintiffName: string;
+  caseNumber: string;
+  links: { label: string; href: string }[];
 };
 
-type QA = {
-  plaintiffAttorneyResponse: string;
-  plaintiffClientResponse: string;
-  finalResponse: string;
-};
+export default function AdminPage() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
-export default function Admin() {
-  const [file, setFile] =
-    useState<File | null>(null);
+  useEffect(() => {
+    if (!query.trim()) return void setResults([]);
 
-  const [loading, setLoading] =
-    useState(false);
+    const timeout = setTimeout(async () => {
+      const res = await fetch(`/api/admin?q=${encodeURIComponent(query)}`);
+      setResults(await res.json());
+    }, 300);
 
-  const [error, setError] =
-    useState<string | null>(null);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
-  const [
-    interrogatories,
-    setInterrogatories,
-  ] = useState<Interrogatory[]>(
-    []
-  );
-
-  const [responses, setResponses] =
-    useState<
-      Record<string, QA>
-    >({});
-
-  // ====================================================
-  // LOAD QUESTIONS
-  // ====================================================
-
-  async function loadQuestions() {
+  async function handleNewCaseUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      setLoading(true);
-      setError(null);
+    const formData = new FormData();
+    formData.append("file", file);
 
-      const formData =
-        new FormData();
+    const res = await fetch("/api/admin", {
+      method: "POST",
+      body: formData,
+    });
 
-      formData.append(
-        "file",
-        file
-      );
+    const data = await res.json();
 
-      formData.append(
-        "mode",
-        "json"
-      );
+    console.log("UPLOAD RESULT", data);
 
-      const res = await fetch(
-        "/api/pdfToDocx",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error(
-          await res.text()
-        );
-      }
-
-      const data =
-        await res.json();
-
-      setInterrogatories(
-        data.interrogatories ||
-          []
-      );
-
-      const initial: Record<
-        string,
-        QA
-      > = {};
-
-      (
-        data.interrogatories ||
-        []
-      ).forEach(
-        (item: Interrogatory) => {
-          initial[item.number] = {
-            plaintiffAttorneyResponse:
-              "",
-
-            plaintiffClientResponse:
-              "",
-
-            finalResponse: "",
-          };
-        }
-      );
-
-      setResponses(initial);
-    } catch (err: any) {
-      setError(
-        err.message ||
-          "Failed to load questions"
-      );
-    } finally {
-      setLoading(false);
+    if (res.ok && data.redirectTo) {
+      router.push(data.redirectTo);
+      return;
     }
+
+    e.target.value = "";
   }
-
-  // ====================================================
-  // DOWNLOAD DOCX
-  // ====================================================
-
-  async function downloadDocx() {
-    if (!file) return;
-  
-    try {
-      setLoading(true);
-      setError(null);
-  
-      const formData =
-        new FormData();
-  
-      formData.append(
-        "file",
-        file
-      );
-  
-      formData.append(
-        "mode",
-        "docx"
-      );
-  
-      // ======================================
-      // SEND FINAL RESPONSES
-      // ======================================
-  
-      formData.append(
-        "responses",
-        JSON.stringify(
-          responses
-        )
-      );
-  
-      const res = await fetch(
-        "/api/pdfToDocx",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-  
-      if (!res.ok) {
-        throw new Error(
-          await res.text()
-        );
-      }
-  
-      const blob =
-        await res.blob();
-  
-      const url =
-        URL.createObjectURL(
-          blob
-        );
-  
-      const a =
-        document.createElement(
-          "a"
-        );
-  
-      a.href = url;
-  
-      a.download =
-        "interrogatories.docx";
-  
-      a.click();
-  
-      URL.revokeObjectURL(
-        url
-      );
-    } catch (err: any) {
-      setError(
-        err.message ||
-          "Download failed"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // ====================================================
-  // UPDATE RESPONSE
-  // ====================================================
-
-  function updateResponse(
-    number: string,
-    field: keyof QA,
-    value: string
-  ) {
-    setResponses((prev) => ({
-      ...prev,
-
-      [number]: {
-        ...prev[number],
-
-        [field]: value,
-      },
-    }));
-  }
-
-  // ====================================================
-  // AI ASSISTANT
-  // ====================================================
-
-  function generateAIResponses() {
-    const updated = {
-      ...responses,
-    };
-  
-    interrogatories.forEach(
-      (item) => {
-        const response =
-          responses[item.number];
-  
-        if (!response) {
-          return;
-        }
-  
-        const attorney =
-          response.plaintiffAttorneyResponse.trim();
-  
-        const client =
-          response.plaintiffClientResponse.trim();
-  
-        // ======================================
-        // SKIP IF BOTH EMPTY
-        // ======================================
-  
-        if (
-          !attorney &&
-          !client
-        ) {
-          return;
-        }
-  
-        // ======================================
-        // CLEAN CLIENT RESPONSE
-        // ======================================
-  
-        let cleanedClient =
-          client;
-  
-        // remove harmful / weak phrases
-        const harmfulPatterns = [
-          /\bi think\b/gi,
-          /\bmaybe\b/gi,
-          /\bprobably\b/gi,
-          /\bnot sure\b/gi,
-          /\bi guess\b/gi,
-          /\bi don't remember\b/gi,
-          /\bi dont remember\b/gi,
-          /\bkind of\b/gi,
-          /\bsort of\b/gi,
-          /\bperhaps\b/gi,
-          /\bi assume\b/gi,
-          /\bpossibly\b/gi,
-        ];
-  
-        harmfulPatterns.forEach(
-          (pattern) => {
-            cleanedClient =
-              cleanedClient.replace(
-                pattern,
-                ""
-              );
-          }
-        );
-  
-        cleanedClient =
-          cleanedClient
-            .replace(/\s+/g, " ")
-            .trim();
-  
-        // ======================================
-        // REMOVE CLIENT RESPONSE ENTIRELY
-        // IF IT LOOKS WEAK / HARMFUL
-        // ======================================
-  
-        const harmfulClient =
-          [
-            "i was careless",
-            "my fault",
-            "i caused",
-            "i should have",
-            "i wasn't paying attention",
-            "i ignored",
-            "i forgot",
-            "i didn't look",
-            "i wasnt looking",
-            "i tripped myself",
-            "i fell because of me",
-          ].some((x) =>
-            cleanedClient
-              .toLowerCase()
-              .includes(x)
-          );
-  
-        if (harmfulClient) {
-          cleanedClient = "";
-        }
-  
-        // ======================================
-        // BUILD FINAL RESPONSE
-        // ======================================
-  
-        let finalResponse =
-          "";
-  
-        // attorney response gets priority
-        if (attorney) {
-          finalResponse +=
-            attorney.trim();
-        }
-  
-        // append helpful client facts only
-        if (
-          cleanedClient
-        ) {
-          if (
-            finalResponse
-          ) {
-            finalResponse +=
-              "\n\n";
-          }
-  
-          finalResponse +=
-            cleanedClient;
-        }
-  
-        // ======================================
-        // FALLBACK
-        // ======================================
-  
-        if (
-          !finalResponse.trim()
-        ) {
-          finalResponse =
-            "Plaintiff presently lacks sufficient information to fully respond to this interrogatory. Investigation and discovery are continuing.";
-        }
-  
-        updated[item.number] = {
-          ...response,
-  
-          finalResponse:
-            finalResponse.trim(),
-        };
-      }
-    );
-  
-    setResponses(updated);
-  }
-
-  // ====================================================
-  // UI
-  // ====================================================
 
   return (
-    <main
-      style={{
-        padding: 24,
-        maxWidth: 1200,
-        margin: "0 auto",
-        fontFamily:
-          "Arial, sans-serif",
-      }}
-    >
-      <h1
-        style={{
-          fontSize: 28,
-          marginBottom: 20,
-        }}
-      >
-        Interrogatories Parser
-      </h1>
+    <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-center md:justify-center p-0 md:p-8">
+      <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
 
-      {/* ====================================== */}
-      {/* FILE */}
-      {/* ====================================== */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
+        <h1 className="text-2xl font-bold mb-5 text-[#00305b]">
+          Admin Dashboard
+        </h1>
 
-      <input
-        type="file"
-        accept="application/pdf"
-        onChange={(e) => {
-          setFile(
-            e.target.files?.[0] ||
-              null
-          );
+        <div className="relative">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search plaintiff..."
+            className="outline-none w-full border border-gray-300 rounded-md px-4 py-3 font-montserrat font-medium"
+          />
 
-          setInterrogatories(
-            []
-          );
-
-          setResponses({});
-
-          setError(null);
-        }}
-      />
-
-      {/* ====================================== */}
-      {/* BUTTONS */}
-      {/* ====================================== */}
-
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginTop: 16,
-          marginBottom: 24,
-        }}
-      >
-        <button
-          onClick={
-            loadQuestions
-          }
-          disabled={
-            loading || !file
-          }
-        >
-          Extract Questions
-        </button>
-
-        <button
-          onClick={
-            generateAIResponses
-          }
-          disabled={
-            loading ||
-            interrogatories.length ===
-              0
-          }
-        >
-          AI Assistant
-        </button>
-
-        <button
-          onClick={
-            downloadDocx
-          }
-          disabled={
-            loading || !file
-          }
-        >
-          Download DOCX
-        </button>
-      </div>
-
-      {loading && (
-        <div>
-          Processing...
-        </div>
-      )}
-
-      {error && (
-        <pre
-          style={{
-            color: "red",
-            whiteSpace:
-              "pre-wrap",
-          }}
-        >
-          {error}
-        </pre>
-      )}
-
-      {/* ====================================== */}
-      {/* QUESTIONS */}
-      {/* ====================================== */}
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 24,
-        }}
-      >
-        {interrogatories.map(
-          (item) => (
+          {results.map((item) => (
             <div
-              key={item.number}
-              style={{
-                border:
-                  "1px solid #ddd",
-
-                borderRadius: 8,
-
-                padding: 20,
-
-                background:
-                  "#fafafa",
-              }}
+              key={item.caseNumber}
+              className="px-4 py-3 border-b border-gray-100 font-montserrat font-medium"
             >
-              {/* ============================== */}
-              {/* QUESTION */}
-              {/* ============================== */}
+              <div className="font-medium">{item.plaintiffName}</div>
 
-              <div
-                style={{
-                  marginBottom: 20,
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 18,
-                    marginBottom: 10,
-                  }}
-                >
-                  {
-                    item.number
-                  }
-                </div>
-
-                <div
-                  style={{
-                    lineHeight: 1.6,
-                    whiteSpace:
-                      "pre-wrap",
-                  }}
-                >
-                  {
-                    item.question
-                  }
-                </div>
+              <div className="text-sm text-gray-500 mb-2">
+                {item.caseNumber}
               </div>
 
-              {/* ============================== */}
-              {/* ATTORNEY RESPONSE */}
-              {/* ============================== */}
-
-              <div
-                style={{
-                  marginBottom: 20,
-                }}
-              >
-                <label
-                  style={{
-                    display:
-                      "block",
-
-                    fontWeight: 600,
-
-                    marginBottom: 8,
-                  }}
-                >
-                  Plaintiff
-                  Attorney
-                  Response
-                </label>
-
-                <textarea
-                  value={
-                    responses[
-                      item.number
-                    ]
-                      ?.plaintiffAttorneyResponse ||
-                    ""
-                  }
-
-                  onChange={(e) =>
-                    updateResponse(
-                      item.number,
-                      "plaintiffAttorneyResponse",
-                      e.target.value
-                    )
-                  }
-
-                  style={{
-                    width: "100%",
-                    minHeight: 120,
-                    padding: 12,
-                    resize:
-                      "vertical",
-                  }}
-                />
-              </div>
-
-              {/* ============================== */}
-              {/* CLIENT RESPONSE */}
-              {/* ============================== */}
-
-              <div
-                style={{
-                  marginBottom: 20,
-                }}
-              >
-                <label
-                  style={{
-                    display:
-                      "block",
-
-                    fontWeight: 600,
-
-                    marginBottom: 8,
-                  }}
-                >
-                  Plaintiff /
-                  Client
-                  Response
-                </label>
-
-                <textarea
-                  value={
-                    responses[
-                      item.number
-                    ]
-                      ?.plaintiffClientResponse ||
-                    ""
-                  }
-
-                  onChange={(e) =>
-                    updateResponse(
-                      item.number,
-                      "plaintiffClientResponse",
-                      e.target.value
-                    )
-                  }
-
-                  style={{
-                    width: "100%",
-                    minHeight: 120,
-                    padding: 12,
-                    resize:
-                      "vertical",
-                  }}
-                />
-              </div>
-
-              {/* ============================== */}
-              {/* FINAL RESPONSE */}
-              {/* ============================== */}
-
-              <div>
-                <label
-                  style={{
-                    display:
-                      "block",
-
-                    fontWeight: 700,
-
-                    marginBottom: 8,
-
-                    color:
-                      "#0b5fff",
-                  }}
-                >
-                  Final Response
-                </label>
-
-                <textarea
-                  value={
-                    responses[
-                      item.number
-                    ]
-                      ?.finalResponse ||
-                    ""
-                  }
-
-                  onChange={(e) =>
-                    updateResponse(
-                      item.number,
-                      "finalResponse",
-                      e.target.value
-                    )
-                  }
-
-                  style={{
-                    width: "100%",
-                    minHeight: 180,
-                    padding: 12,
-                    resize:
-                      "vertical",
-
-                    border:
-                      "2px solid #0b5fff",
-
-                    background:
-                      "#f8fbff",
-                  }}
-                />
+              <div className="flex gap-4">
+                {item.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </div>
             </div>
-          )
-        )}
+          ))}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={handleNewCaseUpload}
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="cursor-pointer text-white bg-[#00305b] px-4 py-3 my-3 rounded-md font-medium font-montserrat"
+          >
+            New Case
+          </button>
+        </div>
       </div>
     </main>
   );
