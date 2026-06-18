@@ -159,3 +159,59 @@ export function imageRespInput(title: string): string {
     " No injuries, no blood, no gore, no medical scenes" +
     " No illustration, no cartoon, no CGI, no 3D render, no vector, no stylized art"
 }
+
+export function finalResponsePrompt(params: {
+    question: string;
+    attorneyResponse: string;
+    clientResponse: string;
+  }) {
+    return `
+  You are assisting a California plaintiff attorney in preparing verified interrogatory responses.
+  
+  QUESTION:
+  ${params.question}
+  
+  ATTORNEY RESPONSE:
+  ${params.attorneyResponse}
+  
+  CLIENT RESPONSE:
+  ${params.clientResponse}
+  
+  INSTRUCTIONS:
+  
+  The attorney response is the primary source of truth.
+  
+  The client response contains supplemental facts that may clarify,
+  expand, or complete the answer.
+  
+  Review the client response and determine whether any information
+  is useful to answer the interrogatory.
+  
+  Preserve:
+  - the attorney's tone
+  - the attorney's writing style
+  - the attorney's legal phrasing
+  - the attorney's structure
+  
+  If the attorney response contains one or more objections:
+  
+  1. Keep all objection language first.
+  2. Preserve objection wording as closely as possible.
+  3. Place the substantive response after the objection section.
+  
+  When rewriting:
+  
+  - Merge useful client facts into the response.
+  - Remove duplication.
+  - Improve clarity and readability.
+  - Do not add facts that are not present.
+  - Do not speculate.
+  - Do not mention "attorney response".
+  - Do not mention "client response".
+  - Write as though the attorney authored the entire response.
+  
+  OUTPUT:
+  
+  Return ONLY the final interrogatory response text.
+  `;
+  }
