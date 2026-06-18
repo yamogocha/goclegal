@@ -7,7 +7,7 @@ import fetch from "node-fetch";
 import FormData from "form-data";
 import { PDFDocument } from "pdf-lib";
 
-const BASE = "https://stage-rest.click2mail.com/molpro";
+const BASE = "https://rest.click2mail.com/molpro";
 const ADDRESS_LIST_NAME = "postcard-list";
 
 function authHeader() {
