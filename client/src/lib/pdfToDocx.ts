@@ -440,7 +440,7 @@ function insertIntroductorySection(
   setNumber: string,
 ) {
   buildIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
-    pleadingLines.push({ text: line.text, firstLine: line.firstLine, bold: line.bold }),
+    pleadingLines.push({ text: line.text, firstLine: line.firstLine }),
   );
 }
 

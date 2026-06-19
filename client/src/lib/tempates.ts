@@ -218,13 +218,18 @@ export function buildFormInterrogatoryIntroLines(
   ];
 }
 
+type InterrogatoryResponseLine = {
+  text: string;
+  firstLine?: boolean;
+  bold?: boolean;
+};
 export function buildInterrogatoryResponseLines(
   isSpecial: boolean,
   number: string,
   question: string,
   response: string,
   questionLines: string[] = [],
-) {
+): InterrogatoryResponseLine[] {
   const questionBlocks = isSpecial ? [{ text: question, firstLine: true }] : [...(question ? [{ text: question, firstLine: true }] : []),
       ...questionLines.map((text) => ({ text, firstLine: true, }))];
   return [
