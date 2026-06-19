@@ -138,8 +138,8 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
           {loading && <div>Processing...</div>}
           {error && <pre className="whitespace-pre-wrap text-red-500">{error}</pre>}
           {successMessage && <div ref={successMessageRef} className="text-green-600 font-medium">{successMessage}</div>}
-          <div className="my-3">
-            <button onClick={downloadDocx} className="cursor-pointer text-[#00305b] px-4 py-2 rounded-md border border-[#00305b] font-medium">Download DOCX</button>
+          <div className="ml-3">
+            <button onClick={downloadDocx} className="cursor-pointer text-[#00305b] px-5 py-3 rounded-md border border-[#00305b] font-medium">Download DOCX</button>
           </div>
         </div>
         {currentInterrogatory && (
@@ -178,7 +178,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
             </div>
           </div>
         )}
-        <div className="mt-5 mb-5">
+        <div className="mt-5 mb-20">
           <div className="text-center font-medium mb-4">INTERROGATORY NO. {currentPage + 1} / {interrogatories.length}</div>
           <div className="flex justify-between items-center gap-4">
             <button className={btnClass} onClick={() => goToPage(currentPage === 0 ? interrogatories.length - 1 : currentPage - 1)}>Previous</button>
