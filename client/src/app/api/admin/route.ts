@@ -3,6 +3,7 @@ import { groq } from "next-sanity";
 import { client } from "@/sanity/client";
 import { serverClient } from "@/lib/blog";
 import { detectInterrogatoryType, loadFormInterrogatoryPdfQuestions, loadSpecialInterrogatoryPdfQuestions } from "@/lib/pdfToDocx";
+import crypto from "crypto";
 
 // Search
 export async function GET(req: NextRequest) {
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
         metadata.plaintiffName match $search
       ]{
         caseNumber,
-        metadata
+        metadata,
+        clientAccessToken
       }
     `,
     { search: `${query}*` }
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
     caseNumber: c.caseNumber,
     links: [
       { label: "Admin Interrogatories", href: `/admin/${encodeURIComponent(c.caseNumber)}` },
-      { label: "Client Interrogatories", href: `/client/${encodeURIComponent(c.caseNumber)}` },
+      { label: "Client Interrogatories", href: `/client/${encodeURIComponent(c.caseNumber)}?token=${c.clientAccessToken}` },
     ],
   }));
 
@@ -68,7 +70,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Case already exists" }, { status: 409 });
     }
 
+    const clientAccessToken = crypto.randomBytes(32).toString("hex");
     const payload = {
+      clientAccessToken,
       caseNumber: result.metadata.caseNumber,
       metadata: result.metadata,
       interrogatoryType: interrogatoryType === "form" ? "form" : "special",
