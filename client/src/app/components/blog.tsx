@@ -43,7 +43,7 @@ export default function BlogComponent({latestPost, posts, current, pages}: Blog)
                     <PortableTextComponent {...{ body }}/>
                     <Link href={`/blog/${slug}`} className="space-x-3 text-[18px] lg:text-[20px] text-[#00305b] hover:text-[#004c8f] font-bold">
                         <strong>Read more</strong>
-                        <strong>&#8594;</strong>
+                        <strong id="posts">&#8594;</strong>
                     </Link>
                     <div className="w-full flex flex-wrap gap-6 py-10 lg:py-[80px]">
                         {posts.map((post, index)=> {

@@ -12,7 +12,7 @@ type Interrogatory = {
 };
 const btnClass = "text-white font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate min-w-30 p-5 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]";
 const backLinkClass = "inline-flex items-center justify-center text-white font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate px-5 py-3 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]";
-const textareaClass = "w-full min-h-[120px] border border-gray-300 rounded-md p-3";
+const textareaClass = "w-full min-h-[300px] border border-gray-300 rounded-md p-3";
 export default function AdminCasePage({ params }: { params: Promise<{ caseNumber: string }> }) {
   const resolved = use(params);
   const caseNumber = decodeURIComponent(resolved.caseNumber);
@@ -24,6 +24,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
   const [currentPage, setCurrentPage] = useState(0);
   const [objectionMenuOpen, setObjectionMenuOpen] = useState(false);
   const [selectedObjection, setSelectedObjection] = useState("");
+  const attorneyResponseRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (successMessage && successMessageRef.current) {
@@ -83,8 +84,27 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
   function insertObjection(title: string) {
     const objection = OBJECTIONS.find((o) => o.title === title);
     if (!objection) return;
+    const textarea = attorneyResponseRef.current;
     const current = interrogatories[currentPage]?.plaintiffAttorneyResponse || "";
-    saveField(currentPage, "plaintiffAttorneyResponse", objection.text + "\n\n" + current);
+
+    if (!textarea) {
+      saveField(currentPage, "plaintiffAttorneyResponse", current + "\n\n" + objection.text );
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = current.slice(0, start);
+    const after = current.slice(end);
+    const insertedText = (before && !before.endsWith("\n") ? "\n\n" : "") + objection.text + "\n\n"; 
+    const newValue = before + insertedText + after; 
+    saveField( currentPage, "plaintiffAttorneyResponse", newValue );
+  
+    requestAnimationFrame(() => { 
+      textarea.focus();
+      const newCursorPos = before.length + insertedText.length; 
+      textarea.setSelectionRange( newCursorPos, newCursorPos );
+    });
   }
 
   const goToPage = (next: number) => {
@@ -156,7 +176,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
               {objectionMenuOpen && (
                 <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-300 bg-white shadow-lg max-h-[300px] overflow-y-auto">
                   {OBJECTIONS.map((objection) => (
-                    <button key={objection.title} type="button" className="w-full text-left px-3 py-2 hover:bg-gray-100 font-medium" onClick={() => { setSelectedObjection(objection.title); insertObjection(objection.title); setObjectionMenuOpen(false); }}>
+                    <button key={objection.title} type="button" className="w-full text-left px-3 py-2 hover:bg-gray-100 font-medium" onClick={() => { setSelectedObjection(objection.title); insertObjection(objection.title); setSelectedObjection(""); setObjectionMenuOpen(false); }}>
                       {objection.title}
                     </button>
                   ))}
@@ -165,7 +185,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
             </div>
             <div>
               <div className="font-bold mb-2">Attorney Response</div>
-              <textarea value={currentInterrogatory.plaintiffAttorneyResponse || ""} onChange={(e) => saveField(currentPage, "plaintiffAttorneyResponse", e.target.value)} className={textareaClass} />
+              <textarea ref={attorneyResponseRef} value={currentInterrogatory.plaintiffAttorneyResponse || ""} onChange={(e) => saveField(currentPage, "plaintiffAttorneyResponse", e.target.value)} className={textareaClass} />
             </div>
             <div className="mt-5">
               <div className="font-bold mb-2">Client Response</div>
@@ -174,7 +194,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
             <div className="mt-5">
               <div className="font-bold mb-2">Final Response</div>
               <button type="button" onClick={generateFinalResponse} className="px-3 py-1 mb-3 rounded-md bg-[#00305b] text-white text-sm cursor-pointer">✨ Generate</button>
-              <textarea value={currentInterrogatory.finalResponse || ""} onChange={(e) => saveField(currentPage, "finalResponse", e.target.value)} className="w-full min-h-[160px] border border-gray-300 rounded-md p-3" />
+              <textarea value={currentInterrogatory.finalResponse || ""} onChange={(e) => saveField(currentPage, "finalResponse", e.target.value)} className="w-full min-h-[300px] border border-gray-300 rounded-md p-3" />
             </div>
           </div>
         )}
