@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type SearchResult = {
   plaintiffName: string;
@@ -11,21 +11,23 @@ type SearchResult = {
 };
 
 export default function AdminPage() {
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") || "");
   const [results, setResults] = useState<SearchResult[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
-    if (!query.trim()) return void setResults([]);
-
-    const timeout = setTimeout(async () => {
-      const res = await fetch(`/api/admin?q=${encodeURIComponent(query)}`);
+    const q = searchParams.get("q");
+    if (!q) return;
+  
+    setQuery(q);
+  
+    (async () => {
+      const res = await fetch(`/api/admin?q=${encodeURIComponent(q)}`);
       setResults(await res.json());
-    }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [query]);
+    })();
+  }, [searchParams]);
 
   async function handleNewCaseUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -63,7 +65,11 @@ export default function AdminPage() {
         <div className="relative">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setQuery(value);
+              router.replace(value ? `/admin?q=${encodeURIComponent(value)}` : "/admin", { scroll: false });
+            }}
             placeholder="Search plaintiff..."
             className="outline-none w-full border border-gray-300 rounded-md px-4 py-3 font-montserrat font-medium"
           />
@@ -83,7 +89,7 @@ export default function AdminPage() {
                 {item.links.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={`${link.href}?returnQ=${encodeURIComponent(query)}`}
                     className="text-blue-600 hover:underline"
                   >
                     {link.label}

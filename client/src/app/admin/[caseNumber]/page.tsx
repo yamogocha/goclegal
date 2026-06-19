@@ -2,6 +2,8 @@
 import { OBJECTIONS } from "@/lib/tempates";
 import { use, useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+
 type Interrogatory = {
   number: string;
   question: string;
@@ -10,6 +12,7 @@ type Interrogatory = {
   plaintiffClientResponse: string;
   finalResponse: string;
 };
+
 const btnClass = "text-white font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate min-w-30 p-5 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]";
 const backLinkClass = "inline-flex items-center justify-center text-white font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate px-5 py-3 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]";
 const textareaClass = "w-full min-h-[300px] border border-gray-300 rounded-md p-3";
@@ -25,6 +28,8 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
   const [objectionMenuOpen, setObjectionMenuOpen] = useState(false);
   const [selectedObjection, setSelectedObjection] = useState("");
   const attorneyResponseRef = useRef<HTMLTextAreaElement>(null);
+  const searchParams = useSearchParams();
+  const returnQ = searchParams.get("returnQ") || "";
 
   useEffect(() => {
     if (successMessage && successMessageRef.current) {
@@ -154,7 +159,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
       <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
         <div className="flex justify-between items-center">
-          <Link href="/admin" className={backLinkClass}>← Back to Dashboard</Link>
+          <Link href={returnQ ? `/admin?q=${encodeURIComponent(returnQ)}` : "/admin"} className={backLinkClass}>← Back to Dashboard</Link>
           {loading && <div>Processing...</div>}
           {error && <pre className="whitespace-pre-wrap text-red-500">{error}</pre>}
           {successMessage && <div ref={successMessageRef} className="text-green-600 font-medium">{successMessage}</div>}
