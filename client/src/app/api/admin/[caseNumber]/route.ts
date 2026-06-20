@@ -11,6 +11,7 @@ import {
   detectInterrogatoryType,
   buildFormInterrogatoryDocx,
 } from "@/lib/pdfToDocx";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -91,6 +92,7 @@ export async function POST(
       const existingQuestion = existingResponses.get(q.number);
 
       return {
+        _key: (existingQuestion as any)?._key || crypto.randomUUID(),
         number: q.number,
         question: q.question,
         questionLines: q.questionLines || [],
@@ -104,14 +106,7 @@ export async function POST(
       caseNumber: result.metadata.caseNumber,
       metadata: result.metadata,
       interrogatoryType: interrogatoryType === "form" ? "form" : "special",
-      interrogatories: result.interrogatories.map((q) => ({
-        number: q.number,
-        question: q.question,
-        questionLines: q.questionLines || [],
-        plaintiffAttorneyResponse: "",
-        plaintiffClientResponse: "",
-        finalResponse: "",
-      })),
+      interrogatories,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -164,7 +159,10 @@ export async function PUT(
     await serverClient
       .patch(existing._id)
       .set({
-        interrogatories: body.interrogatories,
+        interrogatories: body.interrogatories.map((q: any) => ({
+          _key: q._key || crypto.randomUUID(),
+          ...q,
+        })),
         updatedAt: new Date().toISOString(),
       })
       .commit();

@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
       metadata: result.metadata,
       interrogatoryType: interrogatoryType === "form" ? "form" : "special",
       interrogatories: result.interrogatories.map((q) => ({
+        _key: crypto.randomUUID(),
         number: q.number,
         question: q.question,
         questionLines: q.questionLines || [],

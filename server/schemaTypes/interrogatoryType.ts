@@ -9,15 +9,13 @@ export const interrogatoryType = defineType({
     defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: (Rule) => Rule.required() }),
     defineField({
       name: "metadata",
-      title: "Metadata",
       type: "object",
       fields: [
         defineField({ name: "caseNumber", type: "string" }),
-        defineField({ name: "caseTitle", type: "string" }),
-        defineField({ name: "plaintiff", type: "string" }),
-        defineField({ name: "defendant", type: "string" }),
-        defineField({ name: "respondingParty", type: "string" }),
+        defineField({ name: "plaintiffName", type: "string" }),
+        defineField({ name: "defendantName", type: "string" }),
         defineField({ name: "setNumber", type: "string" }),
+        defineField({ name: "title", type: "string" }),
         defineField({ name: "uploadedPdfName", type: "string" }),
       ],
     }),
@@ -59,4 +57,16 @@ export const interrogatoryType = defineType({
     defineField({ name: "createdAt", type: "datetime" }),
     defineField({ name: "updatedAt", type: "datetime" }),
   ],
+  preview: {
+    select: {
+      plaintiff: "metadata.plaintiffName",
+      caseNumber: "caseNumber",
+    },
+    prepare({ plaintiff, caseNumber }) {
+      return {
+        title: plaintiff,
+        subtitle: caseNumber,
+      };
+    },
+  },
 });
