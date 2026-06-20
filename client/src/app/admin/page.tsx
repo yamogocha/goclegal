@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type SearchResult = {
   plaintiffName: string;
@@ -11,23 +11,43 @@ type SearchResult = {
 };
 
 export default function AdminPage() {
-  const searchParams = useSearchParams();
-  const [query, setQuery] = useState(searchParams.get("q") || "");
-  const [results, setResults] = useState<SearchResult[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
 
   useEffect(() => {
-    const q = searchParams.get("q");
-    if (!q) return;
+    const savedQuery = sessionStorage.getItem("adminQuery");
+    const savedResults = sessionStorage.getItem("adminResults");
   
-    setQuery(q);
+    if (savedQuery) setQuery(savedQuery);
   
-    (async () => {
-      const res = await fetch(`/api/admin?q=${encodeURIComponent(q)}`);
-      setResults(await res.json());
-    })();
-  }, [searchParams]);
+    if (savedResults) {
+      try {
+        setResults(JSON.parse(savedResults));
+      } catch {}
+    }
+  }, []);
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      sessionStorage.removeItem("adminQuery");
+      sessionStorage.removeItem("adminResults");
+      return;
+    }
+  
+    const timeout = setTimeout(async () => {
+      const res = await fetch(`/api/admin?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+  
+      setResults(data);
+  
+      sessionStorage.setItem("adminQuery", query);
+      sessionStorage.setItem("adminResults", JSON.stringify(data));
+    }, 300);
+  
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   async function handleNewCaseUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -65,11 +85,7 @@ export default function AdminPage() {
         <div className="relative">
           <input
             value={query}
-            onChange={(e) => {
-              const value = e.target.value;
-              setQuery(value);
-              router.replace(value ? `/admin?q=${encodeURIComponent(value)}` : "/admin", { scroll: false });
-            }}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search plaintiff..."
             className="outline-none w-full border border-gray-300 rounded-md px-4 py-3 font-montserrat font-medium"
           />
@@ -89,7 +105,7 @@ export default function AdminPage() {
                 {item.links.map((link) => (
                   <Link
                     key={link.href}
-                    href={`${link.href}?returnQ=${encodeURIComponent(query)}`}
+                    href={link.href}
                     className="text-blue-600 hover:underline"
                   >
                     {link.label}

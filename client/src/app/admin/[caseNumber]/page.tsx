@@ -2,7 +2,7 @@
 import { OBJECTIONS } from "@/lib/tempates";
 import { use, useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type Interrogatory = {
   number: string;
@@ -28,8 +28,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
   const [objectionMenuOpen, setObjectionMenuOpen] = useState(false);
   const [selectedObjection, setSelectedObjection] = useState("");
   const attorneyResponseRef = useRef<HTMLTextAreaElement>(null);
-  const searchParams = useSearchParams();
-  const returnQ = searchParams.get("returnQ") || "";
+  const router = useRouter();
 
   useEffect(() => {
     if (successMessage && successMessageRef.current) {
@@ -159,7 +158,7 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
       <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
         <div className="flex justify-between items-center">
-          <Link href={returnQ ? `/admin?q=${encodeURIComponent(returnQ)}` : "/admin"} className={backLinkClass}>← Back to Dashboard</Link>
+        <button  onClick={() => router.back()} className={backLinkClass}>← Back to Dashboard</button>
           {loading && <div>Processing...</div>}
           {error && <pre className="whitespace-pre-wrap text-red-500">{error}</pre>}
           {successMessage && <div ref={successMessageRef} className="text-green-600 font-medium">{successMessage}</div>}
