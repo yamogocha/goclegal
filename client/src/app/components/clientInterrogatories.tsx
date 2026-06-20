@@ -70,9 +70,8 @@ export default function ClientInterrogatories({ params }: { params: Promise<{ ca
         {currentInterrogatory && (
           <div className="mt-2 border border-gray-300 p-5 rounded-md">
             <div className="whitespace-pre-wrap font-bold mb-5">
-              {currentInterrogatory.number}
-              {"\n\n"}
-              {currentInterrogatory.questionLines?.length ? currentInterrogatory.questionLines.join("\n") : currentInterrogatory.question}
+            {currentInterrogatory.number}{"\n\n"}{currentInterrogatory.question}
+            {currentInterrogatory.questionLines?.length ? "\n\n" + currentInterrogatory.questionLines.join("\n") : ""}
             </div>
 
             <div className="mt-5">
