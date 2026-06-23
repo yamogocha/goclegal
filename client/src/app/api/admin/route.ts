@@ -4,14 +4,24 @@ import { client } from "@/sanity/client";
 import { serverClient } from "@/lib/blog";
 import { detectInterrogatoryType, loadFormInterrogatoryPdfQuestions, loadSpecialInterrogatoryPdfQuestions } from "@/lib/pdfToDocx";
 import crypto from "crypto";
-
 // Search
 export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get("q") || "";
-
-  if (!query.trim()) return NextResponse.json([]);
-
-  const cases = await client.fetch(
+  const recent = req.nextUrl.searchParams.get("recent"); if (recent === "true") {
+    const cases = await client.fetch(`
+      *[_type == "interrogatory"]
+      | order(_createdAt desc)[0...5]{
+        metadata,
+        caseNumber
+      }
+    `); return NextResponse.json(
+      cases.map((c: any) => ({
+        plaintiffName: c.metadata.plaintiffName,
+        caseNumber: c.caseNumber,
+        links: [],
+      }))
+    );
+  } if (!query.trim()) return NextResponse.json([]); const cases = await client.fetch(
     groq`
       *[
         _type == "interrogatory" &&
@@ -23,54 +33,35 @@ export async function GET(req: NextRequest) {
       }
     `,
     { search: `${query}*` }
-  );
-
-  const results = cases.map((c: any) => ({
+  ); const results = cases.map((c: any) => ({
     plaintiffName: c.metadata?.plaintiffName,
     caseNumber: c.caseNumber,
     links: [
-      { label: "Admin Interrogatories", href: `/admin/${encodeURIComponent(c.caseNumber)}` },
-      { label: "Client Interrogatories", href: `/client/${encodeURIComponent(c.caseNumber)}?token=${c.clientAccessToken}` },
+      { label: "Admin Interrogatories", href: `/admin/${encodeURIComponent(c.caseNumber)}/interrogatories` },
+      { label: "Client Interrogatories", href: `/client/${encodeURIComponent(c.caseNumber)}/interrogatories?token=${c.clientAccessToken}` },
     ],
-  }));
-
-  return NextResponse.json(results);
+  })); return NextResponse.json(results);
 }
-
 // New case
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
+    const file = formData.get("file") as File | null; if (!file) {
       return NextResponse.json({ error: "No PDF uploaded" }, { status: 400 });
-    }
-
-    const buffer = await file.arrayBuffer();
-
-    const interrogatoryType = await detectInterrogatoryType(buffer);
-
-    const result =
+    } const buffer = await file.arrayBuffer(); const interrogatoryType = await detectInterrogatoryType(buffer); const result =
       interrogatoryType === "form"
         ? await loadFormInterrogatoryPdfQuestions(buffer)
-        : await loadSpecialInterrogatoryPdfQuestions(buffer);
-
-    const existing = await client.fetch(
-      groq`
+        : await loadSpecialInterrogatoryPdfQuestions(buffer); const existing = await client.fetch(
+          groq`
       *[
         _type == "interrogatory" &&
         caseNumber == $caseNumber
       ][0]
     `,
-      { caseNumber: result.metadata.caseNumber }
-    );
-
-    if (existing) {
-      return NextResponse.json({ error: "Case already exists" }, { status: 409 });
-    }
-
-    const clientAccessToken = crypto.randomBytes(32).toString("hex");
+          { caseNumber: result.metadata.caseNumber }
+        ); if (existing) {
+          return NextResponse.json({ error: "Case already exists" }, { status: 409 });
+        } const clientAccessToken = crypto.randomBytes(32).toString("hex");
     const payload = {
       clientAccessToken,
       caseNumber: result.metadata.caseNumber,
@@ -87,14 +78,10 @@ export async function POST(req: NextRequest) {
       })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
-
-    await serverClient.create({
+    }; await serverClient.create({
       _type: "interrogatory",
       ...payload,
-    });
-
-    return NextResponse.json({
+    }); return NextResponse.json({
       caseNumber: payload.caseNumber,
       redirectTo: `/admin/${payload.caseNumber}`,
     });
