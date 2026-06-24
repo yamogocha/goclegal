@@ -210,11 +210,15 @@ export default function AdminCasePage({ params }: { params: Promise<{ caseNumber
           <button onClick={() => router.back()} className={backLinkClass}>
             ← Profile
           </button>
-          {loading && <div>Processing...</div>}
-          {error && <pre className="whitespace-pre-wrap text-red-500">{error}</pre>}
-          <div ref={saveStatusRef} className="sticky top-0 z-20 mb-4 text-center rounded-md not-odd:px-4 py-2 text-green-700 font-medium">
-            {saveStatus}
-          </div>
+          {loading ? (
+            <div>Processing...</div>
+          ) : error ? (
+            <pre className="whitespace-pre-wrap text-red-500">{error}</pre>
+          ) : (
+            <div ref={saveStatusRef} className="sticky top-0 z-20 text-center rounded-md not-odd:px-4 py-2 text-green-700 font-medium">
+              {saveStatus}
+            </div>
+          )}
           <div className="ml-3">
             <button onClick={downloadDocx} className="cursor-pointer text-[#00305b] px-5 py-3 rounded-md border border-[#00305b] font-medium">
               Download DOCX

@@ -311,7 +311,7 @@ function buildRows(lines: PleadingLine[]) {
 
     rows.push(
       new TableRow({
-        height: { value: ROW_HEIGHT, rule: HeightRule.EXACT },
+        height: { value: ROW_HEIGHT, rule: HeightRule.ATLEAST },
         cantSplit: true,
         children: [
           new TableCell({
@@ -387,7 +387,7 @@ async function generateDocx(pleadingLines: PleadingLine[], title: string) {
       {
         properties: {
           page: {
-            margin: { left: 720, right: 720, top: 1440, bottom: 720, footer: 720 },
+            margin: { left: 720, right: 720, top: 720, bottom: 720, footer: 1800 },
           },
         },
         footers: { default: buildFooter(title) },
@@ -597,7 +597,7 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
 
   const interrogatories: Interrogatory[] = [];
   let currentNumber = "", currentQuestion: string[] = [], stopQuestionAppend = false;
-  let caseNumber = "", plaintiffName = "", defendantName = "", setNumber = ""; 
+  let caseNumber = "", plaintiffName = "", defendantName = "", setNumber = "";
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
@@ -651,7 +651,7 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
 
       if (titleMatch) {
         if (currentNumber && currentQuestion.length) {
-          interrogatories.push({ number: currentNumber, question: currentQuestion.join(" "), questionLines: [...currentQuestion] });
+          interrogatories.push({ number: currentNumber, question: currentQuestion.join(" "), questionLines: [] });
         }
 
         currentNumber = `INTERROGATORY NO. ${titleMatch[1]}:`;
@@ -671,7 +671,6 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
 
   const title = `RESPONSES TO SPECIAL INTERROGATORIES, SET ${setNumber}`
   console.log("metadata", { caseNumber, plaintiffName, defendantName, setNumber, title });
-
   return {
     interrogatories,
     metadata: { caseNumber, plaintiffName, defendantName, setNumber, title },
@@ -721,14 +720,14 @@ export async function loadFormInterrogatoryPdfQuestions(buffer: ArrayBuffer) {
     const firstOptionIndex = currentLines.findIndex((line) => /^\s*\([a-z]\)/i.test(line));
     let question = "";
     let questionLines: string[] = [];
-  
+
     if (firstOptionIndex === -1) {
       question = currentLines.join(" ");
     } else {
       question = currentLines.slice(0, firstOptionIndex).join(" ").trim();
       questionLines = currentLines.slice(firstOptionIndex).map((x) => x.trim());
     }
-    interrogatories.push({ number: currentNumber, question, questionLines});
+    interrogatories.push({ number: currentNumber, question, questionLines });
   }
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -787,7 +786,7 @@ export async function loadFormInterrogatoryPdfQuestions(buffer: ArrayBuffer) {
         currentNumber = `INTERROGATORY NO. ${match[1].replace(/\s+/g, "").trim()}:`;
         currentLines = [];
         const remainder = text.replace(match[0], "").trim();
-        if (remainder) {currentLines.push(remainder)};
+        if (remainder) { currentLines.push(remainder) };
         continue;
       }
 
