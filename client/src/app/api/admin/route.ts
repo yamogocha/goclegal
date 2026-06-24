@@ -1,11 +1,20 @@
+import { auth } from "@/lib/oauth";
 import { NextRequest, NextResponse } from "next/server";
 import { groq } from "next-sanity";
 import { client } from "@/sanity/client";
 import { serverClient } from "@/lib/blog";
 import { detectInterrogatoryType, loadFormInterrogatoryPdfQuestions, loadSpecialInterrogatoryPdfQuestions } from "@/lib/pdfToDocx";
 import crypto from "crypto";
-// Search
+// Search and load
 export async function GET(req: NextRequest) {
+  const session = await auth();
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
   const query = req.nextUrl.searchParams.get("q") || "";
   const recent = req.nextUrl.searchParams.get("recent"); if (recent === "true") {
     const cases = await client.fetch(`

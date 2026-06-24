@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
 type SearchResult = {
   plaintiffName: string;
   caseNumber: string;
@@ -14,6 +15,7 @@ export default function AdminPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [recentCases, setRecentCases] = useState<SearchResult[]>([]);
   const displayCases = query.trim() ? results : recentCases;
+  const { data: session, status } = useSession();
   async function loadRecentCases() {
     const res = await fetch("/api/admin?recent=true");
     const data = await res.json();
@@ -64,6 +66,28 @@ export default function AdminPage() {
       return;
     }
     e.target.value = "";
+  }
+  if (status === "loading") {
+    return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  }
+  if (!session) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+          <h1 className="text-2xl font-bold text-[#00305b] mb-4">GOC Legal Admin</h1> <p className="text-gray-600 mb-6">Sign in with your authorized Google account to access case management.</p>{" "}
+          <button
+            onClick={() =>
+              signIn("google", {
+                callbackUrl: "/admin",
+              })
+            }
+            className="w-full bg-[#00305b] text-white py-3 rounded-md font-medium"
+          >
+            Sign in with Google
+          </button>
+        </div>
+      </main>
+    );
   }
   return (
     <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8">

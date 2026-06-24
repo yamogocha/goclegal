@@ -1,4 +1,7 @@
 import { OAuth2Client } from "google-auth-library";
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
+import { NextResponse } from "next/server";
 
 export const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID!,
@@ -19,22 +22,66 @@ export function getAuthUrl() {
 }
 
 export async function getGoogleAccessToken() {
-    oauth2Client.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
-    });
-  
-    const { token } = await oauth2Client.getAccessToken();
-  
-    return token;
-  }
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
+  });
+
+  const { token } = await oauth2Client.getAccessToken();
+
+  return token;
+}
 
 
-  export function verifyCronAuth(req: Request) {
-    const auth = req.headers.get("authorization");
-  
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  
-    return null;
+export function verifyCronAuth(req: Request) {
+  const auth = req.headers.get("authorization");
+
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response("Unauthorized", { status: 401 });
   }
+
+  return null;
+}
+
+
+export const {
+  handlers,
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
+
+  callbacks: {
+    async signIn({ profile }) {
+      const allowedEmails = [
+        "greg@goclegal.com",
+        "angel@goclegal.com",
+        "angeltamyamen@gmail.com",
+        "oconnell.gregory@gmail.com"
+      ];
+      return allowedEmails.includes(
+        profile?.email || ""
+      );
+    },
+  },
+});
+
+export default auth((req) => {
+  if (!req.auth) {
+    return NextResponse.redirect(
+      new URL("/login", req.url)
+    );
+  }
+});
+
+export const config = {
+  matcher: [
+    "/admin/:path*",
+    "/api/admin/:path*",
+  ],
+};
