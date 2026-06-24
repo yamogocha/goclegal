@@ -14,6 +14,8 @@ type BudgetControlResult = {
     totalSpend: number;
     totalConversions: number;
     costPerLead: number;
+    qualifiedLeads: number,
+    qualifiedLeadCPA: number,
   };
   campaigns: {
     id: string | number;
@@ -72,6 +74,8 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       totalSpend: 0,
       totalConversions: 0,
       costPerLead: 0,
+      qualifiedLeads: 0,
+      qualifiedLeadCPA: 0,
     },
     campaigns: [],
     adGroups: [],
@@ -194,6 +198,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     const totalConversions = results.campaigns.reduce((s, c) => s + c.conversions, 0);
     results.summary.totalSpend = microsToDollars(totalSpend);
     results.summary.totalConversions = totalConversions;
+    // Placeholder until CRM/offline imports exist
+    results.summary.qualifiedLeads = totalConversions;
+    results.summary.qualifiedLeadCPA = totalConversions > 0 ? microsToDollars(totalSpend) / totalConversions : 0;
     results.summary.costPerLead = totalConversions > 0 ? microsToDollars(totalSpend) / totalConversions : 0;
 
     // FINALIZE

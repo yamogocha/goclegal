@@ -93,8 +93,23 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
       const adGroupId = String(r.ad_group?.id);
       if (text && adGroupId) existingSet.add(`${adGroupId}_${text}`);
     }
+
     // Existing negatives to avoid duplicate shared criteria errors
+    const SHARED_NEG_LIST = process.env.GOOGLE_ADS_SHARED_NEGATIVE_LIST_ID;
     const existingNegativeSet = new Set<string>();
+    if (SHARED_NEG_LIST) {
+      const negativeRows = await customer.query(`
+        SELECT
+        shared_criterion.keyword.text
+        FROM shared_criterion
+        WHERE shared_set.id = ${SHARED_NEG_LIST}
+  `);
+
+      for (const row of negativeRows) {
+        const text = normalize(row.shared_criterion?.keyword?.text || "");
+        if (text) { existingNegativeSet.add(text) }
+      }
+    }
     // Pull the last 30 days of search terms for optimization decisions
     const termRows = await customer.query(`
       SELECT
@@ -103,12 +118,13 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
         campaign.id,
         metrics.clicks,
         metrics.impressions,
-        metrics.cost_micros
-      FROM search_term_view
-      WHERE segments.date DURING LAST_30_DAYS
+        metrics.cost_micros,
+        metrics.conversions
+        FROM search_term_view
+        WHERE segments.date DURING LAST_30_DAYS
     `);
 
-    const SHARED_NEG_LIST = process.env.GOOGLE_ADS_SHARED_NEGATIVE_LIST_ID;
+
     // Review highest spend searches first
     const rows = termRows.sort((a, b) => (b.metrics?.cost_micros ?? 0) - (a.metrics?.cost_micros ?? 0));
     // Record why a search term was ignored
@@ -117,6 +133,7 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
     // Add a search term to the shared negative list and log it
     const addNeg = async (k: string, reason: string) => {
       const key = normalize(k);
+      if (!key) return;
       if (existingNegativeSet.has(key)) return;
       await addNegative(k, customer, SHARED_NEG_LIST, dryRun);
       existingNegativeSet.add(key);
@@ -127,12 +144,21 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
       const raw = r.search_term_view?.search_term || "";
       const normalized = normalize(raw);
       const category = classifyIntent(normalized);
+      const positivePI = isPositivePI(normalized);
+      const clicks = r.metrics?.clicks ?? 0;
+      const impressions = r.metrics?.impressions ?? 0;
+      const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
+      const conversions = r.metrics?.conversions ?? 0;
+
+      // Auto-block junk PI searches wasting money
+      if (!positivePI && conversions === 0 && cost >= 15 && (category === "free" || category === "small_claims" || category === "civil" || isResearchSearch(raw))) {
+        await addNeg(raw, "wasted_spend"); continue
+      }
+
       // Block research-oriented searches unlikely to convert
       if (isResearchSearch(raw)) { await addNeg(raw, "research"); continue; }
       // Exclude non-target legal services
       if (["free", "small_claims", "civil"].includes(category)) { await addNeg(raw, category); continue; }
-
-      const positivePI = isPositivePI(normalized);
 
       if (isIrrelevantForPI(raw)) {
         await addNeg(raw, "irrelevant_pi");
@@ -142,11 +168,10 @@ export async function runCoreOptimization({ dryRun = false } = {}) {
       const kw = toKeyword(raw),
         adGroupId = String(r.ad_group?.id),
         campaignId = String(r.campaign?.id),
-        clicks = r.metrics?.clicks ?? 0,
-        impressions = r.metrics?.impressions ?? 0,
-        cost = (r.metrics?.cost_micros ?? 0) / 1e6,
         mature = isMatureCampaign(clicks, cost),
-        ageBucket = mature ? "mature" : "learning";
+        ageBucket = mature ? "mature" : "learning"
+        ;
+
       // Skip weak or statistically insignificant terms
       if (!kw || kw.split(/\s+/).length < 2) { skip(raw, "invalid", ageBucket); continue; }
       if (!positivePI && clicks < 2 && cost < 15) { skip(raw, "low_data", ageBucket); continue; }
