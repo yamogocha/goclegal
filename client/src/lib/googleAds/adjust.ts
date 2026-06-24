@@ -2,6 +2,8 @@ import { getCustomer } from "./index";
 import type { resources } from "google-ads-api";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
 
+interface PromotedKeyword { keyword: string; conversions: number; cost: number; cpa: number }
+interface KeywordResult { evaluated: number; promoted: number; promotedKeywords: PromotedKeyword[] }
 const LOOKBACK = "LAST_30_DAYS";
 const MIN_COST = 5;
 
@@ -248,7 +250,10 @@ export async function weeklyAdjustments({ dryRun = false } = {}) {
     ok: true, dryRun, durationMs: 0, decision: {} as any,
     topSearchTerms: [] as any[],
     topKeywords: [] as any[],
-    keywords: { evaluated: 0, promoted: 0, promotedKeywords: [] },
+    keywords: {
+      evaluated: 0, promoted: 0,
+      promotedKeywords: [],
+    } as KeywordResult,
     topAds: [] as any[], conversionTypes: [] as any[],
     schedule: { removed: 0, applied: 0 },
     badHours: [] as number[], avgCPA: 0,
