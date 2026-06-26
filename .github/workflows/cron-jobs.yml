@@ -156,13 +156,11 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Test Google OAuth
+      - name: Debug Google Ads versions
         run: |
-          curl -s https://oauth2.googleapis.com/token \
-            -d client_id="$GOOGLE_CLIENT_ID" \
-            -d client_secret="$GOOGLE_CLIENT_SECRET" \
-            -d refresh_token="$GOOGLE_REFRESH_TOKEN" \
-            -d grant_type=refresh_token
+          npm ls google-ads-api
+          npm ls google-auth-library
+          npm ls gaxios
 
       #
       # ======================================================
