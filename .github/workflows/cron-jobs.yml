@@ -33,6 +33,8 @@ on:
 env:
   NODE_ENV: production
 
+  BASE_URL: ${{ secrets.BASE_URL }}
+
   #
   # OpenAI
   #
