@@ -158,26 +158,30 @@ jobs:
 
       - name: Test OAuth with Node fetch
         run: |
-          node -e '
-            (async () => {
-              const body = new URLSearchParams({
-                client_id: process.env.GOOGLE_CLIENT_ID,
-                client_secret: process.env.GOOGLE_CLIENT_SECRET,
-                refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-                grant_type: "refresh_token"
-              });
+          node <<'EOF'
+          (async () => {
+            const body = new URLSearchParams({
+              client_id: process.env.GOOGLE_CLIENT_ID,
+              client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+              grant_type: "refresh_token",
+            });
 
-              const res = await fetch("https://oauth2.googleapis.com/token", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/x-www-form-urlencoded"
-                },
-                body
-              });
+            const res = await fetch("https://oauth2.googleapis.com/token", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body,
+            });
 
-              console.log("status:", res.status);
-              console.log(await res.text());
-            })().catch(console.error);
+            console.log("Status:", res.status);
+            console.log(await res.text());
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
 
       #
       # ======================================================
