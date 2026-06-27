@@ -2,17 +2,28 @@ import { getCustomer } from "./index";
 import type { resources } from "google-ads-api";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
 
-interface PromotedKeyword { keyword: string; conversions: number; cost: number; cpa: number }
-interface KeywordResult { evaluated: number; promoted: number; promotedKeywords: PromotedKeyword[] }
 const LOOKBACK = "LAST_30_DAYS";
 const MIN_COST = 5;
 
-const isMature = (impr: number, clicks: number) => impr >= 1000 || clicks >= 20;
-const isLowData = (cost: number, conv: number) => cost < 50 && conv === 0;
+const isMature = (
+  impr: number,
+  clicks: number
+) =>
+  impr >= 1000 || clicks >= 20;
+
+const isLowData = (
+  cost: number,
+  conv: number
+) =>
+  cost < 50 && conv === 0;
+
+// =========================
 // PERFORMANCE
+// =========================
 
 async function getPerformance() {
-  const rows = await getCustomer().query(`
+  const rows =
+    await getCustomer().query(`
       SELECT
         segments.hour,
         metrics.cost_micros,
@@ -26,72 +37,159 @@ async function getPerformance() {
   const map = new Map<number, any>();
 
   for (const r of rows) {
-    const h = r.segments?.hour ?? 0;
+    const h =
+      r.segments?.hour ?? 0;
 
-    if (!map.has(h)) { map.set(h, { hour: h, cost: 0, conv: 0, clicks: 0, impr: 0 }) }
+    if (!map.has(h)) {
+      map.set(h, {
+        hour: h,
+        cost: 0,
+        conv: 0,
+        clicks: 0,
+        impr: 0,
+      });
+    }
+
     const cur = map.get(h);
 
-    cur.cost += (r.metrics?.cost_micros ?? 0) / 1e6;
-    cur.conv += r.metrics?.conversions ?? 0;
-    cur.clicks += r.metrics?.clicks ?? 0;
-    cur.impr += r.metrics?.impressions ?? 0;
+    cur.cost +=
+      (r.metrics?.cost_micros ?? 0) /
+      1e6;
+
+    cur.conv +=
+      r.metrics?.conversions ?? 0;
+
+    cur.clicks +=
+      r.metrics?.clicks ?? 0;
+
+    cur.impr +=
+      r.metrics?.impressions ?? 0;
   }
 
   return [...map.values()];
 }
 
+// =========================
 // BAD HOURS
+// =========================
 
 function findBadHours(hours: any[]) {
-  const totalCost = hours.reduce((s, h) => s + h.cost, 0);
-  const totalConv = hours.reduce((s, h) => s + h.conv, 0);
-  const avgCPA = totalConv > 0 ? totalCost / totalConv : Infinity;
+  const totalCost = hours.reduce(
+    (s, h) => s + h.cost,
+    0
+  );
 
-  const bad =
-    hours.filter(h => h.cost >= MIN_COST)
-      .filter((h) => {
-        const cpa = h.conv > 0 ? h.cost / h.conv : Infinity;
-        return h.conv === 0 && h.cost > 15 || h.conv > 0 && cpa > avgCPA * 2;
-      })
-      .map((h) => h.hour);
+  const totalConv = hours.reduce(
+    (s, h) => s + h.conv,
+    0
+  );
 
-  return { bad, avgCPA, totalCost, totalConv };
+  const avgCPA =
+    totalConv > 0
+      ? totalCost / totalConv
+      : Infinity;
+
+  const bad = hours
+    .filter(
+      (h) => h.cost >= MIN_COST
+    )
+    .filter((h) => {
+      const cpa =
+        h.conv > 0
+          ? h.cost / h.conv
+          : Infinity;
+
+      return (
+        (h.conv === 0 &&
+          h.cost > 15) ||
+        (h.conv > 0 &&
+          cpa > avgCPA * 2)
+      );
+    })
+    .map((h) => h.hour);
+
+  return {
+    bad,
+    avgCPA,
+    totalCost,
+    totalConv,
+  };
 }
 
+// =========================
 // SCHEDULE BLOCKS
+// =========================
+
 function buildBlocks(
   badHours: number[]
 ) {
-  const badSet = new Set(badHours);
+  const badSet =
+    new Set(badHours);
+
   const good: number[] = [];
+
   for (let h = 0; h < 24; h++) {
-    if (!badSet.has(h)) { good.push(h) }
+    if (!badSet.has(h)) {
+      good.push(h);
+    }
   }
-  if (!good.length) { return [] }
-  const blocks: { start: number; end: number }[] = [];
+
+  if (!good.length) {
+    return [];
+  }
+
+  const blocks: {
+    start: number;
+    end: number;
+  }[] = [];
 
   let start = good[0];
   let prev = good[0];
 
-  for (let i = 1; i < good.length; i++) {
-    if (good[i] === prev + 1) { prev = good[i] }
-    else {
-      blocks.push({ start, end: prev + 1 });
-      start = good[i]; prev = good[i]
+  for (
+    let i = 1;
+    i < good.length;
+    i++
+  ) {
+    if (good[i] === prev + 1) {
+      prev = good[i];
+    } else {
+      blocks.push({
+        start,
+        end: prev + 1,
+      });
+
+      start = good[i];
+      prev = good[i];
     }
   }
 
-  blocks.push({ start, end: prev + 1 });
+  blocks.push({
+    start,
+    end: prev + 1,
+  });
 
   return blocks.length > 6
-    ? [{ start: blocks[0].start, end: blocks[blocks.length - 1].end }]
+    ? [
+      {
+        start:
+          blocks[0].start,
+        end:
+          blocks[
+            blocks.length - 1
+          ].end,
+      },
+    ]
     : blocks;
 }
 
+// =========================
 // CAMPAIGN PERF
+// =========================
 
 async function getCampaignPerf() {
-  const rows = await getCustomer().query(`
+  const rows =
+    await getCustomer().query(`
       SELECT
         campaign.id,
         metrics.cost_micros,
@@ -105,109 +203,133 @@ async function getCampaignPerf() {
 
   return rows.map((r: any) => ({
     id: String(r.campaign.id),
-    cost: (r.metrics?.cost_micros ?? 0) / 1e6,
-    conv: r.metrics?.conversions ?? 0,
-    clicks: r.metrics?.clicks ?? 0,
-    impr: r.metrics?.impressions ?? 0
+    cost:
+      (r.metrics?.cost_micros ??
+        0) / 1e6,
+    conv:
+      r.metrics?.conversions ??
+      0,
+    clicks:
+      r.metrics?.clicks ?? 0,
+    impr:
+      r.metrics?.impressions ??
+      0,
   }));
 }
 
-// Conversion breakdown by action type
-async function getConversionTypes() {
-  return getCustomer().query(`
-    SELECT
-      segments.conversion_action_name,
-      metrics.conversions
-    FROM campaign
-    WHERE segments.date DURING ${LOOKBACK}
-  `);
-}
-
-// Top converting search terms
-async function getSearchTermConversions() {
-  return getCustomer().query(`
-    SELECT
-      search_term_view.search_term,
-      metrics.cost_micros,
-      metrics.clicks,
-      metrics.conversions
-    FROM search_term_view
-    WHERE segments.date DURING ${LOOKBACK}
-  `);
-}
-
-// Top converting keywords
-async function getKeywordConversions() {
-  return getCustomer().query(`
-    SELECT
-      ad_group_criterion.keyword.text,
-      metrics.cost_micros,
-      metrics.clicks,
-      metrics.conversions
-    FROM keyword_view
-    WHERE segments.date DURING ${LOOKBACK}
-  `);
-}
-
-async function getAdConversions() {
-  return getCustomer().query(`
-    SELECT
-      ad_group_ad.ad.id,
-      ad_group_ad.ad.responsive_search_ad.headlines,
-      metrics.clicks,
-      metrics.conversions,
-      metrics.cost_micros
-    FROM ad_group_ad
-    WHERE segments.date DURING ${LOOKBACK}
-  `);
-}
-
+// =========================
 // REMOVE SCHEDULES
-async function removeSchedules(ids: string[], dryRun: boolean) {
+// =========================
+
+async function removeSchedules(
+  ids: string[],
+  dryRun: boolean
+) {
   const customer = getCustomer();
-  const rows = await customer.query(`
+
+  const rows =
+    await customer.query(`
       SELECT campaign_criterion.resource_name
       FROM campaign_criterion
       WHERE campaign.id IN (${ids.join(",")})
         AND campaign_criterion.type = 'AD_SCHEDULE'
     `);
 
-  const names = rows.map((r: any) => r.campaign_criterion?.resource_name).filter(Boolean);
-  if (!dryRun && names.length) { await customer.campaignCriteria.remove(names) }
+  const names = rows
+    .map(
+      (r: any) =>
+        r.campaign_criterion
+          ?.resource_name
+    )
+    .filter(Boolean);
 
-  return { removed: names.length };
+  if (
+    !dryRun &&
+    names.length
+  ) {
+    await customer.campaignCriteria.remove(
+      names
+    );
+  }
+
+  return {
+    removed: names.length,
+  };
 }
 
+// =========================
 // APPLY SCHEDULES
-async function applySchedules(ids: string[], blocks: any[], dryRun: boolean) {
+// =========================
+
+async function applySchedules(
+  ids: string[],
+  blocks: any[],
+  dryRun: boolean
+) {
   const customer = getCustomer();
 
-  const creates: resources.ICampaignCriterion[] = [];
+  const creates: resources.ICampaignCriterion[] =
+    [];
 
   for (const id of ids) {
-    for (const day of ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]) {
+    for (const day of [
+      "MONDAY",
+      "TUESDAY",
+      "WEDNESDAY",
+      "THURSDAY",
+      "FRIDAY",
+      "SATURDAY",
+      "SUNDAY",
+    ]) {
       for (const b of blocks) {
         creates.push({
-          campaign: `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
+          campaign:
+            `customers/${process.env.GOOGLE_ADS_CUSTOMER_ID}/campaigns/${id}`,
+
           ad_schedule: {
-            day_of_week: day as any,
-            start_hour: b.start,
-            end_hour: b.end,
-            start_minute: "ZERO",
-            end_minute: "ZERO",
+            day_of_week:
+              day as any,
+
+            start_hour:
+              b.start,
+
+            end_hour:
+              b.end,
+
+            start_minute:
+              "ZERO",
+
+            end_minute:
+              "ZERO",
           },
         });
       }
     }
   }
 
-  if (!dryRun && creates.length) { await customer.campaignCriteria.create(creates) }
+  if (
+    !dryRun &&
+    creates.length
+  ) {
+    await customer.campaignCriteria.create(
+      creates
+    );
+  }
 
-  return { applied: creates.length };
+  return {
+    applied: creates.length,
+  };
 }
 
+// =========================
 // KEYWORD PROMOTION
-async function promoteKeywords(ids: string[], avgCPA: number, dryRun: boolean) {
+// =========================
+
+async function promoteKeywords(
+  ids: string[],
+  avgCPA: number,
+  dryRun: boolean
+) {
   const customer = getCustomer();
 
   const rows =
@@ -225,109 +347,265 @@ async function promoteKeywords(ids: string[], avgCPA: number, dryRun: boolean) {
 
   const normalized = rows.map(
     (r: any) => {
-      const cost = (r.metrics?.cost_micros ?? 0) / 1e6;
-      const conv = r.metrics?.conversions ?? 0;
-      const cpa = conv > 0 ? cost / conv : Infinity;
-      return { resource: r.ad_group_criterion?.resource_name, text: r.ad_group_criterion?.keyword?.text, status: r.ad_group_criterion?.status, cost, conv, cpa }
+      const cost =
+        (r.metrics?.cost_micros ??
+          0) / 1e6;
+
+      const conv =
+        r.metrics?.conversions ??
+        0;
+
+      const cpa =
+        conv > 0
+          ? cost / conv
+          : Infinity;
+
+      return {
+        resource:
+          r.ad_group_criterion
+            ?.resource_name,
+
+        text:
+          r.ad_group_criterion
+            ?.keyword?.text,
+
+        status:
+          r.ad_group_criterion
+            ?.status,
+
+        cost,
+        conv,
+        cpa,
+      };
     }
   );
 
-  const qualified = normalized.filter(k => k.resource && (k.conv >= 2 || k.conv >= 1 && k.cpa < avgCPA));
-  const toEnable = qualified.filter(k => k.status !== "ENABLED");
+  const qualified =
+    normalized.filter(
+      (k) =>
+        k.resource &&
+        (
+          (k.conv >= 2 &&
+            k.cpa <=
+            avgCPA * 1.5) ||
+          (k.conv >= 1 &&
+            k.cost > 25)
+        )
+    );
 
-  if (!dryRun && toEnable.length) {
-    await customer.adGroupCriteria.update(toEnable.map(k => ({ resource_name: k.resource, status: "ENABLED" })))
+  const toEnable =
+    qualified.filter(
+      (k) =>
+        k.status !== "ENABLED"
+    );
+
+  if (
+    !dryRun &&
+    toEnable.length
+  ) {
+    await customer.adGroupCriteria.update(
+      toEnable.map((k) => ({
+        resource_name:
+          k.resource,
+
+        status: "ENABLED",
+      }))
+    );
   }
-  return { evaluated: rows.length, promoted: toEnable.length, promotedKeywords: toEnable.map(k => ({ keyword: k.text, conversions: k.conv, cost: k.cost, cpa: k.cpa })) };
+
+  return {
+    evaluated: rows.length,
+    promoted: toEnable.length,
+  };
 }
 
+// =========================
 // MAIN
+// =========================
 
-export async function weeklyAdjustments({ dryRun = false } = {}) {
+export async function weeklyAdjustments({
+  dryRun = false,
+} = {}) {
   const start = Date.now();
 
   const results = {
-    ok: true, dryRun, durationMs: 0, decision: {} as any,
-    topSearchTerms: [] as any[],
-    topKeywords: [] as any[],
+    ok: true,
+
+    dryRun,
+
+    durationMs: 0,
+
+    decision: {} as any,
+
+    schedule: {
+      removed: 0,
+      applied: 0,
+    },
+
     keywords: {
-      evaluated: 0, promoted: 0,
-      promotedKeywords: [],
-    } as KeywordResult,
-    topAds: [] as any[], conversionTypes: [] as any[],
-    schedule: { removed: 0, applied: 0 },
-    badHours: [] as number[], avgCPA: 0,
-    errors: [] as any[]
+      evaluated: 0,
+      promoted: 0,
+    },
+
+    badHours: [] as number[],
+
+    avgCPA: 0,
+
+    errors: [] as any[],
   };
 
   try {
-    const perf = await getPerformance();
-    const { bad, avgCPA, totalCost, totalConv } = findBadHours(perf);
-    const campaignPerf = await getCampaignPerf();
+    const perf =
+      await getPerformance();
 
-    const conversionTypes = await getConversionTypes();
-    results.conversionTypes = conversionTypes.filter((c: any) => (c.metrics?.conversions ?? 0) > 0)
-      .map((c: any) => ({ type: c.segments?.conversion_action_name, conversions: c.metrics?.conversions ?? 0 }));
+    const {
+      bad,
+      avgCPA,
+      totalCost,
+      totalConv,
+    } = findBadHours(perf);
 
-    const searchTerms = await getSearchTermConversions();
-    results.topSearchTerms = searchTerms.filter((s: any) => (s.metrics?.conversions ?? 0) > 0)
-      .sort((a: any, b: any) => (b.metrics?.conversions ?? 0) - (a.metrics?.conversions ?? 0)).slice(0, 10)
-      .map((s: any) => ({ term: s.search_term_view?.search_term, conversions: s.metrics?.conversions ?? 0, clicks: s.metrics?.clicks ?? 0, spend: (s.metrics?.cost_micros ?? 0) / 1e6 }));
+    const campaignPerf =
+      await getCampaignPerf();
 
-    const keywordPerf = await getKeywordConversions();
-    results.topKeywords = keywordPerf.filter((k: any) => (k.metrics?.conversions ?? 0) > 0)
-      .sort((a: any, b: any) => (b.metrics?.conversions ?? 0) - (a.metrics?.conversions ?? 0))
-      .slice(0, 10).map((k: any) => ({ keyword: k.ad_group_criterion?.keyword?.text, conversions: k.metrics?.conversions ?? 0, clicks: k.metrics?.clicks ?? 0, spend: (k.metrics?.cost_micros ?? 0) / 1e6 }));
+    const matureCount =
+      campaignPerf.filter((c) =>
+        isMature(
+          c.impr,
+          c.clicks
+        )
+      ).length;
 
+    const lowData =
+      isLowData(
+        totalCost,
+        totalConv
+      );
 
-    const adPerf = await getAdConversions();
-    results.topAds = adPerf.filter((a: any) => (a.metrics?.conversions ?? 0) > 0)
-      .sort((a: any, b: any) => (b.metrics?.conversions ?? 0) - (a.metrics?.conversions ?? 0))
-      .slice(0, 10).map((a: any) => ({ adId: a.ad_group_ad?.ad?.id, headline: a.ad_group_ad?.ad?.responsive_search_ad?.headlines?.[0]?.text, conversions: a.metrics?.conversions ?? 0, spend: (a.metrics?.cost_micros ?? 0) / 1e6 }));
-
-    const matureCount = campaignPerf.filter(c => isMature(c.impr, c.clicks)).length;
-    const lowData = isLowData(totalCost, totalConv);
-    const applySchedule = !lowData && matureCount > 0;
+    const applySchedule =
+      !lowData &&
+      matureCount > 0;
 
     results.badHours = bad;
     results.avgCPA = avgCPA;
-    results.decision = { applySchedule, reason: lowData ? "low_data" : "sufficient_data", totalCost, totalConv, matureCampaigns: matureCount };
-    results.decision.costPerConversion = totalConv > 0 ? totalCost / totalConv : null;
 
+    results.decision = {
+      applySchedule,
+      reason: lowData
+        ? "low_data"
+        : "ok",
+      totalCost,
+      totalConv,
+      matureCampaigns:
+        matureCount,
+    };
+
+    // =========================
     // SCHEDULES
+    // =========================
+
     if (applySchedule) {
       try {
-        const ids = campaignPerf.map(c => c.id);
-        const cleanup = await removeSchedules(ids, dryRun);
-        const blocks = buildBlocks(bad);
-        const applied = await applySchedules(ids, blocks, dryRun);
+        const ids =
+          campaignPerf.map(
+            (c) => c.id
+          );
 
-        results.schedule = { removed: cleanup.removed, applied: applied.applied };
+        const cleanup =
+          await removeSchedules(
+            ids,
+            dryRun
+          );
+
+        const blocks =
+          buildBlocks(bad);
+
+        const applied =
+          await applySchedules(
+            ids,
+            blocks,
+            dryRun
+          );
+
+        results.schedule = {
+          removed:
+            cleanup.removed,
+
+          applied:
+            applied.applied,
+        };
+
       } catch (err) {
         results.ok = false;
-        const error = getErrorMessage(err);
-        results.errors.push({ type: "schedule", err: error });
-        await notifySlackError("Google Ads Schedule Adjustment Failed", err);
+
+        const error =
+          getErrorMessage(err);
+
+        results.errors.push({
+          type: "schedule",
+          err: error,
+        });
+
+        await notifySlackError(
+          "Google Ads Schedule Adjustment Failed",
+          err
+        );
       }
     }
 
+    // =========================
     // KEYWORDS
+    // =========================
+
     try {
-      const ids = campaignPerf.map(c => c.id);
-      results.keywords = await promoteKeywords(ids, avgCPA, dryRun);
+      const ids =
+        campaignPerf.map(
+          (c) => c.id
+        );
+
+      results.keywords =
+        await promoteKeywords(
+          ids,
+          avgCPA,
+          dryRun
+        );
+
     } catch (err) {
       results.ok = false;
-      const error = getErrorMessage(err);
-      results.errors.push({ type: "keywords", err: error });
-      await notifySlackError("Google Ads Keyword Promotion Failed", err);
+
+      const error =
+        getErrorMessage(err);
+
+      results.errors.push({
+        type: "keywords",
+        err: error,
+      });
+
+      await notifySlackError(
+        "Google Ads Keyword Promotion Failed",
+        err
+      );
     }
 
-    results.ok = results.errors.length === 0;
-    results.durationMs = Date.now() - start;
-    await notifySlackResult("Google Ads Weekly Adjustment Result", results);
+    results.ok =
+      results.errors.length === 0;
+
+    results.durationMs =
+      Date.now() - start;
+
+    await notifySlackResult(
+      "Google Ads Weekly Adjustment Result",
+      results
+    );
+
     return results;
+
   } catch (err) {
-    await notifySlackError("Google Ads Weekly Adjustment Fatal Failure", err);
+    await notifySlackError(
+      "Google Ads Weekly Adjustment Fatal Failure",
+      err
+    );
+
     throw err;
   }
 }
