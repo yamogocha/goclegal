@@ -156,11 +156,28 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Debug Google Ads versions
+      - name: Test OAuth with Node fetch
         run: |
-          npm ls google-ads-api
-          npm ls google-auth-library
-          npm ls gaxios
+          node -e '
+            (async () => {
+              const body = new URLSearchParams({
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+                grant_type: "refresh_token"
+              });
+
+              const res = await fetch("https://oauth2.googleapis.com/token", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body
+              });
+
+              console.log("status:", res.status);
+              console.log(await res.text());
+            })().catch(console.error);
 
       #
       # ======================================================
