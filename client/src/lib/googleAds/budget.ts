@@ -1,6 +1,5 @@
 import { getCustomer } from "./index";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
-import util from "node:util";
 
 
 type BudgetControlResult = {
@@ -84,11 +83,6 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
   };
 
   try {
-    console.log({
-      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.length,
-      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET?.length,
-      GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN?.length,
-    });
     const customer = getCustomer();
     // 1. Load campaigns and current budget settings
     const campaigns = await customer.query(`
@@ -214,27 +208,12 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     results.success = results.ok;
     results.durationMs = Date.now() - start;
     // 7. Send budget and lead quality report to Slack
-    // await notifySlackResult("Google Ads Budget Control Result", results);
+    await notifySlackResult("Google Ads Budget Control Result", results);
+
     return results;
   } catch (err) {
-    // await notifySlackError("Google Ads Budget Control Fatal Failure", err);
-    console.error("========== FULL ERROR ==========");
-    console.error(util.inspect(err, {
-      depth: null,
-      colors: false,
-      showHidden: true,
-    }));
+    await notifySlackError("Google Ads Budget Control Fatal Failure", err);
 
-    console.error("========== PROPERTIES ==========");
-    console.error("name:", err?.name);
-    console.error("message:", err?.message);
-    console.error("code:", err?.code);
-    console.error("cause:", err?.cause);
-    console.error("stack:", err?.stack);
-
-    if (err?.response) {
-      console.error("response:", util.inspect(err.response, { depth: null }));
-    }
     throw err;
   }
 }
