@@ -85,6 +85,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
   try {
     const customer = getCustomer();
     // 1. Load campaigns and current budget settings
+    console.log("Query #1");
     const campaigns = await customer.query(`
         SELECT
           campaign.id,
@@ -93,6 +94,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
           campaign_budget.amount_micros
         FROM campaign
       `);
+    console.log("Query #1 OK");
 
     const active = campaigns.filter((c: any) => c.campaign?.status === 2);
     const paused = campaigns.filter((c: any) => c.campaign?.status === 3);
@@ -100,6 +102,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     results.summary.activeCampaigns = active.length;
     results.summary.pausedCampaigns = paused.length;
     // 2. Load 30-day performance metrics (spend, clicks, conversions)
+    console.log("Query #2");
     const perf30d = await customer.query(`
       SELECT
         campaign.id,
@@ -115,7 +118,9 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       WHERE campaign.status = 'ENABLED'
         AND segments.date DURING LAST_30_DAYS
     `);
+    console.log("Query #2 OK");
     // 3. Load search terms to see what actually generated conversions
+    console.log("Query #3");
     const searchTerms = await customer.query(`
     SELECT
       search_term_view.search_term,
@@ -126,6 +131,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     FROM search_term_view
     WHERE segments.date DURING LAST_30_DAYS
   `);
+    console.log("Query #3 OK");
 
     const topConverters = searchTerms
       .filter((x: any) => toNumber(x.metrics?.conversions) > 0)
