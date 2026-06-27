@@ -18,20 +18,7 @@ async function run() {
       }),
     });
 
-    // const genData = await genRes.json();
-
-    // if (!genData.ok) {
-    //   console.error("GEN FAILED", genData);
-    //   process.exit(1);
-    // }
-
-    console.log("Generate status:", genRes.status);
-    console.log("Generate content-type:", genRes.headers.get("content-type"));
-
     const genText = await genRes.text();
-
-    console.log("Generate response:");
-    console.log(genText);
 
     let genData;
     try {
