@@ -309,7 +309,7 @@ export async function createSearchCampaign(opts: CreateCampaignOpts = {}) {
   } = opts;
 
   const customer = getCustomer();
-  customer.query("SELECT campaign.id LIMIT 1")
+  await customer.query("SELECT campaign.id LIMIT 1")
   const logs: any[] = [];
   const details: any[] = [];
 
