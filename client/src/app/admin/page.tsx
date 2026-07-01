@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+// import { signIn, useSession } from "next-auth/react";
 type SearchResult = {
   plaintiffName: string;
   caseNumber: string;
@@ -15,7 +15,7 @@ export default function AdminPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [recentCases, setRecentCases] = useState<SearchResult[]>([]);
   const displayCases = query.trim() ? results : recentCases;
-  const { data: session, status } = useSession();
+  // const { data: session, status } = useSession();
   async function loadRecentCases() {
     const res = await fetch("/api/admin?recent=true");
     const data = await res.json();
@@ -24,19 +24,19 @@ export default function AdminPage() {
   useEffect(() => {
     loadRecentCases();
   }, []);
-  useEffect(() => {
-    const savedQuery = sessionStorage.getItem("adminQuery");
-    const savedResults = sessionStorage.getItem("adminResults");
-    if (savedQuery) setQuery(savedQuery);
-    if (savedResults) {
-      try {
-        setResults(JSON.parse(savedResults));
-      } catch {}
-    }
-  }, []);
+  // useEffect(() => {
+  //   const savedQuery = sessionStorage.getItem("adminQuery");
+  //   const savedResults = sessionStorage.getItem("adminResults");
+  //   if (savedQuery) setQuery(savedQuery);
+  //   if (savedResults) {
+  //     try {
+  //       setResults(JSON.parse(savedResults));
+  //     } catch {}
+  //   }
+  // }, []);
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
+      // setResults([]);
       sessionStorage.removeItem("adminQuery");
       sessionStorage.removeItem("adminResults");
       return;
@@ -70,25 +70,25 @@ export default function AdminPage() {
   if (status === "loading") {
     return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
   }
-  if (!session) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
-          <h1 className="text-2xl font-bold text-[#00305b] mb-4">GOC Legal Admin</h1> <p className="text-gray-600 mb-6">Sign in with your authorized Google account to access case management.</p>{" "}
-          <button
-            onClick={() =>
-              signIn("google", {
-                callbackUrl: "/admin",
-              })
-            }
-            className="w-full bg-[#00305b] text-white py-3 rounded-md font-medium"
-          >
-            Sign in with Google
-          </button>
-        </div>
-      </main>
-    );
-  }
+  // if (!session) {
+  //   return (
+  //     <main className="min-h-screen flex items-center justify-center bg-gray-100">
+  //       <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+  //         <h1 className="text-2xl font-bold text-[#00305b] mb-4">GOC Legal Admin</h1> <p className="text-gray-600 mb-6">Sign in with your authorized Google account to access case management.</p>{" "}
+  //         <button
+  //           onClick={() =>
+  //             signIn("google", {
+  //               callbackUrl: "/admin",
+  //             })
+  //           }
+  //           className="w-full bg-[#00305b] text-white py-3 rounded-md font-medium"
+  //         >
+  //           Sign in with Google
+  //         </button>
+  //       </div>
+  //     </main>
+  //   );
+  // }
   return (
     <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8">
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />{" "}
