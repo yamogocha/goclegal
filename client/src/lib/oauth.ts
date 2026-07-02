@@ -1,12 +1,12 @@
 import { OAuth2Client } from "google-auth-library";
-// import NextAuth from "next-auth";
-// import Google from "next-auth/providers/google";
-// import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
+import { NextResponse } from "next/server";
 
 export const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID!,
   process.env.GOOGLE_CLIENT_SECRET!,
-  process.env.GOOGLE_REDIRECT_URI! // e.g. http://localhost:3000/api/oauth/callback
+  process.env.GOOGLE_API_REDIRECT_URI! // e.g. http://localhost:3000/api/oauth/callback
 );
 
 export function getAuthUrl() {
@@ -43,45 +43,45 @@ export function verifyCronAuth(req: Request) {
 }
 
 
-// export const {
-//   handlers,
-//   auth,
-//   signIn,
-//   signOut,
-// } = NextAuth({
-//   providers: [
-//     Google({
-//       clientId: process.env.GOOGLE_CLIENT_ID!,
-//       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-//     }),
-//   ],
+export const {
+  handlers,
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
 
-//   callbacks: {
-//     async signIn({ profile }) {
-//       const allowedEmails = [
-//         "greg@goclegal.com",
-//         "angel@goclegal.com",
-//         "angeltamyamen@gmail.com",
-//         "oconnell.gregory@gmail.com"
-//       ];
-//       return allowedEmails.includes(
-//         profile?.email || ""
-//       );
-//     },
-//   },
-// });
+  callbacks: {
+    async signIn({ profile }) {
+      const allowedEmails = [
+        "greg@goclegal.com",
+        "angel@goclegal.com",
+        "angeltamyamen@gmail.com",
+        "oconnell.gregory@gmail.com"
+      ];
+      return allowedEmails.includes(
+        profile?.email || ""
+      );
+    },
+  },
+});
 
-// export default auth((req) => {
-//   if (!req.auth) {
-//     return NextResponse.redirect(
-//       new URL("/login", req.url)
-//     );
-//   }
-// });
+export default auth((req) => {
+  if (!req.auth) {
+    return NextResponse.redirect(
+      new URL("/login", req.url)
+    );
+  }
+});
 
-// export const config = {
-//   matcher: [
-//     "/admin/:path*",
-//     "/api/admin/:path*",
-//   ],
-// };
+export const config = {
+  matcher: [
+    "/admin/:path*",
+    "/api/admin/:path*",
+  ],
+};

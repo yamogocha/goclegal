@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
-// import Providers from "../app/components/providers";
+import Providers from "../app/components/providers";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -43,9 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${montserrat.variable} ${cormorantGaramond.variable} antialiased`}>
-        {/* <Providers> */}
-        {children}
-        {/* </Providers> */}
+        <Providers>{children}</Providers>
       </body>
       {/* Google Tag (gtag.js) */}
       <Script async src={`https://www.googletagmanager.com/gtag/js?id=AW-17444498530`} />
