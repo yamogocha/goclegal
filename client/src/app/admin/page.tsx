@@ -24,19 +24,19 @@ export default function AdminPage() {
   useEffect(() => {
     loadRecentCases();
   }, []);
-  // useEffect(() => {
-  //   const savedQuery = sessionStorage.getItem("adminQuery");
-  //   const savedResults = sessionStorage.getItem("adminResults");
-  //   if (savedQuery) setQuery(savedQuery);
-  //   if (savedResults) {
-  //     try {
-  //       setResults(JSON.parse(savedResults));
-  //     } catch {}
-  //   }
-  // }, []);
+  useEffect(() => {
+    const savedQuery = sessionStorage.getItem("adminQuery");
+    const savedResults = sessionStorage.getItem("adminResults");
+    if (savedQuery) setQuery(savedQuery);
+    if (savedResults) {
+      try {
+        setResults(JSON.parse(savedResults));
+      } catch {}
+    }
+  }, []);
   useEffect(() => {
     if (!query.trim()) {
-      // setResults([]);
+      setResults([]);
       sessionStorage.removeItem("adminQuery");
       sessionStorage.removeItem("adminResults");
       return;
@@ -67,9 +67,9 @@ export default function AdminPage() {
     }
     e.target.value = "";
   }
-  if (status === "loading") {
-    return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
-  }
+  // if (status === "loading") {
+  //   return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  // }
   // if (!session) {
   //   return (
   //     <main className="min-h-screen flex items-center justify-center bg-gray-100">
