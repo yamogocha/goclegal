@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { groq } from "next-sanity";
-import { client } from "@/sanity/client";
-import { serverClient } from "@/lib/blog";
+import { client, serverClient } from "@/sanity/client";
 import {
   buildSpecialInterrogatoryDocx,
   createFinalResponse,
