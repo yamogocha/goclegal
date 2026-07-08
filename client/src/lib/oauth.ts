@@ -3,6 +3,9 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { NextResponse } from "next/server";
 
+
+//google api oauth
+
 export const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID!,
   process.env.GOOGLE_CLIENT_SECRET!,
@@ -41,6 +44,9 @@ export function verifyCronAuth(req: Request) {
 
   return null;
 }
+
+
+//next auth
 
 
 export const {
