@@ -18,59 +18,59 @@ export function getOpenAI() {
 }
 
 const blockSchema = {
-    type: "array",
-    minItems: 6,
-    items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-        type: { type: "string", enum: ["heading3", "paragraph"] },
-        text: { type: "string" },
-        link: {
-            anyOf: [
-                { type: "null" },
-                {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    href: { type: "string" },
-                    text: { type: "string" }
-                  },
-                  required: ["href", "text"]
-                }
-              ]
-        }
-        },
-        required: ["type", "text", "link"]
-    }
-}
-
-export const weeklyPostSchema = {
+  type: "array",
+  minItems: 6,
+  items: {
     type: "object",
     additionalProperties: false,
     properties: {
-        candidateTopics: {
-            type: "array",
-            minItems: 6,
-            maxItems: 10,
-            items: { type: "string" },
-        },
-        chosenTopic: { type: "string" },
-        title: { type: "string" },
-        headline: { type: "string" },
-        buttonText: { type: "string" },
-        columnLeft: blockSchema,
-        columnRight: blockSchema,
+      type: { type: "string", enum: ["heading3", "paragraph"] },
+      text: { type: "string" },
+      link: {
+        anyOf: [
+          { type: "null" },
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              href: { type: "string" },
+              text: { type: "string" }
+            },
+            required: ["href", "text"]
+          }
+        ]
+      }
     },
-    required: [
-        "candidateTopics",
-        "chosenTopic",
-        "title",
-        "headline",
-        "buttonText",
-        "columnLeft",
-        "columnRight"
-    ]
+    required: ["type", "text", "link"]
+  }
+}
+
+export const weeklyPostSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    candidateTopics: {
+      type: "array",
+      minItems: 6,
+      maxItems: 10,
+      items: { type: "string" },
+    },
+    chosenTopic: { type: "string" },
+    title: { type: "string" },
+    headline: { type: "string" },
+    buttonText: { type: "string" },
+    columnLeft: blockSchema,
+    columnRight: blockSchema,
+  },
+  required: [
+    "candidateTopics",
+    "chosenTopic",
+    "title",
+    "headline",
+    "buttonText",
+    "columnLeft",
+    "columnRight"
+  ]
 }
 
 // Brand + competitive research document injected into the search mix
@@ -110,7 +110,7 @@ TONE FOR ALL CONTENT: Professional, reassuring, educational. No legal advice. Su
 `;
 
 export function postRespInstructions(recentTopicHints: { title: string, slug: string }[]) {
-    return "Write a weekly SEO blog post for GOC Legal, a California personal injury law firm. " +
+  return "Write a weekly SEO blog post for GOC Legal, a California personal injury law firm. " +
     "Generate a concise title (max 5 words), generate a headline (max 12 words). " +
     "Select ONE topic based on either (1) recent California personal injury–related news or (2) trending personal injury search questions, researched via the web_search tool. " +
     "Write original, educational content (no citations, links, or news attribution) and do not provide legal advice. " +
@@ -137,18 +137,18 @@ export function postRespInstructions(recentTopicHints: { title: string, slug: st
 }
 
 export const postRespInput =
-    "Audience: California residents researching personal injury topics. " +
-    "Tone: Professional, reassuring, educational, and easy to read. " +
-    "Each column must contain at least 6 blocks. " +
-    "Include at most 3 headings per column; include at most one link per column; every link must be followed by 2~3 sentences explaining it. " +
-    "The link field must always exist; set link=null for most blocks. " +
-    "Limit to a maximum of ONE link per column. Links must be either a reputable external source or a provided GOC Legal service URL. " +
-    "For paragraphs, place the text in the 'text' field. " +
-    "If a link is included, link.text must be a short clickable phrase." +
-    "Please remove em dashes."
+  "Audience: California residents researching personal injury topics. " +
+  "Tone: Professional, reassuring, educational, and easy to read. " +
+  "Each column must contain at least 6 blocks. " +
+  "Include at most 3 headings per column; include at most one link per column; every link must be followed by 2~3 sentences explaining it. " +
+  "The link field must always exist; set link=null for most blocks. " +
+  "Limit to a maximum of ONE link per column. Links must be either a reputable external source or a provided GOC Legal service URL. " +
+  "For paragraphs, place the text in the 'text' field. " +
+  "If a link is included, link.text must be a short clickable phrase." +
+  "Please remove em dashes."
 
 export function imageRespInput(title: string): string {
-    return "Photorealistic, real-life hero image for a personal injury law firm blog post" +
+  return "Photorealistic, real-life hero image for a personal injury law firm blog post" +
     ` Topic: ${title}` +
     " Realistic everyday scene relevant to the topic (e.g., calm roadside after a minor car incident, professional office handshake, courthouse exterior, thoughtful person using a phone)" +
     " Mood: calm, trustworthy, reassuring, professional" +
@@ -161,11 +161,11 @@ export function imageRespInput(title: string): string {
 }
 
 export function finalResponsePrompt(params: {
-    question: string;
-    attorneyResponse: string;
-    clientResponse: string;
-  }) {
-    return `
+  question: string;
+  attorneyResponse: string;
+  clientResponse: string;
+}) {
+  return `
   You are assisting a California plaintiff attorney in preparing verified interrogatory responses.
   
   QUESTION:
@@ -214,4 +214,66 @@ export function finalResponsePrompt(params: {
   
   Return ONLY the final interrogatory response text.
   `;
-  }
+}
+
+export function weeklyAdCaptionPrompt(params: {
+  title: string;
+  headline: string;
+}) {
+  return `
+  Write ONE Instagram caption for GOC Legal (California personal injury).
+    Tone: modern, credible, calm. No emojis. No legal advice. No phone/email/website in the caption.
+    Goal: spark curiosity to read more.
+
+    REQUIREMENTS:
+    - 1–2 sentences about the blog topic.
+    - MUST end with this exact sentence (verbatim, including punctuation):
+      "Read our blog to find out what your rights are. Link in bio!"
+    - Keep total caption length <= 140 characters (including the required ending).
+
+    Blog:
+    Title: ${params.title}
+    Headline: ${params.headline ?? ""}
+
+    Return ONLY JSON:
+    {"caption": string, "hashtags": string[]}
+
+    Hashtags: 8-15. CA + personal injury + safety + local intent. No spaces inside hashtags.
+  `;
+}
+
+export function weeklyVideoPrompt(params: {
+  title: string;
+  headline: string;
+}) {
+  return `
+  You are Greg O'Connell, founder of GOC Legal in Oakland, California.
+  
+  Write a short educational video script based on the firm's newest blog.
+  
+  BLOG TITLE
+  ${params.title}
+  
+  HEADLINE
+  ${params.headline}
+  
+  Requirements:
+  
+  • Speak directly to the viewer.
+  • Conversational and natural.
+  • 650-840 characters
+  • Approximately 45-60 seconds.
+  • Professional but friendly.
+  • No legal jargon.
+  • No bullet points.
+  • No emojis.
+  • Do not mention reading the blog.
+  • Focus on educating rather than selling.
+  • begin with a compelling hook
+  • explain one key takeaway from this week's blog
+  End with a natural call to action encouraging viewers to contact GOC Legal for a free consultation
+  
+  Return ONLY valid JSON.
+  {"title": ${params.title} "script": string}
+  `;
+}
