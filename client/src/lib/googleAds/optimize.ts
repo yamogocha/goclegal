@@ -1,5 +1,5 @@
 import { getCustomer } from "./index";
-import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
+import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
 
 
 // Add search term to shared negative list
