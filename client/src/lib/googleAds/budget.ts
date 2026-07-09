@@ -1,5 +1,5 @@
 import { getCustomer } from "./index";
-import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
+import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
 
 
 type BudgetControlResult = {
