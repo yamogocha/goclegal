@@ -1,9 +1,10 @@
 import { auth } from "@/lib/oauth";
 import { NextRequest, NextResponse } from "next/server";
 import { groq } from "next-sanity";
-import { client, serverClient } from "@/sanity/client";
+import { client } from "@/sanity/client";
 import { detectInterrogatoryType, loadFormInterrogatoryPdfQuestions, loadSpecialInterrogatoryPdfQuestions } from "@/lib/pdfToDocx";
 import crypto from "crypto";
+import { serverClient } from "@/sanity/serverClient";
 // Search and load
 export async function GET(req: NextRequest) {
   const session = await auth();

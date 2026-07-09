@@ -1,6 +1,6 @@
 import { extractImageBase64, Block, toPortatbleTextBlock, slugify, getRecentPosts } from "@/lib/blog";
 import { imageRespInput, getOpenAI, postRespInput, postRespInstructions, weeklyPostSchema } from "@/lib/openai";
-import { serverClient } from "@/sanity/client";
+import { serverClient } from "@/sanity/serverClient";
 import { NextResponse } from "next/server";
 
 const openai = getOpenAI();

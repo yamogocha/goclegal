@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { groq } from "next-sanity";
-import { client, serverClient } from "@/sanity/client";
-import {
-  buildSpecialInterrogatoryDocx,
-  createFinalResponse,
-  Interrogatory,
-  loadSpecialInterrogatoryPdfQuestions,
-  loadFormInterrogatoryPdfQuestions,
-  detectInterrogatoryType,
-  buildFormInterrogatoryDocx,
-} from "@/lib/pdfToDocx";
-import crypto from "crypto"; export const runtime = "nodejs"; type SavedInterrogatory = {
+import { client } from "@/sanity/client";
+import { buildSpecialInterrogatoryDocx, createFinalResponse, Interrogatory, loadSpecialInterrogatoryPdfQuestions, loadFormInterrogatoryPdfQuestions, detectInterrogatoryType, buildFormInterrogatoryDocx } from "@/lib/pdfToDocx";
+import crypto from "crypto";
+import { serverClient } from "@/sanity/serverClient";
+
+export const runtime = "nodejs"; type SavedInterrogatory = {
   number: string;
   question?: string;
   questionLines?: string[];
