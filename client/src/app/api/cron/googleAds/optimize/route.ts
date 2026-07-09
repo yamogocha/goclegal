@@ -1,5 +1,5 @@
 // api route (single execution)
-import { getErrorMessage } from "@/lib";
+import { getErrorMessage } from "@/lib/error";
 import {
   runCoreOptimization,
 } from "@/lib/googleAds/optimize";

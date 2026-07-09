@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@/lib";
+import { getErrorMessage } from "@/lib/error";
 import {
   weeklyAdjustments,
 } from "../../src/lib/googleAds/adjust";
