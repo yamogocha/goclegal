@@ -1,9 +1,10 @@
 // app/api/webhooks/heygen/route.ts
 
 import { NextResponse } from "next/server";
-import { client, serverClient } from "@/sanity/client";
+import { client } from "@/sanity/client";
 import { saveReelToBlob, publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel } from "@/lib/weeklyAd";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
+import { serverClient } from "@/sanity/serverClient";
 
 export async function POST(req: Request) {
     const started = Date.now();
