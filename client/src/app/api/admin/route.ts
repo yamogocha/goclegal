@@ -1,7 +1,8 @@
 import { auth } from "@/lib/oauth";
 import { NextRequest, NextResponse } from "next/server";
 import { groq } from "next-sanity";
-import { client, serverClient } from "@/sanity/client";
+import { client } from "@/sanity/client";
+import { serverClient } from "@/lib/blog";
 import { detectInterrogatoryType, loadFormInterrogatoryPdfQuestions, loadSpecialInterrogatoryPdfQuestions } from "@/lib/pdfToDocx";
 import crypto from "crypto";
 // Search and load

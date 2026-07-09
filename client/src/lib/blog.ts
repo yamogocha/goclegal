@@ -1,5 +1,15 @@
+import { createClient } from "next-sanity";
 import { ResponseOutputItem } from 'openai/resources/responses/responses.mjs'
 import { client } from "@/sanity/client";
+
+
+export const serverClient = createClient({
+    projectId: process.env.SANITY_PROJECT_ID!,
+    dataset: process.env.SANITY_DATASET!,
+    apiVersion: "2024-01-01",
+    useCdn: false, // MUST be false for mutations
+    token: process.env.SANITY_API_TOKEN!, // 👈 write token
+  });
 
 type RecentPost = {
     title: string
@@ -13,9 +23,9 @@ export function getRecentPosts(limit: number): Promise<RecentPost[]> {
 
 export function extractImageBase64(response: { output: ResponseOutputItem[] }): string {
     const call = response.output.find(
-        (output): output is Extract<ResponseOutputItem, { type: "image_generation_call" }> =>
+        (output): output is Extract<ResponseOutputItem, { type: "image_generation_call" }> => 
             output.type === "image_generation_call");
-
+    
     if (!call) throw new Error(`No image generation call found`);
 
     if (typeof call.result === "string") return call.result;
@@ -28,11 +38,11 @@ export function extractImageBase64(response: { output: ResponseOutputItem[] }): 
 
 export function slugify(input: string) {
     return input
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g,"-")
 }
 
 export type Block = {
@@ -51,11 +61,11 @@ export function toPortatbleTextBlock(block: Block) {
     const text = (hasLink ? block.link!.text : block.text).trim()
 
     return [{
-        _type: "block",
-        _key: crypto.randomUUID(),
-        style,
+        _type: "block", 
+        _key: crypto.randomUUID(), 
+        style, 
         markDefs: hasLink ? [{ _type: "link", _key: markKey, href: block.link!.href }] : [],
-        children: [{ _type: "span", _key: crypto.randomUUID(), text, marks: hasLink ? [markKey] : [] }]
+        children: [{ _type: "span", _key: crypto.randomUUID(), text, marks: hasLink ? [markKey] :[] }]
     }]
 }
 
