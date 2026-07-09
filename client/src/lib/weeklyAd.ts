@@ -5,8 +5,9 @@ import { z } from "zod";
 import { getOpenAI, weeklyAdCaptionPrompt, weeklyVideoPrompt } from "./openai";
 import { toFile } from "openai";
 import { getGoogleAccessToken } from "./oauth";
-import { client, serverClient } from "@/sanity/client";
+import { client } from "@/sanity/client";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "./error";
+import { serverClient } from "@/sanity/serverClient";
 
 export const runtime = "nodejs";
 
