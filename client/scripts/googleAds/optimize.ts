@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@/lib/error";
+import { getErrorMessage } from "@/lib";
 import {
   runCoreOptimization,
 } from "../../src/lib/googleAds/optimize";

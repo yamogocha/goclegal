@@ -1,5 +1,5 @@
 // no change needed except naming consistency
-import { getErrorMessage } from "@/lib/error";
+import { getErrorMessage } from "@/lib";
 import {
   weeklyAdjustments,
 } from "@/lib/googleAds/adjust";
