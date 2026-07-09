@@ -1,6 +1,6 @@
 import { getCustomer } from "./index";
 import type { resources } from "google-ads-api";
-import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib";
+import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
 
 interface PromotedKeyword { keyword: string; conversions: number; cost: number; cpa: number }
 interface KeywordResult { evaluated: number; promoted: number; promotedKeywords: PromotedKeyword[] }
