@@ -90,12 +90,13 @@ export async function generateImage({ caption, template = "instagram", weekNumbe
 
     NON-NEGOTIABLE (must be pixel-faithful):
     - Keep the background exactly the same.
+    - Keep the large ALL-CAPS headline exactly the same
     - Keep ALL existing small text exactly the same.
     - Keep the CTA button exactly the same.
     - Keep the white logo EXACTLY the same.
     - Keep layout identical.
 
-    Replace ONLY the main message with:
+    Replace ONLY the quoted body message with:
     "${caption}"
 
     Change ONLY the attorney clothing.
