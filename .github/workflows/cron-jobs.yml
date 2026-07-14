@@ -24,52 +24,40 @@ on:
           - adjust
           - budget
 
-#
-# ======================================================
 # TOP LEVEL ENV
-# ======================================================
-#
-
 env:
   NODE_ENV: production
 
   BASE_URL: ${{ secrets.BASE_URL }}
   AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
 
-  #
   # OpenAI
-  #
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-  #
+  # HeyGen
+  HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KYE }}
+  HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
+  HEYGEN_VOICE_ID: ${{ secrets.HEYGEN_VOICE_ID }}
+
   # Vercel Blob
-  #
   BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
 
-  #
   # Facebook / Instagram
-  #
   FB_USER_ACCESS_TOKEN: ${{ secrets.FB_USER_ACCESS_TOKEN }}
   FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
   FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
   IG_USER_ID: ${{ secrets.IG_USER_ID }}
 
-  #
   # Google Business Profile
-  #
   GBP_ACCOUNT_ID: ${{ secrets.GBP_ACCOUNT_ID }}
   GBP_LOCATION_ID: ${{ secrets.GBP_LOCATION_ID }}
 
-  #
   # Google OAuth
-  #
   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
   GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
 
-  #
   # Google Ads
-  #
   GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
   GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
   GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
@@ -77,16 +65,12 @@ env:
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
   GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
 
-  #
   # Sanity
-  #
   SANITY_API_TOKEN: ${{ secrets.SANITY_API_TOKEN }}
   SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
   SANITY_DATASET: ${{ secrets.SANITY_DATASET }}
 
-  #
-  # Slack
-  #
+ # Slack
   SLACK_ALERTS_URL: ${{ secrets.SLACK_ALERTS_URL }}
   SLACK_REPORTS_URL: ${{ secrets.SLACK_REPORTS_URL }}
 
@@ -156,12 +140,8 @@ jobs:
 
       - name: Install deps
         run: npm ci
-      #
-      # ======================================================
-      # WEEKLY BLOG
-      # ======================================================
-      #
 
+      # WEEKLY BLOG
       - name: Weekly blog
         if: github.event.schedule == '0 16 * * 1' || github.event.inputs.job == 'blog' || github.event.inputs.job == 'all'
         run: |
@@ -171,12 +151,7 @@ jobs:
 
           npx tsx scripts/weeklyBlog.ts
 
-      #
-      # ======================================================
       # WEEKLY AD
-      # ======================================================
-      #
-
       - name: Weekly ad
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: |
@@ -186,12 +161,7 @@ jobs:
 
           npx tsx scripts/weeklyAd.ts
 
-      #
-      # ======================================================
-      # GOOGLE ADS ADJUSTMENTS
-      # ======================================================
-      #
-
+       # GOOGLE ADS ADJUSTMENTS
       - name: Weekly Google Ads Adjustments
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'adjust' || github.event.inputs.job == 'all'
         run: |
@@ -201,12 +171,7 @@ jobs:
 
           npx tsx scripts/googleAds/adjust.ts
 
-      #
-      # ======================================================
       # GOOGLE ADS SETUP
-      # ======================================================
-      #
-
       - name: Google Ads Setup (one-time)
         if: github.event.inputs.job == 'setup'
         run: |
@@ -216,12 +181,7 @@ jobs:
 
           npx tsx scripts/googleAds/setup.ts
 
-      #
-      # ======================================================
       # GOOGLE ADS OPTIMIZATION
-      # ======================================================
-      #
-
       - name: Google Ads Optimization
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'optimize' || github.event.inputs.job == 'all'
         run: |
@@ -231,12 +191,7 @@ jobs:
 
           npx tsx scripts/googleAds/optimize.ts
 
-      #
-      # ======================================================
       # GOOGLE ADS BUDGET CONTROL
-      # ======================================================
-      #
-
       - name: Google Ads Budget Control
         if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
         run: |
@@ -246,12 +201,7 @@ jobs:
 
           npx tsx scripts/googleAds/budget.ts
 
-      #
-      # ======================================================
       # FINAL STATUS
-      # ======================================================
-      #
-
       - name: Workflow completed
         if: success()
         run: |
