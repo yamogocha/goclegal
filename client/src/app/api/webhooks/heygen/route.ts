@@ -18,20 +18,21 @@ export async function POST(req: Request) {
         );
 
         const event = body.event_type;
-        const video = body.data;
 
         // Ignore non-completed events
         if (event !== "avatar_video.success") {
             return NextResponse.json({ ok: true, ignored: true });
         }
-        const videoUrl = video.video_url;
 
         // 2. Lookup ad
-        const adId = body.event_data.callback_id;
+        const eventData = body.event_data;
+        const videoUrl = eventData.url;
+        const adId = eventData.callback_id;
+        const heygenVideoId = eventData.video_id;
         const ad = await client.getDocument(adId);
-        if (!ad) {
-            throw new Error(`Weekly ad not found for ${adId}`);
-        }
+        if (!ad) { throw new Error(`Weekly ad not found for ${adId}`) }
+        if (!videoUrl) { throw new Error("HeyGen webhook missing event_data.url") }
+        if (!adId) { throw new Error("HeyGen webhook missing callback_id") }
 
         // 3. Download MP4
         const download = await fetch(videoUrl);
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
         await serverClient.patch(ad._id)
             .set({
                 status: "completed",
+                heygenVideoId,
                 videoUrl,
                 youtubeVideoId,
                 instagramPostId: staticAds.instagramPostId,

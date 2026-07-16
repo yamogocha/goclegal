@@ -424,7 +424,6 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 5000));
         const status = await getHeyGenVideo(heygenVideoId);
-        console.log(JSON.stringify(status, null, 2));
         if (status.data.status === "completed") {
           result.videoUrl = status.data.video_url;
           return result;
