@@ -12,11 +12,16 @@ export async function POST(req: Request) {
     try {
         // 1. Parse webhook
         const body = await req.json();
+
+        console.log(
+            JSON.stringify(body, null, 2)
+        );
+
         const event = body.event_type;
         const video = body.data;
 
         // Ignore non-completed events
-        if (event !== "video.completed") {
+        if (event !== "avatar_video.success") {
             return NextResponse.json({ ok: true, ignored: true });
         }
         const videoUrl = video.video_url;
