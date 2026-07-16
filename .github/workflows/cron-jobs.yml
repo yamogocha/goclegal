@@ -35,7 +35,7 @@ env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
   # HeyGen
-  HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KYE }}
+  HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
   HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
   HEYGEN_VOICE_ID: ${{ secrets.HEYGEN_VOICE_ID }}
 
@@ -137,6 +137,12 @@ jobs:
           echo "✅ Blob token exists"
           echo "Prefix: ${BLOB_READ_WRITE_TOKEN:0:20}"
           echo "Length: ${#BLOB_READ_WRITE_TOKEN}"
+
+      - name: Verify HeyGen env
+        run: |
+          echo "API Key length: ${#HEYGEN_API_KEY}"
+          echo "Avatar ID length: ${#HEYGEN_AVATAR_ID}"
+          echo "Voice ID length: ${#HEYGEN_VOICE_ID}"
 
       - name: Install deps
         run: npm ci
