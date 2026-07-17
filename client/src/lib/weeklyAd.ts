@@ -274,7 +274,12 @@ export async function publishInstagramReel(opts: {
       throw new Error(JSON.stringify(status));
     }
 
-    if (status.status_code === "FINISHED") { break }
+    if (status.status_code === "FINISHED") {
+      // Instagram sometimes reports FINISHED slightly before
+      // the media is actually publishable.
+      await new Promise(r => setTimeout(r, 5000));
+      break
+    }
     if (status.status_code === "ERROR") {
       throw new Error(JSON.stringify(status));
     }
@@ -288,13 +293,16 @@ export async function publishInstagramReel(opts: {
   const publishForm = new URLSearchParams();
   publishForm.set("creation_id", creationId);
   publishForm.set("access_token", opts.userAccessToken);
-
-  const publishRes = await fetch(`https://graph.facebook.com/v20.0/${opts.igUserId}/media_publish`, { method: "POST", body: publishForm });
-  const publishData = await publishRes.json();
-  if (!publishRes.ok) {
+  for (let i = 0; i < 5; i++) {
+    const publishRes = await fetch(`https://graph.facebook.com/v20.0/${opts.igUserId}/media_publish`, { method: "POST", body: publishForm });
+    const publishData = await publishRes.json();
+    if (publishRes.ok) { return publishData.id }
+    if (JSON.stringify(publishData).includes("Media ID is not available")) {
+      await new Promise(r => setTimeout(r, 10000));
+      continue
+    }
     throw new Error(`IG Reel publish failed: ${JSON.stringify(publishData, null, 2)}`);
   }
-  return publishData.id;
 }
 
 export async function publishFacebookReel(opts: {
