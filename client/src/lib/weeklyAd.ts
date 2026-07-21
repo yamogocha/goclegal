@@ -8,6 +8,7 @@ import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "./error";
 import { serverClient } from "@/sanity/serverClient";
+import { del } from "@vercel/blob";
 
 export const runtime = "nodejs";
 
@@ -403,6 +404,18 @@ export async function getHeyGenVideo(videoId: string) {
     throw new Error(await res.text());
   }
   return res.json();
+}
+
+export async function deleteBlob(url?: string) {
+  if (!url) return;
+  try {
+    await del(url, {
+      token: process.env.BLOB_READ_WRITE_TOKEN!,
+    });
+    console.log("Deleted Blob:", url);
+  } catch (err) {
+    console.error("Unable to delete Blob:", err);
+  }
 }
 
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {

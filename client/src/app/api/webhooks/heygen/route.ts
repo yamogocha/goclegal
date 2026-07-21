@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { client } from "@/sanity/client";
-import { saveReelToBlob, publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel } from "@/lib/weeklyAd";
+import { publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel, deleteBlob } from "@/lib/weeklyAd";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
 import { serverClient } from "@/sanity/serverClient";
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         const buffer = Buffer.from(await download.arrayBuffer());
 
         // Upload to Blob
-        const reelUrl = ad.reelUrl ?? (await saveReelToBlob(buffer, `${ad.slug}.mp4`));
+        const reelUrl = videoUrl;
         const caption = buildInstagramCaption(ad.caption, ad.hashtags);
 
         // Static Instagram + Facebook
@@ -147,7 +147,9 @@ export async function POST(req: Request) {
         }
 
         // Complete
-        await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString() }).commit();
+        await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString() }).unset(["imageUrl"]).commit();
+        // Delete temporary image now that every platform has it.
+        await deleteBlob(ad.imageUrl);
         await notifySlackResult("Weekly Ad Completed", {
             videoUrl,
             youtubeVideoId,
