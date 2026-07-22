@@ -132,7 +132,8 @@ export async function createHeyGenVideo({
     body: JSON.stringify({
       type: "avatar", avatar_id: process.env.HEYGEN_AVATAR_ID!, voice_id: process.env.HEYGEN_VOICE_ID!,
       script, title: `Weekly Ad ${adId}`, resolution: "1080p", aspect_ratio: "9:16", fit: "cover", output_format: "mp4",
-      engine: { type: "avatar_v" }, voice_settings: { speed: 1 }, callback_url: `${process.env.BASE_URL}/api/webhooks/heygen`, callback_id: adId,
+      engine: { type: "avatar_v" }, voice_settings: { speed: 1 }, caption: { file_format: "srt", style: "default" },
+      callback_url: `${process.env.BASE_URL}/api/webhooks/heygen`, callback_id: adId,
     })
   });
 
