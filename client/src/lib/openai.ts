@@ -1,5 +1,6 @@
 // src/lib/openai.ts
 import OpenAI from "openai";
+import type { ReusableStoryAsset } from "./videoAd";
 
 let client: OpenAI | null = null;
 
@@ -276,4 +277,47 @@ export function weeklyVideoPrompt(params: {
   Return ONLY valid JSON.
   {"title": ${params.title} "script": string}
   `;
+}
+
+export function storyboardFromLibraryPrompt(script: string, avatarDuration: number, assetsByCategory: Record<string, ReusableStoryAsset[]>) {
+  const library = Object.entries(assetsByCategory).map(([category, assets]) =>
+    `\n${category.toUpperCase()} ASSETS:\n${assets.length ? assets.map(a => `- slug="${a.slug}" title="${a.title}" tags="${a.tags.join(", ")}" prompt="${a.prompt}"`).join("\n") : "(none)"}`
+  ).join("\n");
+
+  return `Create exactly 8 B-roll storyboard beats for this ${avatarDuration}-second legal video.
+
+The avatar speaks the complete narration. Each B-roll beat appears briefly while its corresponding narration is being spoken, and Greg remains visible during the remaining narration.
+
+For each beat, first determine whether an EXISTING StoryAsset in the provided library clearly represents the primary visual concept.
+
+ASSET SELECTION RULES:
+- If an existing StoryAsset clearly matches the primary visual concept, set visualType="asset" and assetSlug to that exact existing slug.
+- If no existing StoryAsset clearly matches, set visualType="asset" and assetSlug=null.
+- NEVER invent an assetSlug.
+- NEVER use a slug that is not in the provided library.
+- Do NOT force an existing asset to fit unrelated narration.
+- A weak or generic match is NOT a match.
+- A new concept should remain assetSlug=null so it can be manually added to the library later.
+- Greg introduction beats may use visualType="greg" and assetSlug=null.
+- Do not repeat the same assetSlug within one video.
+- Every word of the script must appear exactly once across the eight narration fields.
+- Preserve the original word order exactly.
+- Do not paraphrase, summarize, omit, invent, or reorder narration.
+- The eight beats should cover the script in logical visual sections.
+- The final beat must contain only the consultation CTA.
+- Never put the entire remaining narration into the final beat.
+
+VISUAL CONCEPT RULES:
+- Each beat must have one primary visual concept.
+- Prefer realistic, relatable scenes.
+- Do not create a concept merely because it sounds visually interesting.
+- The visual must immediately explain the narration.
+- Avoid generic paperwork, generic phones, and generic legal scenes.
+- If no library asset clearly explains the narration, leave assetSlug=null.
+
+LIBRARY:
+${library}
+
+SCRIPT:
+${script}`;
 }
