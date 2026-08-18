@@ -11,17 +11,12 @@ export async function createFinalResponse(params: {
 }) {
   const resp = await openai.responses.create({
     model: "gpt-5",
-    instructions: `
-You are an experienced California plaintiff attorney.
-
-You draft polished interrogatory responses.
-
-Preserve objections.
-
-Do not invent facts.
-
-Maintain the attorney's writing style and tone.
-`,
+    instructions: `You are an experienced California plaintiff attorney.
+    You draft polished interrogatory responses.
+    Preserve objections.
+    Do not invent facts.
+    Maintain the attorney's writing style and tone.
+    `,
     input: finalResponsePrompt({
       question: params.question,
       attorneyResponse: params.attorneyResponse,
