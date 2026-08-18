@@ -376,14 +376,12 @@ async function renderKenBurns(assets: ImageRenderAsset[], outDir: string, avatar
 // Render Greg between B-roll clips.
 async function renderGregSegment(avatar: string, start: number, duration: number, out: string, addFade: boolean): Promise<RenderClip> {
     const renderDuration = duration + (addFade ? FADE : 0);
-
     await new Promise<void>((resolve, reject) => ffmpeg(avatar)
         .inputOptions([`-ss ${start}`])
         .outputOptions([`-t ${renderDuration}`, "-an", "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p", "-r 30", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"])
-        .on("end", resolve)
+        .on("end", () => resolve())
         .on("error", reject)
         .save(out));
-
     return { id: `greg-${start}`, videoPath: out, start, duration };
 }
 
