@@ -1,4 +1,3 @@
-import { put } from "@vercel/blob";
 import path from "path";
 import fs from "fs";
 import { z } from "zod";
@@ -8,9 +7,28 @@ import { getGoogleAccessToken } from "./oauth";
 import { client } from "@/sanity/client";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "./error";
 import { serverClient } from "@/sanity/serverClient";
-import { del } from "@vercel/blob";
 
 export const runtime = "nodejs";
+
+
+const COMPLETED_STATUS = "completed" as const;
+
+type WeeklyAdRecord = { _id: string; title: string; status: string; };
+
+async function findCompletedWeeklyAd(title: string): Promise<WeeklyAdRecord | null> {
+  return serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title && status==$status][0]{_id,title,status}`, { title, status: COMPLETED_STATUS });
+}
+
+async function skipIfCompleted(title: string): Promise<WeeklyAdRecord | null> {
+  const existing = await findCompletedWeeklyAd(title);
+  if (existing) console.log(`[WEEKLY AD] Skipping "${title}" — completed ad already exists: ${existing._id}`);
+  return existing;
+}
+
+async function markWeeklyAdFailed(adId: string | undefined, error: unknown) {
+  if (!adId) return;
+  await serverClient.patch(adId).set({ status: "failed", error: getErrorMessage(error) }).commit();
+}
 
 const openai = getOpenAI();
 
@@ -121,9 +139,11 @@ export async function generateImage({ caption, template = "instagram", weekNumbe
 
 export async function createHeyGenVideo({
   script,
+  date,
   adId,
 }: {
   script: string;
+  date: string
   adId: string;
 }) {
   const res = await fetch("https://api.heygen.com/v3/videos", {
@@ -131,8 +151,8 @@ export async function createHeyGenVideo({
     headers: { "Content-Type": "application/json", "X-Api-Key": process.env.HEYGEN_API_KEY! },
     body: JSON.stringify({
       type: "avatar", avatar_id: process.env.HEYGEN_AVATAR_ID!, voice_id: process.env.HEYGEN_VOICE_ID!,
-      script, title: `Weekly Ad ${adId}`, resolution: "1080p", aspect_ratio: "9:16", fit: "cover", output_format: "mp4",
-      engine: { type: "avatar_v" }, voice_settings: { speed: 1 }, caption: { file_format: "srt", style: "default" },
+      script, title: `${date} ${adId}`, resolution: "1080p", aspect_ratio: "9:16", fit: "cover", output_format: "mp4",
+      engine: { type: "avatar_v" }, voice_settings: { speed: 1 },
       callback_url: `${process.env.BASE_URL}/api/webhooks/heygen`, callback_id: adId,
     })
   });
@@ -145,38 +165,6 @@ export async function createHeyGenVideo({
   }
 
   return videoId;
-}
-
-export async function saveStaticAdToBlob(imageBuffer: Buffer, filename: string) {
-  try {
-    const pathname = `ad/${filename}`;
-    const blob = await put(pathname, imageBuffer, {
-      access: "public",
-      contentType: "image/png",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-      addRandomSuffix: true,
-    });
-    return blob.url;
-  } catch (err) {
-    await notifySlackError("Weekly Ad Image Blob Upload Failed", err, { filename });
-    throw err;
-  }
-}
-
-export async function saveReelToBlob(videoBuffer: Buffer, filename: string) {
-  try {
-    const pathname = `reel/${filename}`;
-    const blob = await put(pathname, videoBuffer, {
-      access: "public",
-      contentType: "video/mp4",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-      addRandomSuffix: true,
-    });
-    return blob.url;
-  } catch (err) {
-    await notifySlackError("Weekly Ad Video Blob Upload Failed", err, { filename });
-    throw err;
-  }
 }
 
 export function buildInstagramCaption(message: string, hashtags: string[]) {
@@ -407,61 +395,84 @@ export async function getHeyGenVideo(videoId: string) {
   return res.json();
 }
 
-export async function deleteBlob(url?: string) {
-  if (!url) return;
+// Temporary Sanity image asset; delete after all publishing completes.
+export async function saveStaticAdToSanity(imageBuffer: Buffer, filename: string) {
   try {
-    await del(url, {
-      token: process.env.BLOB_READ_WRITE_TOKEN!,
-    });
-    console.log("Deleted Blob:", url);
+    const asset = await serverClient.assets.upload("image", imageBuffer, { filename, contentType: "image/png" });
+    return { assetId: asset._id, url: asset.url };
   } catch (err) {
-    console.error("Unable to delete Blob:", err);
+    await notifySlackError("Weekly Ad Sanity Image Upload Failed", err, { filename });
+    throw err;
+  }
+}
+
+// Temporary Sanity file asset; delete after all publishing completes.
+export async function saveReelToSanity(videoBuffer: Buffer, filename: string) {
+  try {
+    const asset = await serverClient.assets.upload("file", videoBuffer, { filename, contentType: "video/mp4" });
+    return { assetId: asset._id, url: asset.url };
+  } catch (err) {
+    await notifySlackError("Weekly Ad Sanity Video Upload Failed", err, { filename });
+    throw err;
+  }
+}
+
+export async function deleteSanityAsset(assetId?: string) {
+  if (!assetId) return;
+  try {
+    await serverClient.delete(assetId);
+    console.log(`[SANITY] Deleted temporary asset ${assetId}`);
+  } catch (err) {
+    console.error(`[SANITY] Unable to delete temporary asset ${assetId}:`, err);
   }
 }
 
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
-
+  let weeklyAdId: string | undefined;
+  let imageAssetId: string | undefined;
   try {
-    const post = await client.fetch<{ title: string; headline: string; slug: string; date: string }>(`*[_type == "post" && defined(date)] | order(date desc)[0]{title, headline, "slug": slug.current, date}`);
-    if (!post) { throw new Error("No blog post found.") }
-
-    const { title, headline, slug } = post;
+    const post = await client.fetch<{ title: string; headline: string; slug: string; date: string }>(`*[_type=="post" && defined(date)] | order(date desc)[0]{title,headline,"slug":slug.current,date}`);
+    if (!post) throw new Error("No blog post found.");
+    const { title, headline, slug, date } = post;
+    const existing = await skipIfCompleted(title);
+    if (existing) return { ...result, skipped: true, reason: "completed", durationMs: Date.now() - start };
     const { script } = await generateScript({ title, headline });
     const { caption, hashtags } = await generateCaption({ title, headline });
-    const weekNumber = getWeekOfMonth();
-
-    console.log("[ASSET] generating image");
-    const imageBuffer = await generateImage({ caption, weekNumber });
-    const imageUrl = await saveStaticAdToBlob(imageBuffer, `${slug}.png`);
-
-    console.log("[ASSET] creating ad");
-    const weeklyAd = await serverClient.create({ _type: "weeklyAd", status: "pending", title, slug, script, caption, hashtags, imageUrl });
-    const heygenVideoId = await createHeyGenVideo({ script, adId: weeklyAd._id });
-    await serverClient.patch(weeklyAd._id).set({ heygenVideoId }).commit();
-    Object.assign(result, { imageUrl, heygenVideoId });
-
+    const imageBuffer = await generateImage({ caption, weekNumber: getWeekOfMonth() });
+    const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`);
+    imageAssetId = imageAsset.assetId;
+    const weeklyAd = await serverClient.create({ _type: "weeklyAd", status: "pending", title, slug, script, caption, hashtags, imageUrl: imageAsset.url, imageAssetId });
+    weeklyAdId = weeklyAd._id;
+    const duplicateBeforeHeyGen = await skipIfCompleted(title);
+    if (duplicateBeforeHeyGen && duplicateBeforeHeyGen._id !== weeklyAdId) {
+      await serverClient.delete(weeklyAdId);
+      await deleteSanityAsset(imageAssetId);
+      return { ...result, skipped: true, reason: "completed", durationMs: Date.now() - start };
+    }
+    const heygenVideoId = await createHeyGenVideo({ script, date, adId: weeklyAdId });
+    await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit();
+    Object.assign(result, { heygenVideoId, weeklyAdId });
     if (dryRun) {
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 5000));
         const status = await getHeyGenVideo(heygenVideoId);
         if (status.data.status === "completed") {
           result.videoUrl = status.data.video_url;
+          result.durationMs = Date.now() - start;
           return result;
         }
-        if (status.data.status === "failed") {
-          throw new Error(status.data.failure_reason);
-        }
+        if (status.data.status === "failed") throw new Error(status.data.failure_reason);
       }
       throw new Error("HeyGen timed out.");
     }
-
     result.durationMs = Date.now() - start;
     await notifySlackResult("Weekly Ad Result", result);
     return result;
   } catch (err) {
-    await notifySlackError("Weekly Ad Fatal Pipeline Failure", err, { dryRun });
-    return { ok: false, error: getErrorMessage(err), durationMs: Date.now() - start };
+    await markWeeklyAdFailed(weeklyAdId, err);
+    await notifySlackError("Weekly Ad Fatal Pipeline Failure", err, { dryRun, weeklyAdId });
+    return { ok: false, error: getErrorMessage(err), weeklyAdId, durationMs: Date.now() - start };
   }
 }
