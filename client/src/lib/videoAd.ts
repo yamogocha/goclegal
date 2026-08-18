@@ -163,7 +163,7 @@ export async function getVideoDuration(file: string): Promise<number> {
 
 async function transcribeGreg(avatar: string): Promise<CaptionWord[]> {
     const audioPath = path.join(path.dirname(avatar), "greg-caption-audio.m4a");
-    await new Promise<void>((resolve, reject) => ffmpeg(avatar).noVideo().audioCodec("aac").audioBitrate("128k").outputOptions(["-y"]).on("end", resolve).on("error", reject).save(audioPath));
+    await new Promise<void>((resolve, reject) => { ffmpeg(avatar).noVideo().audioCodec("aac").audioBitrate("128k").outputOptions(["-y"]).on("end", () => resolve()).on("error", reject).save(audioPath) });
     const buffer = await fs.readFile(audioPath);
     const file = new File([buffer], "greg-caption-audio.m4a", { type: "audio/mp4" });
     const transcription = await openai.audio.transcriptions.create({ file, model: "whisper-1", response_format: "verbose_json", timestamp_granularities: ["word", "segment"] });
