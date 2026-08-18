@@ -425,7 +425,7 @@ async function crossfadeTimeline(clips: RenderClip[], output: string, totalDurat
         accumulatedDuration += sorted[i].duration;
     }
     filters.push(`[${current}]trim=start=0:duration=${totalDuration},setpts=PTS-STARTPTS[outv]`);
-    await new Promise<void>((resolve, reject) => command.complexFilter(filters).outputOptions(["-map [outv]", "-an", "-t", String(totalDuration), "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", resolve).on("error", reject).save(output));
+    await new Promise<void>((resolve, reject) => command.complexFilter(filters).outputOptions(["-map [outv]", "-an", "-t", String(totalDuration), "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", () => resolve()).on("error", reject).save(output));
     return output;
 }
 
@@ -547,7 +547,7 @@ async function addCaptions(video: string, avatar: string, output: string): Promi
     await new Promise<void>((resolve, reject) => command
         .complexFilter(filters)
         .outputOptions(["-map [outv]", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"])
-        .on("end", resolve)
+        .on("end", () => resolve())
         .on("error", reject)
         .save(output));
 
@@ -560,7 +560,7 @@ async function replaceAudio(video: string, audioSource: string, output: string) 
         .input(video)
         .input(audioSource)
         .outputOptions(["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart"])
-        .on("end", resolve)
+        .on("end", () => resolve())
         .on("error", reject)
         .save(output));
 
