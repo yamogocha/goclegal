@@ -322,13 +322,13 @@ function buildTimeline(input: TimelineInput): Timeline {
 const storyAssetsBySlugs = groq`*[_type=="storyAsset" && slug.current in $slugs]{"title":title,"slug":slug.current,"imageUrl":image.asset->url,"metadata":image.asset->metadata{dimensions}}`;
 
 async function resolveStoryAssets(timeline: Timeline): Promise<Timeline> {
-    const slugs = [...new Set(timeline.clips.filter(c => c.type === "asset").map(c => c.assetSlug!))];
+    const slugs = [...new Set(timeline.clips.filter(c => c.type === "asset").map(c => c.assetSlug).filter((slug): slug is string => Boolean(slug)))];
     const docs = await client.fetch<StoryAsset[]>(storyAssetsBySlugs, { slugs });
     const map = new Map(docs.map(d => [d.slug, d]));
-
     return {
         clips: timeline.clips.map(c => {
             if (c.type === "avatar") return c;
+            if (!c.assetSlug) throw new Error(`Asset clip "${c.id}" is missing assetSlug.`);
             const asset = map.get(c.assetSlug);
             if (!asset) throw new Error(`Missing StoryAsset: ${c.assetSlug}`);
             return { ...c, imageUrl: asset.imageUrl, imageWidth: asset.metadata.dimensions.width, imageHeight: asset.metadata.dimensions.height };
