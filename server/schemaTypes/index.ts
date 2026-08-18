@@ -6,6 +6,5 @@ import { contactType } from './contactType'
 import { footerType, information } from './footerType'
 import { interrogatoryType } from './interrogatoryType'
 import { storyAssetType } from './storyAssetType'
-import { weeklyAdType } from './weeklyAdType'
 
-export const schemaTypes = [postType, navType, navItem, pageType, slideType, sliderType, contactType, footerType, information, interrogatoryType, storyAssetType, weeklyAdType]
+export const schemaTypes = [postType, navType, navItem, pageType, slideType, sliderType, contactType, footerType, information, interrogatoryType, storyAssetType]

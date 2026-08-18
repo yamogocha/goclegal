@@ -44,7 +44,7 @@ export const weeklyAdType = defineType({
         }),
 
         defineField({
-            name: "message",
+            name: "caption",
             title: "Caption",
             type: "text",
             validation: Rule => Rule.required(),
