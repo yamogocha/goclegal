@@ -5,10 +5,19 @@ export const interrogatoryType = defineType({
   title: "Interrogatory",
   type: "document",
   fields: [
-    defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string" }),
-    defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: (Rule) => Rule.required() }),
+    // Existing client is required.
+    defineField({
+      name: "client",
+      title: "Client",
+      type: "reference",
+      to: [{ type: "clientType" }],
+      validation: Rule => Rule.required(),
+    }),
+    defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string", hidden: true }),
+    defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: Rule => Rule.required() }),
     defineField({
       name: "metadata",
+      title: "Metadata",
       type: "object",
       fields: [
         defineField({ name: "caseNumber", type: "string" }),
@@ -23,7 +32,13 @@ export const interrogatoryType = defineType({
       name: "interrogatoryType",
       title: "Interrogatory Type",
       type: "string",
-      options: { list: [{ title: "Special", value: "special" }, { title: "Form", value: "form" }] },
+      options: {
+        list: [
+          { title: "Special", value: "special" },
+          { title: "Form", value: "form" },
+        ],
+      },
+      validation: Rule => Rule.required(),
     }),
     defineField({
       name: "interrogatories",
@@ -58,15 +73,9 @@ export const interrogatoryType = defineType({
     defineField({ name: "updatedAt", type: "datetime" }),
   ],
   preview: {
-    select: {
-      plaintiff: "metadata.plaintiffName",
-      caseNumber: "caseNumber",
-    },
+    select: { plaintiff: "metadata.plaintiffName", caseNumber: "caseNumber" },
     prepare({ plaintiff, caseNumber }) {
-      return {
-        title: plaintiff,
-        subtitle: caseNumber,
-      };
+      return { title: plaintiff || "Unknown Plaintiff", subtitle: caseNumber || "No Case Number" };
     },
   },
 });
