@@ -2,6 +2,8 @@ import { OAuth2Client } from "google-auth-library";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { NextResponse } from "next/server";
+import { client } from "@/sanity/client";
+import { groq } from "next-sanity";
 
 
 //google api oauth
@@ -91,3 +93,24 @@ export const config = {
     "/api/admin/:path*",
   ],
 };
+
+// clientAccess
+export type ClientAccess = {
+  clientId: string;
+  clientName: string;
+  clientAccessToken: string;
+  mode: "admin" | "client";
+};
+
+export async function getClientAccess(clientId: string, token?: string): Promise<ClientAccess | null> {
+  const record = await client.fetch(
+    groq`*[_type == "clientType" && (_id == $clientId || clientId == $clientId)][0]{_id,clientId,clientName,clientAccessToken}`,
+    { clientId },
+    { cache: "no-store" }
+  );
+  if (!record) return null;
+  const session = await auth();
+  if (session) return { clientId: record._id, clientName: record.clientName, clientAccessToken: record.clientAccessToken, mode: "admin" };
+  if (token && token === record.clientAccessToken) return { clientId: record._id, clientName: record.clientName, clientAccessToken: record.clientAccessToken, mode: "client" };
+  return null;
+}
