@@ -53,7 +53,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     }
   }
 
-  if (loading) return <main className="p-8">Loading...</main>;
+  if (loading) return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
   if (!clientData?._id) return <main className="p-8">Client not found.</main>;
 
   const clientName = clientData.clientName || "Unknown Client";
