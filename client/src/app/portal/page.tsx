@@ -136,7 +136,7 @@ export default function AdminPage() {
 
           {!query.trim() && (
             <div className="mt-10 mb-4">
-              <h2 className="font-semibold text-gray-700 font-montserrat">Recent Clients</h2>
+              <h2 className="font-semibold text-[#00305b] font-montserrat">Recent Clients</h2>
             </div>
           )}
           {query.trim() && results.length === 0 && <div className="py-8 text-center text-gray-500 font-montserrat">No clients found.</div>}
@@ -167,7 +167,7 @@ export default function AdminPage() {
 
                 <div className="mt-5 grid gap-5 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-xl font-semibold text-gray-700">Client Name</label>
+                    <label className="mb-2 block text-xl font-semibold text-[#00305b]">Client Name</label>
                     <input
                       value={newClientName}
                       onChange={(e) => setNewClientName(e.target.value)}
@@ -177,7 +177,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xl font-semibold text-gray-700">Client Phone</label>
+                    <label className="mb-2 block text-xl font-semibold text-[#00305b]">Client Phone</label>
                     <input
                       value={newClientPhone}
                       onChange={(e) => setNewClientPhone(e.target.value)}
@@ -194,30 +194,28 @@ export default function AdminPage() {
                   <div className="flex items-start gap-3">
                     <input id="smsConsent" type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-1 h-5 w-5 cursor-pointer accent-[#00305b]" />
                     <label htmlFor="smsConsent" className="cursor-pointer">
-                      <div className="font-semibold text-gray-800">Client consented to SMS</div>
-                      <div className="mt-1 font-montserrat text-sm leading-5 text-gray-500">
-                        The client gave verbal consent during a phone call to receive case-related text messages from GOC Legal.
-                      </div>
+                      <div className="text-xl font-semibold text-[#00305b]">Client consented to SMS</div>
+                      <div className="mt-1 font-montserrat leading-6 text-gray-500">The client gave verbal consent during a phone call to receive case-related text messages from GOC Legal.</div>
                     </label>
                   </div>
 
                   {smsConsent && (
                     <div className="mt-5 grid gap-5 sm:grid-cols-2">
                       <div>
-                        <label className="mb-2 block font-semibold text-gray-700">Consent Date & Time</label>
+                        <label className="mb-2 block text-xl font-semibold text-[#00305b]">Consent Date & Time</label>
                         <input
                           type="datetime-local"
                           value={consentDate}
                           onChange={(e) => setConsentDate(e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-4 py-3 font-montserrat text-gray-600 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
+                          className="w-full rounded-lg border border-gray-300 px-4 py-3 font-montserrat text-gray-500 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block font-semibold text-gray-700">Consent Method</label>
+                        <label className="mb-2 block text-xl font-semibold text-[#00305b]">Consent Method</label>
                         <select
                           value={consentMethod}
                           onChange={(e) => setConsentMethod(e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 font-montserrat text-gray-600 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 font-montserrat text-gray-500 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
                         >
                           <option value="phone">Phone / Verbal</option>
                           <option value="written">Written</option>
@@ -225,13 +223,13 @@ export default function AdminPage() {
                         </select>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="mb-2 block font-semibold text-gray-700">Consent Language Used</label>
+                        <label className="mb-2 block text-xl font-semibold text-[#00305b]">Consent Language Used</label>
                         <textarea
                           value={consentNotes}
                           onChange={(e) => setConsentNotes(e.target.value)}
-                          className="min-h-28 w-full rounded-lg border border-gray-300 px-4 py-3 font-montserrat text-sm text-gray-600 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
+                          className="min-h-28 w-full rounded-lg border border-gray-300 px-4 py-3 font-montserrat text-gray-500 outline-none focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
                         />
-                        <p className="mt-1 text-xs text-gray-500">Keep the exact language used by the attorney whenever possible.</p>
+                        <p className="mt-1 text-xl font-semibold text-[#00305b]">Keep the exact language used by the attorney whenever possible.</p>
                       </div>
                     </div>
                   )}
@@ -241,7 +239,7 @@ export default function AdminPage() {
                   <button
                     onClick={resetNewClientForm}
                     disabled={creatingClient}
-                    className="w-full rounded-md border border-gray-300 px-5 py-3.5 font-montserrat font-base text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:w-auto"
+                    className="w-full rounded-md border border-gray-300 px-5 py-3.5 font-montserrat text-[#00305b] transition hover:bg-gray-50 disabled:opacity-50 sm:w-auto"
                   >
                     Cancel
                   </button>
