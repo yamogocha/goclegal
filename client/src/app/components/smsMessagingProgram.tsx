@@ -8,10 +8,9 @@ export type SmsMessagingProgramPage = {
   headline: string;
   image: string;
   body: PortableTextBlock[];
-  photo: string;
 };
 export default function SmsMessagingProgramComponent(smsMessagingProgramPage: SmsMessagingProgramPage) {
-  const { headline, image, body, photo } = smsMessagingProgramPage;
+  const { headline, image, body } = smsMessagingProgramPage;
   return (
     <div className="bg-[#00305bcf] w-full h-full">
       <div className="relative w-full h-[200px] lg:h-[400px]">
@@ -23,7 +22,6 @@ export default function SmsMessagingProgramComponent(smsMessagingProgramPage: Sm
       <div className="bg-white px-5 py-10 lg:py-[80px]">
         <div className="max-w-[1200px] m-auto flex flex-col">
           <PortableTextComponent {...{ body }} />
-          <Image src={photo} alt="Internal consent-recording process photo" width={1200} height={887} className="w-full object-contain" />
         </div>
       </div>
     </div>
