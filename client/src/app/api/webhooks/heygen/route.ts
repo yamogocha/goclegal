@@ -36,7 +36,7 @@ export async function POST(req: Request) {
         const download = await fetch(heygenVideoUrl);
         if (!download.ok) throw new Error("Unable to download HeyGen video.");
         const buffer = Buffer.from(await download.arrayBuffer());
-        const tempDir = path.join(process.cwd(), "tmp", "weekly-ad");
+        const tempDir = path.join("/tmp", "weekly-ad");
         await fs.mkdir(tempDir, { recursive: true });
         tempAvatarPath = path.join(tempDir, `${adId}-heygen.mp4`);
         await fs.writeFile(tempAvatarPath, buffer);
