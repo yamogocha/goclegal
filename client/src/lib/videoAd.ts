@@ -2,15 +2,18 @@ import groq from "groq";
 import { client } from "@/sanity/client";
 import fs from "node:fs/promises";
 import path from "node:path";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
-import ffprobe from "ffprobe-static";
 import sharp from "sharp";
 import { getOpenAI, storyboardFromLibraryPrompt } from "./openai";
 import { serverClient } from "@/sanity/serverClient";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+import ffmpegProbeStatic from "ffmpeg-ffprobe-static";
 
-ffmpeg.setFfmpegPath(ffmpegPath!);
-ffmpeg.setFfprobePath(ffprobe.path);
+// Configure FFmpeg/FFprobe executables. 
+if (!ffmpegStatic) throw new Error("FFmpeg binary path is unavailable.");
+if (!ffmpegProbeStatic.ffprobePath) throw new Error("FFprobe binary path is unavailable.");
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffmpegProbeStatic.ffprobePath);
 
 const openai = getOpenAI();
 const FADE = 0.35;
