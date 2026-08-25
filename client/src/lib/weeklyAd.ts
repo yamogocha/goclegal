@@ -10,25 +10,11 @@ import { serverClient } from "@/sanity/serverClient";
 
 export const runtime = "nodejs";
 
-
-const COMPLETED_STATUS = "completed" as const;
-
-type WeeklyAdRecord = { _id: string; title: string; status: string; };
-
-async function findCompletedWeeklyAd(title: string): Promise<WeeklyAdRecord | null> {
-  return serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title && status==$status][0]{_id,title,status}`, { title, status: COMPLETED_STATUS });
-}
-
-async function skipIfCompleted(title: string): Promise<WeeklyAdRecord | null> {
-  const existing = await findCompletedWeeklyAd(title);
-  if (existing) console.log(`[WEEKLY AD] Skipping "${title}" — completed ad already exists: ${existing._id}`);
-  return existing;
-}
-
-async function markWeeklyAdFailed(adId: string | undefined, error: unknown) {
-  if (!adId) return;
-  await serverClient.patch(adId).set({ status: "failed", error: getErrorMessage(error) }).commit();
-}
+const ACTIVE_STATUSES = ["pending", "publishing", "completed"] as const;
+type WeeklyAdRecord = { _id: string; title: string; status: string; heygenVideoId?: string; };
+async function findCompletedWeeklyAd(title: string): Promise<WeeklyAdRecord | null> { return serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title && status in $statuses][0]{_id,title,status,heygenVideoId}`, { title, statuses: ACTIVE_STATUSES }); }
+async function skipIfCompleted(title: string): Promise<WeeklyAdRecord | null> { const existing = await findCompletedWeeklyAd(title); if (existing) console.log(`[WEEKLY AD] Skipping "${title}" — existing ${existing.status} ad already exists: ${existing._id}`); return existing; }
+async function markWeeklyAdFailed(adId: string | undefined, error: unknown) { if (!adId) return; await serverClient.patch(adId).set({ status: "failed", error: getErrorMessage(error) }).commit(); }
 
 const openai = getOpenAI();
 
@@ -428,48 +414,52 @@ export async function deleteSanityAsset(assetId?: string) {
 }
 
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
-  const start = Date.now();
-  const result: any = { ok: true, dryRun, durationMs: 0 };
-  let weeklyAdId: string | undefined;
-  let imageAssetId: string | undefined;
+  const start = Date.now(); const result: any = { ok: true, dryRun, durationMs: 0 };
+  let weeklyAdId: string | undefined; let imageAssetId: string | undefined;
   try {
     const post = await client.fetch<{ title: string; headline: string; slug: string; date: string }>(`*[_type=="post" && defined(date)] | order(date desc)[0]{title,headline,"slug":slug.current,date}`);
-    if (!post) throw new Error("No blog post found.");
-    const { title, headline, slug, date } = post;
+    if (!post) throw new Error("No blog post found."); const { title, headline, slug, date } = post;
+    // Stop immediately if this week's ad is already completed or being processed. 
     const existing = await skipIfCompleted(title);
-    if (existing) return { ...result, skipped: true, reason: "completed", durationMs: Date.now() - start };
+    if (existing) return { ...result, skipped: true, reason: existing.status, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
     const { script } = await generateScript({ title, headline });
     const { caption, hashtags } = await generateCaption({ title, headline });
     const imageBuffer = await generateImage({ caption, weekNumber: getWeekOfMonth() });
-    const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`);
-    imageAssetId = imageAsset.assetId;
-    const weeklyAd = await serverClient.create({ _type: "weeklyAd", status: "pending", title, slug, script, caption, hashtags, imageUrl: imageAsset.url, imageAssetId });
-    weeklyAdId = weeklyAd._id;
-    const duplicateBeforeHeyGen = await skipIfCompleted(title);
-    if (duplicateBeforeHeyGen && duplicateBeforeHeyGen._id !== weeklyAdId) {
-      await serverClient.delete(weeklyAdId);
-      await deleteSanityAsset(imageAssetId);
-      return { ...result, skipped: true, reason: "completed", durationMs: Date.now() - start };
-    }
+    const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`); imageAssetId = imageAsset.assetId;
+    // Use a deterministic ID so concurrent cron executions target the same weekly ad. 
+    const deterministicId = `weeklyAd-${slug}-${date.replace(/[^0-9]/g, "")}`;
+    try {
+      const weeklyAd = await serverClient.createIfNotExists({ _id: deterministicId, _type: "weeklyAd", status: "pending", title, slug, script, caption, hashtags, imageUrl: imageAsset.url, imageAssetId, }); weeklyAdId = weeklyAd._id;
+      // Re-check after deterministic creation to prevent a concurrent cron from generating HeyGen twice. 
+      const lockedAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: deterministicId });
+      if (!lockedAd) throw new Error(`Weekly ad lock record not found: ${deterministicId}`);
+      if (lockedAd.heygenVideoId || lockedAd.status === "publishing" || lockedAd.status === "completed") {
+        console.log(`[WEEKLY AD] Existing HeyGen job found for "${title}": ${lockedAd.heygenVideoId ?? "none"} (${lockedAd.status})`);
+        await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: lockedAd.status, weeklyAdId: lockedAd._id, heygenVideoId: lockedAd.heygenVideoId, durationMs: Date.now() - start };
+      }
+    } catch (err) {
+      // If another cron created the deterministic record first, reuse it instead of creating another ad. 
+      const existingAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: deterministicId });
+      if (!existingAd) throw err; weeklyAdId = existingAd._id;
+      if (existingAd.heygenVideoId || ACTIVE_STATUSES.includes(existingAd.status as typeof ACTIVE_STATUSES[number])) {
+        console.log(`[WEEKLY AD] Concurrent weekly ad already exists: ${existingAd._id} (${existingAd.status})`);
+        await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: existingAd.status, weeklyAdId: existingAd._id, heygenVideoId: existingAd.heygenVideoId, durationMs: Date.now() - start };
+      } throw err;
+    } // Generate HeyGen only when this deterministic weekly ad has no existing HeyGen video. 
+    const currentAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: weeklyAdId });
+    if (!currentAd) throw new Error(`Weekly ad not found after creation: ${weeklyAdId}`);
+    if (currentAd.heygenVideoId) { await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: "heygen_exists", weeklyAdId, heygenVideoId: currentAd.heygenVideoId, durationMs: Date.now() - start }; }
     const heygenVideoId = await createHeyGenVideo({ script, date, adId: weeklyAdId });
-    await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit();
-    Object.assign(result, { heygenVideoId, weeklyAdId });
+    await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit(); Object.assign(result, { heygenVideoId, weeklyAdId });
     if (dryRun) {
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 5000));
-        const status = await getHeyGenVideo(heygenVideoId);
-        if (status.data.status === "completed") {
-          result.videoUrl = status.data.video_url;
-          result.durationMs = Date.now() - start;
-          return result;
-        }
+        const status = await getHeyGenVideo(heygenVideoId); if (status.data.status === "completed") { result.videoUrl = status.data.video_url; result.durationMs = Date.now() - start; return result; }
         if (status.data.status === "failed") throw new Error(status.data.failure_reason);
-      }
-      throw new Error("HeyGen timed out.");
+      } throw new Error("HeyGen timed out.");
     }
     result.durationMs = Date.now() - start;
-    await notifySlackResult("Weekly Ad Result", result);
-    return result;
+    await notifySlackResult("Weekly Ad Result", result); return result;
   } catch (err) {
     await markWeeklyAdFailed(weeklyAdId, err);
     await notifySlackError("Weekly Ad Fatal Pipeline Failure", err, { dryRun, weeklyAdId });
