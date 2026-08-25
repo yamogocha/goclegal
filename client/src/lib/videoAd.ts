@@ -20,7 +20,7 @@ async function runSandboxCommand(sandbox: Sandbox, cmd: string, args: string[]) 
 
 async function createVideoSandbox(): Promise<Sandbox> {
     const sandbox = await Sandbox.create({ runtime: "node22", timeout: 10 * 60 * 1000, persistent: false });
-    await runSandboxCommand(sandbox, "dnf", ["install", "-y", "ffmpeg"]);
+    await runSandboxCommand(sandbox, "sudo", ["dnf", "install", "-y", "ffmpeg"]);
     return sandbox;
 }
 
