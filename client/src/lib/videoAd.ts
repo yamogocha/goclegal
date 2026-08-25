@@ -5,18 +5,27 @@ import path from "node:path";
 import sharp from "sharp";
 import { getOpenAI, storyboardFromLibraryPrompt } from "./openai";
 import { serverClient } from "@/sanity/serverClient";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegStatic from "ffmpeg-static";
-import ffmpegProbeStatic from "ffmpeg-ffprobe-static";
-
-// Configure FFmpeg/FFprobe executables. 
-if (!ffmpegStatic) throw new Error("FFmpeg binary path is unavailable.");
-if (!ffmpegProbeStatic.ffprobePath) throw new Error("FFprobe binary path is unavailable.");
-ffmpeg.setFfmpegPath(ffmpegStatic);
-ffmpeg.setFfprobePath(ffmpegProbeStatic.ffprobePath);
 
 const openai = getOpenAI();
 const FADE = 0.35;
+
+type Ffmpeg = typeof import("fluent-ffmpeg");
+let ffmpegInstance: Ffmpeg | null = null;
+
+async function getFfmpeg(): Promise<Ffmpeg> {
+    if (ffmpegInstance) return ffmpegInstance;
+    const [{ default: ffmpeg }, { default: ffmpegPath }, { default: ffprobe }] = await Promise.all([
+        import("fluent-ffmpeg"),
+        import("ffmpeg-static"),
+        import("ffprobe-static"),
+    ]);
+    if (!ffmpegPath) throw new Error("FFmpeg binary not found.");
+    if (!ffprobe?.path) throw new Error("FFprobe binary not found.");
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobe.path);
+    ffmpegInstance = ffmpeg;
+    return ffmpegInstance;
+}
 
 // Types.
 export type TimelineInputClip = { id: string; type: "avatar" | "asset"; assetSlug?: string; narration: string; duration: number; start?: number; };
@@ -29,7 +38,7 @@ type StoryAsset = { title: string; slug: string; imageUrl: string; metadata: { d
 type ImageRenderAsset = { id: string; type: "asset"; localPath: string; duration: number; start: number; narration: string; };
 type RenderClip = { id: string; videoPath: string; start: number; duration: number; };
 type CaptionWord = { word: string; start: number; end: number; };
-type CaptionSegment = { text?: string; start?: number; end?: number };
+type CaptionSegment = { text?: string; start?: number; end?: number; };
 
 // Storyboard schema.
 export type StoryboardBeat = {
@@ -74,6 +83,7 @@ const StoryboardSchema = {
     required: ["beats"],
 } as const;
 
+// Keep all storyboard/timeline logic unchanged below this point.
 function normalizeNarration(text: string): string {
     return text.replace(/^\s*\d+:\d+\s*/, "").toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -131,10 +141,12 @@ async function notifyConceptSuggestions(beats: StoryboardBeat[]) {
 
 // Avatar timing.
 export async function getVideoDuration(file: string): Promise<number> {
+    const ffmpeg = await getFfmpeg();
     return new Promise((resolve, reject) => ffmpeg.ffprobe(file, (err, data) => err ? reject(err) : resolve(Number(data.format.duration))));
 }
 
 async function transcribeGreg(avatar: string): Promise<CaptionWord[]> {
+    const ffmpeg = await getFfmpeg();
     const audioPath = path.join(path.dirname(avatar), "greg-caption-audio.m4a");
     await new Promise<void>((resolve, reject) => ffmpeg(avatar).noVideo().audioCodec("aac").audioBitrate("128k").outputOptions(["-y"]).on("end", () => resolve()).on("error", reject).save(audioPath));
     const buffer = await fs.readFile(audioPath);
@@ -285,6 +297,7 @@ async function downloadRenderAssets(timeline: Timeline, renderDir: string): Prom
 }
 
 async function renderKenBurns(assets: ImageRenderAsset[], outDir: string, avatarDuration: number): Promise<RenderClip[]> {
+    const ffmpeg = await getFfmpeg();
     await fs.mkdir(outDir, { recursive: true });
     return Promise.all(assets.map(a => new Promise<RenderClip>((resolve, reject) => {
         const out = path.join(outDir, `${String(a.start).padStart(3, "0")}_${a.id}.mp4`);
@@ -295,6 +308,7 @@ async function renderKenBurns(assets: ImageRenderAsset[], outDir: string, avatar
 }
 
 async function renderGregSegment(avatar: string, start: number, duration: number, out: string, addFade: boolean): Promise<RenderClip> {
+    const ffmpeg = await getFfmpeg();
     const renderDuration = duration + (addFade ? FADE : 0);
     await new Promise<void>((resolve, reject) => ffmpeg(avatar).inputOptions([`-ss ${start}`]).outputOptions([`-t ${renderDuration}`, "-an", "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p", "-r 30", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", () => resolve()).on("error", reject).save(out));
     return { id: `greg-${start}`, videoPath: out, start, duration };
@@ -319,6 +333,7 @@ async function buildVisualTimeline(assets: RenderClip[], avatar: string, avatarD
 }
 
 async function crossfadeTimeline(clips: RenderClip[], output: string, totalDuration: number) {
+    const ffmpeg = await getFfmpeg();
     if (!clips.length) throw new Error("No visual clips to assemble.");
     const sorted = [...clips].sort((a, b) => a.start - b.start);
     const command = ffmpeg();
@@ -338,6 +353,7 @@ async function crossfadeTimeline(clips: RenderClip[], output: string, totalDurat
     return output;
 }
 
+// Captions.
 function punctuationOf(text: string): string { return text.trim().match(/[.,!?;:]+(?:["'’)]*)$/)?.[0] ?? ""; }
 function normalizeCaptionWord(text: string): string { return text.toLowerCase().replace(/[.,!?;:%'"’)\]}]+$/g, "").replace(/[^a-z0-9]/g, ""); }
 function joinCaptionWords(words: CaptionWord[]): string { return words.reduce((text, w) => { const word = w.word.trim(); if (!text) return word; if (/^[.,!?;:%)\]}]/.test(word) || /^['’]/.test(word)) return `${text}${word}`; return `${text} ${word}`; }, ""); }
@@ -407,6 +423,7 @@ async function createCaptionImage(text: string, output: string): Promise<void> {
 function escapeXml(text: string): string { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
 async function addCaptions(video: string, avatar: string, output: string): Promise<string> {
+    const ffmpeg = await getFfmpeg();
     const captionDir = path.join(path.dirname(output), "caption-images");
     await fs.mkdir(captionDir, { recursive: true });
     const words = await transcribeGreg(avatar);
@@ -432,6 +449,7 @@ async function addCaptions(video: string, avatar: string, output: string): Promi
 }
 
 async function replaceAudio(video: string, audioSource: string, output: string) {
+    const ffmpeg = await getFfmpeg();
     await new Promise<void>((resolve, reject) => ffmpeg().input(video).input(audioSource).outputOptions(["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart"]).on("end", () => resolve()).on("error", reject).save(output));
     return output;
 }
@@ -443,7 +461,6 @@ async function uploadFinalVideo(videoPath: string) {
     return { assetId: asset._id, url: asset.url };
 }
 
-// Main render pipeline.
 export function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun: false): Promise<{ assetId: string; url: string }>;
 export function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun: true): Promise<{ localPath: string }>;
 export async function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun = false): Promise<{ assetId: string; url: string } | { localPath: string }> {

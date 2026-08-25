@@ -4,7 +4,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { client } from "@/sanity/client";
 import { serverClient } from "@/sanity/serverClient";
-import { generateStoryboard, alignStoryboardToAvatar, storyboardToAlignedTimeline, renderBrollVideo, getVideoDuration } from "@/lib/videoAd";
 import { publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel, deleteSanityAsset } from "@/lib/weeklyAd";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
 
@@ -42,6 +41,7 @@ export async function POST(req: Request) {
         await fs.writeFile(tempAvatarPath, buffer);
 
         // Generate 8-beat storyboard, align narration to Greg audio, and build aligned timeline.
+        const { generateStoryboard, alignStoryboardToAvatar, storyboardToAlignedTimeline, renderBrollVideo, getVideoDuration } = await import("@/lib/videoAd");
         const avatarDuration = await getVideoDuration(tempAvatarPath);
         const storyboard = await generateStoryboard(ad.script, avatarDuration);
         const alignedStoryboard = await alignStoryboardToAvatar(storyboard, tempAvatarPath);
