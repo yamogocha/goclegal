@@ -414,55 +414,115 @@ export async function deleteSanityAsset(assetId?: string) {
 }
 
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
-  const start = Date.now(); const result: any = { ok: true, dryRun, durationMs: 0 };
-  let weeklyAdId: string | undefined; let imageAssetId: string | undefined;
+  const start = Date.now();
+  const result: any = { ok: true, dryRun, durationMs: 0 };
+  let weeklyAdId: string | undefined;
+  let imageAssetId: string | undefined;
   try {
     const post = await client.fetch<{ title: string; headline: string; slug: string; date: string }>(`*[_type=="post" && defined(date)] | order(date desc)[0]{title,headline,"slug":slug.current,date}`);
-    if (!post) throw new Error("No blog post found."); const { title, headline, slug, date } = post;
-    // Stop immediately if this week's ad is already completed or being processed. 
-    const existing = await skipIfCompleted(title);
-    if (existing) return { ...result, skipped: true, reason: existing.status, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
+    if (!post) throw new Error("No blog post found.");
+    const { title, headline, slug, date } = post;
+
+    // Resume an existing weekly ad before generating anything new.
+    const existing = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title][0]{_id,title,status,heygenVideoId}`, { title });
+    if (existing) {
+      weeklyAdId = existing._id;
+      if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
+
+      if (existing.heygenVideoId) {
+        console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existing.heygenVideoId}`);
+        const heygen = await getHeyGenVideo(existing.heygenVideoId);
+        const heygenStatus = heygen?.data?.status;
+        const heygenVideoUrl = heygen?.data?.video_url ?? heygen?.data?.url;
+        if (heygenStatus === "completed" && heygenVideoUrl) {
+          const webhookRes = await fetch(`${process.env.BASE_URL}/api/webhooks/heygen`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event_type: "avatar_video.success", event_data: { callback_id: existing._id, video_id: existing.heygenVideoId, url: heygenVideoUrl } }),
+          });
+          const webhookBody = await webhookRes.json().catch(() => null);
+          if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed: ${JSON.stringify(webhookBody)}`);
+          result.durationMs = Date.now() - start;
+          return { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, webhook: webhookBody };
+        }
+        if (heygenStatus === "failed") throw new Error(`Existing HeyGen video failed: ${heygen?.data?.failure_reason ?? "Unknown HeyGen failure"}`);
+        result.durationMs = Date.now() - start;
+        await notifySlackResult("Weekly Ad Result", { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, heygenStatus });
+        return { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, heygenStatus };
+      }
+
+      // Existing record without HeyGen can be reused instead of creating another weeklyAd.
+      console.log(`[WEEKLY AD] Existing ad has no HeyGen video yet: ${existing._id}`);
+      const existingAd = await serverClient.fetch<{ _id: string; imageAssetId?: string; imageUrl?: string; script: string } | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,imageAssetId,imageUrl,script}`, { id: existing._id });
+      if (!existingAd) throw new Error(`Weekly ad not found: ${existing._id}`);
+      imageAssetId = existingAd.imageAssetId;
+      const heygenVideoId = await createHeyGenVideo({ script: existingAd.script, date, adId: existing._id });
+      await serverClient.patch(existing._id).set({ heygenVideoId, status: "pending" }).commit();
+      Object.assign(result, { heygenVideoId, weeklyAdId: existing._id });
+      if (dryRun) {
+        for (let i = 0; i < 60; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          const status = await getHeyGenVideo(heygenVideoId);
+          if (status.data.status === "completed") {
+            result.videoUrl = status.data.video_url;
+            result.durationMs = Date.now() - start;
+            return result;
+          }
+          if (status.data.status === "failed") throw new Error(status.data.failure_reason);
+        }
+        throw new Error("HeyGen timed out.");
+      }
+      result.durationMs = Date.now() - start;
+      await notifySlackResult("Weekly Ad Result", result);
+      return result;
+    }
+
+    // Generate a new weekly ad only when no existing record exists.
     const { script } = await generateScript({ title, headline });
     const { caption, hashtags } = await generateCaption({ title, headline });
     const imageBuffer = await generateImage({ caption, weekNumber: getWeekOfMonth() });
-    const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`); imageAssetId = imageAsset.assetId;
-    // Use a deterministic ID so concurrent cron executions target the same weekly ad. 
-    const deterministicId = `weeklyAd-${slug}-${date.replace(/[^0-9]/g, "")}`;
-    try {
-      const weeklyAd = await serverClient.createIfNotExists({ _id: deterministicId, _type: "weeklyAd", status: "pending", title, slug, script, caption, hashtags, imageUrl: imageAsset.url, imageAssetId, }); weeklyAdId = weeklyAd._id;
-      // Re-check after deterministic creation to prevent a concurrent cron from generating HeyGen twice. 
-      const lockedAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: deterministicId });
-      if (!lockedAd) throw new Error(`Weekly ad lock record not found: ${deterministicId}`);
-      if (lockedAd.heygenVideoId || lockedAd.status === "publishing" || lockedAd.status === "completed") {
-        console.log(`[WEEKLY AD] Existing HeyGen job found for "${title}": ${lockedAd.heygenVideoId ?? "none"} (${lockedAd.status})`);
-        await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: lockedAd.status, weeklyAdId: lockedAd._id, heygenVideoId: lockedAd.heygenVideoId, durationMs: Date.now() - start };
-      }
-    } catch (err) {
-      // If another cron created the deterministic record first, reuse it instead of creating another ad. 
-      const existingAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: deterministicId });
-      if (!existingAd) throw err; weeklyAdId = existingAd._id;
-      if (existingAd.heygenVideoId || ACTIVE_STATUSES.includes(existingAd.status as typeof ACTIVE_STATUSES[number])) {
-        console.log(`[WEEKLY AD] Concurrent weekly ad already exists: ${existingAd._id} (${existingAd.status})`);
-        await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: existingAd.status, weeklyAdId: existingAd._id, heygenVideoId: existingAd.heygenVideoId, durationMs: Date.now() - start };
-      } throw err;
-    } // Generate HeyGen only when this deterministic weekly ad has no existing HeyGen video. 
-    const currentAd = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,status,heygenVideoId}`, { id: weeklyAdId });
-    if (!currentAd) throw new Error(`Weekly ad not found after creation: ${weeklyAdId}`);
-    if (currentAd.heygenVideoId) { await deleteSanityAsset(imageAssetId); return { ...result, skipped: true, reason: "heygen_exists", weeklyAdId, heygenVideoId: currentAd.heygenVideoId, durationMs: Date.now() - start }; }
+    const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`);
+    imageAssetId = imageAsset.assetId;
+
+    const weeklyAd = await serverClient.create({
+      _type: "weeklyAd",
+      status: "pending",
+      title,
+      slug,
+      script,
+      caption,
+      hashtags,
+      imageUrl: imageAsset.url,
+      imageAssetId,
+    });
+    weeklyAdId = weeklyAd._id;
+
+    // Generate HeyGen exactly once for the newly created weekly ad.
     const heygenVideoId = await createHeyGenVideo({ script, date, adId: weeklyAdId });
-    await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit(); Object.assign(result, { heygenVideoId, weeklyAdId });
+    await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit();
+    Object.assign(result, { heygenVideoId, weeklyAdId });
+
     if (dryRun) {
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 5000));
-        const status = await getHeyGenVideo(heygenVideoId); if (status.data.status === "completed") { result.videoUrl = status.data.video_url; result.durationMs = Date.now() - start; return result; }
+        const status = await getHeyGenVideo(heygenVideoId);
+        if (status.data.status === "completed") {
+          result.videoUrl = status.data.video_url;
+          result.durationMs = Date.now() - start;
+          return result;
+        }
         if (status.data.status === "failed") throw new Error(status.data.failure_reason);
-      } throw new Error("HeyGen timed out.");
+      }
+      throw new Error("HeyGen timed out.");
     }
+
     result.durationMs = Date.now() - start;
-    await notifySlackResult("Weekly Ad Result", result); return result;
+    await notifySlackResult("Weekly Ad Result", result);
+    return result;
   } catch (err) {
     await markWeeklyAdFailed(weeklyAdId, err);
     await notifySlackError("Weekly Ad Fatal Pipeline Failure", err, { dryRun, weeklyAdId });
     return { ok: false, error: getErrorMessage(err), weeklyAdId, durationMs: Date.now() - start };
   }
 }
+
