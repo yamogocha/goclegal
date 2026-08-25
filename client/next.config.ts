@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  outputFileTracingIncludes: { "/api/webhooks/heygen": ["./node_modules/ffmpeg-static/**/*", "./node_modules/ffprobe-static/**/*",], },
   turbopack: {
-    root: __dirname // // force correct project root
+    root: __dirname,
   },
   serverExternalPackages: ["fluent-ffmpeg", "ffmpeg-static"],
   images: {
