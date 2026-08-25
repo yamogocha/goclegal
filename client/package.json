@@ -10,8 +10,6 @@
     "googleAds": "dotenv -e .env.local -- tsx ./scripts/googleAds.ts"
   },
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@ffprobe-installer/ffprobe": "^2.1.2",
     "@fontsource/eb-garamond": "^5.2.7",
     "@fontsource/open-sauce-two": "^5.2.5",
     "@sanity/client": "^7.13.1",

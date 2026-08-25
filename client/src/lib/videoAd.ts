@@ -3,14 +3,14 @@ import { client } from "@/sanity/client";
 import fs from "node:fs/promises";
 import path from "node:path";
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ffprobeInstaller from "@ffprobe-installer/ffprobe";
+import ffmpegPath from "ffmpeg-static";
+import ffprobe from "ffprobe-static";
 import sharp from "sharp";
 import { getOpenAI, storyboardFromLibraryPrompt } from "./openai";
 import { serverClient } from "@/sanity/serverClient";
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
+ffmpeg.setFfmpegPath(ffmpegPath!);
+ffmpeg.setFfprobePath(ffprobe.path);
 
 const openai = getOpenAI();
 const FADE = 0.35;
