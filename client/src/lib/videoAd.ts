@@ -5,26 +5,33 @@ import path from "node:path";
 import sharp from "sharp";
 import { getOpenAI, storyboardFromLibraryPrompt } from "./openai";
 import { serverClient } from "@/sanity/serverClient";
+import { Sandbox } from "@vercel/sandbox";
 
 const openai = getOpenAI();
 const FADE = 0.35;
 
-type Ffmpeg = typeof import("fluent-ffmpeg");
-let ffmpegInstance: Ffmpeg | null = null;
+// Remove fluent-ffmpeg, ffmpeg-static, ffprobe-static imports and getFfmpeg() entirely.
 
-async function getFfmpeg(): Promise<Ffmpeg> {
-    if (ffmpegInstance) return ffmpegInstance;
-    const [{ default: ffmpeg }, { default: ffmpegPath }, { default: ffprobe }] = await Promise.all([
-        import("fluent-ffmpeg"),
-        import("ffmpeg-static"),
-        import("ffprobe-static"),
-    ]);
-    if (!ffmpegPath) throw new Error("FFmpeg binary not found.");
-    if (!ffprobe?.path) throw new Error("FFprobe binary not found.");
-    ffmpeg.setFfmpegPath(ffmpegPath);
-    ffmpeg.setFfprobePath(ffprobe.path);
-    ffmpegInstance = ffmpeg;
-    return ffmpegInstance;
+async function runSandboxCommand(sandbox: Sandbox, cmd: string, args: string[]) {
+    const result = await sandbox.runCommand({ cmd, args });
+    if (result.exitCode !== 0) throw new Error(`Sandbox command failed: ${cmd} ${args.join(" ")}\n${await result.stderr()}`);
+    return result;
+}
+
+async function createVideoSandbox(): Promise<Sandbox> {
+    const sandbox = await Sandbox.create({ runtime: "node22", timeout: 10 * 60 * 1000, persistent: false });
+    await runSandboxCommand(sandbox, "dnf", ["install", "-y", "ffmpeg"]);
+    return sandbox;
+}
+
+async function writeSandboxFile(sandbox: Sandbox, sandboxPath: string, data: Buffer) {
+    await sandbox.writeFiles([{ path: sandboxPath, content: data }]);
+}
+
+async function readSandboxFile(sandbox: Sandbox, sandboxPath: string): Promise<Buffer> {
+    const data = await sandbox.readFileToBuffer({ path: sandboxPath });
+    if (!data) throw new Error(`Sandbox output missing: ${sandboxPath}`);
+    return data;
 }
 
 // Types.
@@ -141,20 +148,16 @@ async function notifyConceptSuggestions(beats: StoryboardBeat[]) {
 
 // Avatar timing.
 export async function getVideoDuration(file: string): Promise<number> {
-    const ffmpeg = await getFfmpeg();
-    return new Promise((resolve, reject) => ffmpeg.ffprobe(file, (err, data) => err ? reject(err) : resolve(Number(data.format.duration))));
-}
-
-async function transcribeGreg(avatar: string): Promise<CaptionWord[]> {
-    const ffmpeg = await getFfmpeg();
-    const audioPath = path.join(path.dirname(avatar), "greg-caption-audio.m4a");
-    await new Promise<void>((resolve, reject) => ffmpeg(avatar).noVideo().audioCodec("aac").audioBitrate("128k").outputOptions(["-y"]).on("end", () => resolve()).on("error", reject).save(audioPath));
-    const buffer = await fs.readFile(audioPath);
-    const file = new File([buffer], "greg-caption-audio.m4a", { type: "audio/mp4" });
-    const transcription = await openai.audio.transcriptions.create({ file, model: "whisper-1", response_format: "verbose_json", timestamp_granularities: ["word", "segment"] });
-    await fs.unlink(audioPath).catch(() => { });
-    const words = (transcription.words ?? []).map((w: any) => ({ word: w.word.trim(), start: Number(w.start), end: Number(w.end) })).filter(w => w.word);
-    return applySegmentPunctuation(words, (transcription.segments ?? []) as CaptionSegment[]);
+    const sandbox = await createVideoSandbox();
+    try {
+        await writeSandboxFile(sandbox, "input.mp4", await fs.readFile(file));
+        const result = await runSandboxCommand(sandbox, "ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "input.mp4"]);
+        const duration = Number((await result.stdout()).trim());
+        if (!Number.isFinite(duration)) throw new Error("Unable to determine video duration.");
+        return duration;
+    } finally {
+        await sandbox.stop();
+    }
 }
 
 function normalizeAlignWord(text: string): string {
@@ -297,20 +300,35 @@ async function downloadRenderAssets(timeline: Timeline, renderDir: string): Prom
 }
 
 async function renderKenBurns(assets: ImageRenderAsset[], outDir: string, avatarDuration: number): Promise<RenderClip[]> {
-    const ffmpeg = await getFfmpeg();
     await fs.mkdir(outDir, { recursive: true });
-    return Promise.all(assets.map(a => new Promise<RenderClip>((resolve, reject) => {
+    const results: RenderClip[] = [];
+    for (const a of assets) {
         const out = path.join(outDir, `${String(a.start).padStart(3, "0")}_${a.id}.mp4`);
-        const hasFollowingClip = a.start + a.duration < avatarDuration - 0.01;
-        const renderDuration = a.duration + (hasFollowingClip ? FADE : 0);
-        ffmpeg(a.localPath).inputOptions(["-loop 1"]).videoFilters("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p").outputOptions([`-t ${renderDuration}`, "-r 30", "-pix_fmt yuv420p", "-c:v libx264", "-preset medium", "-crf 18", "-movflags +faststart", "-y"]).on("end", () => resolve({ id: a.id, videoPath: out, start: a.start, duration: a.duration })).on("error", reject).save(out);
-    })));
+        const sandbox = await createVideoSandbox();
+        try {
+            await writeSandboxFile(sandbox, "input.png", await fs.readFile(a.localPath));
+            const hasFollowingClip = a.start + a.duration < avatarDuration - 0.01;
+            const renderDuration = a.duration + (hasFollowingClip ? FADE : 0);
+            await runSandboxCommand(sandbox, "ffmpeg", ["-y", "-loop", "1", "-i", "input.png", "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p", "-t", String(renderDuration), "-r", "30", "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-movflags", "+faststart", "output.mp4"]);
+            await fs.writeFile(out, await readSandboxFile(sandbox, "output.mp4"));
+            results.push({ id: a.id, videoPath: out, start: a.start, duration: a.duration });
+        } finally {
+            await sandbox.stop();
+        }
+    }
+    return results;
 }
 
 async function renderGregSegment(avatar: string, start: number, duration: number, out: string, addFade: boolean): Promise<RenderClip> {
-    const ffmpeg = await getFfmpeg();
-    const renderDuration = duration + (addFade ? FADE : 0);
-    await new Promise<void>((resolve, reject) => ffmpeg(avatar).inputOptions([`-ss ${start}`]).outputOptions([`-t ${renderDuration}`, "-an", "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p", "-r 30", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", () => resolve()).on("error", reject).save(out));
+    const sandbox = await createVideoSandbox();
+    try {
+        await writeSandboxFile(sandbox, "avatar.mp4", await fs.readFile(avatar));
+        const renderDuration = duration + (addFade ? FADE : 0);
+        await runSandboxCommand(sandbox, "ffmpeg", ["-y", "-ss", String(start), "-i", "avatar.mp4", "-t", String(renderDuration), "-an", "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p", "-r", "30", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "output.mp4"]);
+        await fs.writeFile(out, await readSandboxFile(sandbox, "output.mp4"));
+    } finally {
+        await sandbox.stop();
+    }
     return { id: `greg-${start}`, videoPath: out, start, duration };
 }
 
@@ -333,24 +351,46 @@ async function buildVisualTimeline(assets: RenderClip[], avatar: string, avatarD
 }
 
 async function crossfadeTimeline(clips: RenderClip[], output: string, totalDuration: number) {
-    const ffmpeg = await getFfmpeg();
     if (!clips.length) throw new Error("No visual clips to assemble.");
-    const sorted = [...clips].sort((a, b) => a.start - b.start);
-    const command = ffmpeg();
-    sorted.forEach(c => command.input(c.videoPath));
-    const filters: string[] = [];
-    sorted.forEach((c, i) => filters.push(`[${i}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,settb=1/30,setpts=PTS-STARTPTS[v${i}]`));
-    let current = "v0";
-    let accumulatedDuration = sorted[0].duration;
-    for (let i = 1; i < sorted.length; i++) {
-        const next = `xf${i}`;
-        filters.push(`[${current}][v${i}]xfade=transition=fade:duration=${FADE}:offset=${accumulatedDuration}[${next}]`);
-        current = next;
-        accumulatedDuration += sorted[i].duration;
+    const sandbox = await createVideoSandbox();
+    try {
+        for (let i = 0; i < clips.length; i++) await writeSandboxFile(sandbox, `clip-${i}.mp4`, await fs.readFile(clips[i].videoPath));
+        const inputs = clips.flatMap((_, i) => ["-i", `clip-${i}.mp4`]);
+        const filters: string[] = [];
+        clips.forEach((_, i) => filters.push(`[${i}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,settb=1/30,setpts=PTS-STARTPTS[v${i}]`));
+        let current = "v0";
+        let accumulatedDuration = clips[0].duration;
+        for (let i = 1; i < clips.length; i++) {
+            const next = `xf${i}`;
+            filters.push(`[${current}][v${i}]xfade=transition=fade:duration=${FADE}:offset=${accumulatedDuration}[${next}]`);
+            current = next;
+            accumulatedDuration += clips[i].duration;
+        }
+        filters.push(`[${current}]trim=start=0:duration=${totalDuration},setpts=PTS-STARTPTS[outv]`);
+        await runSandboxCommand(sandbox, "ffmpeg", ["-y", ...inputs, "-filter_complex", filters.join(";"), "-map", "[outv]", "-an", "-t", String(totalDuration), "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "output.mp4"]);
+        await fs.writeFile(output, await readSandboxFile(sandbox, "output.mp4"));
+    } finally {
+        await sandbox.stop();
     }
-    filters.push(`[${current}]trim=start=0:duration=${totalDuration},setpts=PTS-STARTPTS[outv]`);
-    await new Promise<void>((resolve, reject) => command.complexFilter(filters).outputOptions(["-map [outv]", "-an", "-t", String(totalDuration), "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", () => resolve()).on("error", reject).save(output));
     return output;
+}
+
+async function transcribeGreg(avatar: string): Promise<CaptionWord[]> {
+    const audioPath = path.join(path.dirname(avatar), "greg-caption-audio.m4a");
+    const sandbox = await createVideoSandbox();
+    try {
+        await writeSandboxFile(sandbox, "avatar.mp4", await fs.readFile(avatar));
+        await runSandboxCommand(sandbox, "ffmpeg", ["-y", "-i", "avatar.mp4", "-vn", "-c:a", "aac", "-b:a", "128k", "audio.m4a"]);
+        const buffer = await readSandboxFile(sandbox, "audio.m4a");
+        await fs.writeFile(audioPath, buffer);
+    } finally {
+        await sandbox.stop();
+    }
+    const file = new File([await fs.readFile(audioPath)], "greg-caption-audio.m4a", { type: "audio/mp4" });
+    const transcription = await openai.audio.transcriptions.create({ file, model: "whisper-1", response_format: "verbose_json", timestamp_granularities: ["word", "segment"] });
+    await fs.unlink(audioPath).catch(() => { });
+    const words = (transcription.words ?? []).map((w: any) => ({ word: w.word.trim(), start: Number(w.start), end: Number(w.end) })).filter(w => w.word);
+    return applySegmentPunctuation(words, (transcription.segments ?? []) as CaptionSegment[]);
 }
 
 // Captions.
@@ -423,34 +463,48 @@ async function createCaptionImage(text: string, output: string): Promise<void> {
 function escapeXml(text: string): string { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
 async function addCaptions(video: string, avatar: string, output: string): Promise<string> {
-    const ffmpeg = await getFfmpeg();
     const captionDir = path.join(path.dirname(output), "caption-images");
     await fs.mkdir(captionDir, { recursive: true });
     const words = await transcribeGreg(avatar);
     const captions = buildCaptionLines(words);
-    const command = ffmpeg(video);
-    const filters: string[] = [];
-    for (let i = 0; i < captions.length; i++) {
-        const png = path.join(captionDir, `${i}.png`);
-        await createCaptionImage(captions[i].text, png);
-        command.input(png).inputOptions(["-loop", "1", "-framerate", "30"]);
-        filters.push(`[${i + 1}:v]format=rgba,setpts=PTS-STARTPTS[cap${i}]`);
+    const sandbox = await createVideoSandbox();
+    try {
+        await writeSandboxFile(sandbox, "video.mp4", await fs.readFile(video));
+        const filters: string[] = [];
+        const inputs: string[] = ["-i", "video.mp4"];
+        for (let i = 0; i < captions.length; i++) {
+            const png = path.join(captionDir, `${i}.png`);
+            await createCaptionImage(captions[i].text, png);
+            await writeSandboxFile(sandbox, `caption-${i}.png`, await fs.readFile(png));
+            inputs.push("-loop", "1", "-framerate", "30", "-i", `caption-${i}.png`);
+            filters.push(`[${i + 1}:v]format=rgba,setpts=PTS-STARTPTS[cap${i}]`);
+        }
+        let current = "[0:v]";
+        for (let i = 0; i < captions.length; i++) {
+            const c = captions[i];
+            const next = `[capout${i}]`;
+            filters.push(`${current}[cap${i}]overlay=x=(W-w)/2:y=55:enable='between(t,${c.start},${c.end})':eof_action=pass${next}`);
+            current = next;
+        }
+        filters.push(`${current}format=yuv420p[outv]`);
+        await runSandboxCommand(sandbox, "ffmpeg", ["-y", ...inputs, "-filter_complex", filters.join(";"), "-map", "[outv]", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "output.mp4"]);
+        await fs.writeFile(output, await readSandboxFile(sandbox, "output.mp4"));
+    } finally {
+        await sandbox.stop();
     }
-    let current = "[0:v]";
-    for (let i = 0; i < captions.length; i++) {
-        const c = captions[i];
-        const next = `[capout${i}]`;
-        filters.push(`${current}[cap${i}]overlay=x=(W-w)/2:y=55:enable='between(t,${c.start},${c.end})':eof_action=pass${next}`);
-        current = next;
-    }
-    filters.push(`${current}format=yuv420p[outv]`);
-    await new Promise<void>((resolve, reject) => command.complexFilter(filters).outputOptions(["-map [outv]", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y"]).on("end", () => resolve()).on("error", reject).save(output));
     return output;
 }
 
 async function replaceAudio(video: string, audioSource: string, output: string) {
-    const ffmpeg = await getFfmpeg();
-    await new Promise<void>((resolve, reject) => ffmpeg().input(video).input(audioSource).outputOptions(["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart"]).on("end", () => resolve()).on("error", reject).save(output));
+    const sandbox = await createVideoSandbox();
+    try {
+        await writeSandboxFile(sandbox, "video.mp4", await fs.readFile(video));
+        await writeSandboxFile(sandbox, "audio.mp4", await fs.readFile(audioSource));
+        await runSandboxCommand(sandbox, "ffmpeg", ["-y", "-i", "video.mp4", "-i", "audio.mp4", "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "output.mp4"]);
+        await fs.writeFile(output, await readSandboxFile(sandbox, "output.mp4"));
+    } finally {
+        await sandbox.stop();
+    }
     return output;
 }
 
@@ -464,7 +518,7 @@ async function uploadFinalVideo(videoPath: string) {
 export function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun: false): Promise<{ assetId: string; url: string }>;
 export function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun: true): Promise<{ localPath: string }>;
 export async function renderBrollVideo(timeline: TimelineInput, gregAvatarVideo: string, dryRun = false): Promise<{ assetId: string; url: string } | { localPath: string }> {
-    const root = path.join("/tmp", "weekly-video");
+    const root = "/tmp/weekly-video";
     const avatarDuration = await getVideoDuration(gregAvatarVideo);
     const renderTimeline = buildTimeline(timeline);
     const assets = await downloadRenderAssets(await resolveStoryAssets(renderTimeline), path.join(root, "assets"));
