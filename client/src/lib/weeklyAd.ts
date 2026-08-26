@@ -411,6 +411,113 @@ export async function deleteSanityAsset(assetId?: string) {
   }
 }
 
+export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl }: { weeklyAdId: string; heygenVideoId: string; heygenVideoUrl: string }) {
+  const started = Date.now();
+  let tempAvatarPath: string | undefined;
+  let temporaryVideoAssetId: string | undefined;
+  let completed = false;
+  try {
+    const ad = await client.getDocument(weeklyAdId);
+    if (!ad) throw new Error(`Weekly ad not found for ${weeklyAdId}`);
+    if (ad.status === "completed") return { ok: true, duplicate: true, weeklyAdId };
+    if (ad.status === "publishing") return { ok: true, duplicate: true, weeklyAdId };
+    await serverClient.patch(ad._id).set({ status: "publishing", heygenVideoId }).commit();
+
+    // Download HeyGen video.
+    const download = await fetch(heygenVideoUrl);
+    if (!download.ok) throw new Error(`Unable to download HeyGen video: ${download.status} ${download.statusText}`);
+    const buffer = Buffer.from(await download.arrayBuffer());
+    const tempDir = path.join("/tmp", "weekly-ad");
+    await fs.promises.mkdir(tempDir, { recursive: true });
+    tempAvatarPath = path.join(tempDir, `${weeklyAdId}-heygen.mp4`);
+    await fs.promises.writeFile(tempAvatarPath, buffer);
+
+    // Build storyboard, alignment, timeline, and B-roll.
+    const { generateStoryboard, alignStoryboardToAvatar, storyboardToAlignedTimeline, renderBrollVideo, getVideoDuration } = await import("@/lib/videoAd");
+    const avatarDuration = await getVideoDuration(tempAvatarPath);
+    const storyboard = await generateStoryboard(ad.script, avatarDuration);
+    const alignedStoryboard = await alignStoryboardToAvatar(storyboard, tempAvatarPath);
+    const timeline = await storyboardToAlignedTimeline(alignedStoryboard);
+    const rendered = await renderBrollVideo(timeline, tempAvatarPath, false);
+    temporaryVideoAssetId = rendered.assetId;
+    const reelUrl = rendered.url;
+
+    // Download rendered B-roll video.
+    const renderedDownload = await fetch(reelUrl);
+    if (!renderedDownload.ok) throw new Error(`Unable to download rendered B-roll video: ${renderedDownload.status} ${renderedDownload.statusText}`);
+    const renderedBuffer = Buffer.from(await renderedDownload.arrayBuffer());
+    const caption = buildInstagramCaption(ad.caption, ad.hashtags);
+
+    // Static Instagram + Facebook.
+    let instagramPostId = ad.instagramPostId;
+    let facebookPostId = ad.facebookPostId;
+    if (!instagramPostId || !facebookPostId) {
+      const staticAds = await publishInstagramAndFacebook({ igUserId: process.env.IG_USER_ID!, fbPageId: process.env.FB_PAGE_ID!, userAccessToken: process.env.FB_USER_ACCESS_TOKEN!, pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!, imageUrl: ad.imageUrl, caption });
+      instagramPostId = staticAds.instagramPostId;
+      facebookPostId = staticAds.facebookPostId;
+      await serverClient.patch(ad._id).set({ instagramPostId, facebookPostId }).commit();
+    }
+
+    // Instagram Reel.
+    let instagramReelId = ad.instagramReelId;
+    if (!instagramReelId) {
+      for (let i = 0; i < 5; i++) {
+        try {
+          instagramReelId = await publishInstagramReel({ igUserId: process.env.IG_USER_ID!, userAccessToken: process.env.FB_USER_ACCESS_TOKEN!, reelUrl, caption });
+          break;
+        } catch (err) {
+          if (!String(err).includes("Media ID is not available")) throw err;
+          await new Promise<void>(resolve => setTimeout(resolve, 10000));
+        }
+      }
+      if (!instagramReelId) throw new Error("Instagram Reel never became ready.");
+      await serverClient.patch(ad._id).set({ instagramReelId }).commit();
+    }
+
+    // Facebook Reel.
+    let facebookReelId = ad.facebookReelId;
+    if (!facebookReelId) {
+      facebookReelId = await publishFacebookReel({ fbPageId: process.env.FB_PAGE_ID!, pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!, reelUrl, caption });
+      await serverClient.patch(ad._id).set({ facebookReelId }).commit();
+    }
+
+    // YouTube Short.
+    let youtubeVideoId = ad.youtubeVideoId;
+    if (!youtubeVideoId) {
+      youtubeVideoId = await uploadYoutubeVideo({ videoBuffer: renderedBuffer, title: ad.title, description: `${ad.caption}\n\n${ad.hashtags.join(" ")}` });
+      await serverClient.patch(ad._id).set({ youtubeVideoId }).commit();
+    }
+
+    // Google Business Profile.
+    let gbpMediaName = ad.gbpMediaName;
+    if (!gbpMediaName) {
+      gbpMediaName = await uploadGBPMedia({ accountId: process.env.GBP_ACCOUNT_ID!, locationId: process.env.GBP_LOCATION_ID!, imageUrl: ad.imageUrl });
+      await serverClient.patch(ad._id).set({ gbpMediaName }).commit();
+    }
+
+    // Complete and clean up.
+    await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString(), heygenVideoId, brollVideoUrl: reelUrl }).commit();
+    completed = true;
+    await deleteSanityAsset(temporaryVideoAssetId);
+    await deleteSanityAsset(ad.imageAssetId);
+    await serverClient.delete(ad._id).catch(err => console.error("[SANITY] Temporary weeklyAd deletion failed:", err));
+    if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
+
+    // Completion Slack notification.
+    await notifySlackResult("Weekly Ad Completed", { weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName, durationMs: Date.now() - started }).catch(err => console.error("[SLACK] Completion notification failed:", err));
+    return { ok: true, weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName };
+  } catch (err) {
+    if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
+    if (!completed) {
+      if (temporaryVideoAssetId) await deleteSanityAsset(temporaryVideoAssetId);
+      const ad = await client.getDocument(weeklyAdId).catch(() => null);
+      if (ad?._id) await serverClient.patch(ad._id).set({ status: "pending", error: getErrorMessage(err) }).commit().catch(cleanupErr => console.error("[SANITY] Failed resetting weeklyAd:", cleanupErr));
+    }
+    await notifySlackError("Weekly Ad Processing Failure", err, { weeklyAdId, heygenVideoId });
+    throw err;
+  }
+}
+
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
@@ -433,19 +540,14 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        const webhookUrl = `${process.env.BASE_URL}/api/webhooks/heygen`;
-        const webhookPayload = {
-          event_type: "avatar_video.success",
-          event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: heygenVideoUrl },
-        };
-        const webhookRes = await fetch(webhookUrl, {
+        const processUrl = `${process.env.BASE_URL}/api/cron/weeklyAd?process=true`;
+        void fetch(processUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(webhookPayload),
-        });
-        const webhookText = await webhookRes.text();
-        if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed (${webhookRes.status}): ${webhookText || "<empty response>"}`);
-        console.log(`[WEEKLY AD] HeyGen webhook accepted for ${weeklyAdId}: ${webhookRes.status}`);
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.CRON_SECRET}` },
+          body: JSON.stringify({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl }),
+        }).then(async response => {
+          if (!response.ok) throw new Error(`Weekly ad processing returned HTTP ${response.status}: ${await response.text()}`);
+        }).catch(err => notifySlackError("Weekly Ad Processing Trigger Failed", err, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId }));
         result.heygenVideoId = existingHeyGenVideoId;
         result.videoUrl = heygenVideoUrl;
         result.durationMs = Date.now() - start;
