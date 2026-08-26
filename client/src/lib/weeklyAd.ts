@@ -438,27 +438,27 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
     if (existing) {
       weeklyAdId = existing._id;
       if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
-
-      if (existing.heygenVideoId) {
-        console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existing.heygenVideoId}`);
-        const heygen = await getHeyGenVideo(existing.heygenVideoId);
-        const heygenStatus = heygen?.data?.status;
-        const heygenVideoUrl = heygen?.data?.video_url ?? heygen?.data?.url;
-        if (heygenStatus === "completed" && heygenVideoUrl) {
-          const webhookRes = await fetch(`${process.env.BASE_URL}/api/webhooks/heygen`, {
+      const existingHeyGenVideoId = existing.heygenVideoId;
+      if (existingHeyGenVideoId) {
+        console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existingHeyGenVideoId}`);
+        const webhookUrl = `${process.env.BASE_URL}/api/webhooks/heygen`;
+        const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
+        const heygenStatusValue = heygenStatus?.data?.status;
+        if (heygenStatusValue === "completed") {
+          const webhookRes = await fetchWithTimeout(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event_type: "avatar_video.success", event_data: { callback_id: existing._id, video_id: existing.heygenVideoId, url: heygenVideoUrl } }),
-          });
-          const webhookBody = await webhookRes.json().catch(() => null);
-          if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed: ${JSON.stringify(webhookBody)}`);
+            body: JSON.stringify({ event_type: "avatar_video.success", event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: heygenStatus.data.video_url } }),
+          }, 120_000);
+          const webhookText = await webhookRes.text();
+          if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed (${webhookRes.status}): ${webhookText || "<empty response>"}`);
+          let webhookData: any = null;
+          try { webhookData = webhookText ? JSON.parse(webhookText) : null; } catch { throw new Error(`Existing HeyGen webhook returned invalid JSON: ${webhookText}`); }
+          if (!webhookData?.ok) throw new Error(`Existing HeyGen webhook failed: ${JSON.stringify(webhookData)}`);
           result.durationMs = Date.now() - start;
-          return { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, webhook: webhookBody };
+          await notifySlackResult("Weekly Ad Result", result);
+          return result;
         }
-        if (heygenStatus === "failed") throw new Error(`Existing HeyGen video failed: ${heygen?.data?.failure_reason ?? "Unknown HeyGen failure"}`);
-        result.durationMs = Date.now() - start;
-        await notifySlackResult("Weekly Ad Result", { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, heygenStatus });
-        return { ...result, resumed: true, weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, heygenStatus };
       }
 
       // Existing record without HeyGen can be reused instead of creating another weeklyAd.
