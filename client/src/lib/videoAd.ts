@@ -10,8 +10,6 @@ import { Sandbox } from "@vercel/sandbox";
 const openai = getOpenAI();
 const FADE = 0.35;
 
-// Remove fluent-ffmpeg, ffmpeg-static, ffprobe-static imports and getFfmpeg() entirely.
-
 async function runSandboxCommand(sandbox: Sandbox, cmd: string, args: string[]) {
     const result = await sandbox.runCommand({ cmd, args });
     if (result.exitCode !== 0) throw new Error(`Sandbox command failed: ${cmd} ${args.join(" ")}\n${await result.stderr()}`);
@@ -20,7 +18,15 @@ async function runSandboxCommand(sandbox: Sandbox, cmd: string, args: string[]) 
 
 async function createVideoSandbox(): Promise<Sandbox> {
     const sandbox = await Sandbox.create({ runtime: "node22", timeout: 10 * 60 * 1000, persistent: false });
-    await runSandboxCommand(sandbox, "sudo", ["dnf", "install", "-y", "ffmpeg"]);
+    const cwd = await sandbox.runCommand({ cmd: "pwd", args: [] });
+    if (cwd.exitCode !== 0) throw new Error(`Unable to determine Sandbox working directory.\n${await cwd.stderr()}`);
+    const workdir = (await cwd.stdout()).trim();
+    await runSandboxCommand(sandbox, "npm", ["init", "-y"]);
+    await runSandboxCommand(sandbox, "npm", ["install", "--no-save", "ffmpeg-static", "ffprobe-static"]);
+    await runSandboxCommand(sandbox, "ln", ["-sf", `${workdir}/node_modules/ffmpeg-static/ffmpeg`, "/usr/local/bin/ffmpeg"]);
+    await runSandboxCommand(sandbox, "ln", ["-sf", `${workdir}/node_modules/ffprobe-static/bin/linux/x64/ffprobe`, "/usr/local/bin/ffprobe"]);
+    await runSandboxCommand(sandbox, "ffmpeg", ["-version"]);
+    await runSandboxCommand(sandbox, "ffprobe", ["-version"]);
     return sandbox;
 }
 
