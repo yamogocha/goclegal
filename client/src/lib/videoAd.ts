@@ -167,7 +167,7 @@ export async function getVideoDuration(file: string): Promise<number> {
 }
 
 function normalizeAlignWord(text: string): string {
-    return text.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^ a - z0 - 9']/g, "").replace(/^' +| '+$/g, "");
+    return text.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9']/g, "").replace(/^'+|'+$/g, "");
 }
 
 function wordSimilarity(a: string, b: string): number {
