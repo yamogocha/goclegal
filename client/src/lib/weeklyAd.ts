@@ -373,11 +373,21 @@ export async function uploadGBPMedia({ accountId, locationId, imageUrl }: { acco
   return data.name as string;
 }
 
-export async function getHeyGenVideo(videoId: string) {
-  const res = await fetch(`https://api.heygen.com/v3/videos/${videoId}`, { headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! } });
-  if (!res.ok) {
-    throw new Error(await res.text());
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 120_000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    throw new Error(`Fetch failed: ${url} — ${getErrorMessage(err)}`);
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+export async function getHeyGenVideo(videoId: string) {
+  const res = await fetchWithTimeout(`https://api.heygen.com/v3/videos/${videoId}`, { headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! } }, 30_000);
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 

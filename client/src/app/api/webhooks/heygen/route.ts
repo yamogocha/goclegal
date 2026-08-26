@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { client } from "@/sanity/client";
 import { serverClient } from "@/sanity/serverClient";
-import { publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel, deleteSanityAsset } from "@/lib/weeklyAd";
+import { publishInstagramAndFacebook, uploadYoutubeVideo, uploadGBPMedia, buildInstagramCaption, publishInstagramReel, publishFacebookReel, deleteSanityAsset, fetchWithTimeout } from "@/lib/weeklyAd";
 import { getErrorMessage, notifySlackError, notifySlackResult } from "@/lib/error";
 
 export async function POST(req: Request) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         await serverClient.patch(ad._id).set({ status: "publishing", heygenVideoId }).commit();
 
         // Download HeyGen video to ephemeral runtime storage.
-        const download = await fetch(heygenVideoUrl);
+        const download = await fetchWithTimeout(heygenVideoUrl, {}, 120_000);
         if (!download.ok) throw new Error("Unable to download HeyGen video.");
         const buffer = Buffer.from(await download.arrayBuffer());
         const tempDir = path.join("/tmp", "weekly-ad");
