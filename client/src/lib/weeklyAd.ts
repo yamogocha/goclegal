@@ -411,18 +411,6 @@ export async function deleteSanityAsset(assetId?: string) {
   }
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10 * 60_000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err) {
-    throw new Error(`Fetch failed: ${url} — ${getErrorMessage(err)}`);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
@@ -439,27 +427,25 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       weeklyAdId = existing._id;
       if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
       const existingHeyGenVideoId = existing.heygenVideoId;
-      // Existing HeyGen video: trigger webhook and immediately continue cron.
-      // Resume existing HeyGen video and wait for the webhook pipeline to finish.
+      // Existing HeyGen video: trigger the webhook without waiting for the long publishing pipeline.
       if (existingHeyGenVideoId) {
         console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existingHeyGenVideoId}`);
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
         const webhookUrl = `${process.env.BASE_URL}/api/webhooks/heygen`;
-        const webhookRes = await fetchWithTimeout(webhookUrl, {
+        const webhookPayload = {
+          event_type: "avatar_video.success",
+          event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: heygenVideoUrl },
+        };
+        const webhookRes = await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event_type: "avatar_video.success",
-            event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: heygenVideoUrl },
-          }),
+          body: JSON.stringify(webhookPayload),
         });
         const webhookText = await webhookRes.text();
         if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed (${webhookRes.status}): ${webhookText || "<empty response>"}`);
-        let webhookResult: { ok?: boolean; error?: string } = {};
-        try { webhookResult = JSON.parse(webhookText); } catch { }
-        if (webhookResult.ok === false) throw new Error(`Existing HeyGen webhook failed: ${webhookResult.error ?? webhookText}`);
+        console.log(`[WEEKLY AD] HeyGen webhook accepted for ${weeklyAdId}: ${webhookRes.status}`);
         result.heygenVideoId = existingHeyGenVideoId;
         result.videoUrl = heygenVideoUrl;
         result.durationMs = Date.now() - start;
