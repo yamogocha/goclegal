@@ -373,20 +373,21 @@ export async function uploadGBPMedia({ accountId, locationId, imageUrl }: { acco
   return data.name as string;
 }
 
-export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 120_000): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+// Fire-and-forget webhook; cron does not wait for rendering/publishing.
+export async function triggerHeyGenWebhook(url: string, payload: unknown, adId: string): Promise<void> {
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`HeyGen webhook trigger failed (${res.status}): ${text || "<empty response>"}`);
+    console.log(`[WEEKLY AD] Existing HeyGen webhook triggered: ${res.status} ${text || "<empty response>"}`);
   } catch (err) {
-    throw new Error(`Fetch failed: ${url} — ${getErrorMessage(err)}`);
-  } finally {
-    clearTimeout(timeout);
+    console.error("[WEEKLY AD] Existing HeyGen webhook trigger failed:", getErrorMessage(err));
+    await notifySlackError("Weekly Ad Webhook Trigger Failed", err, { weeklyAdId: adId });
   }
 }
 
 export async function getHeyGenVideo(videoId: string) {
-  const res = await fetchWithTimeout(`https://api.heygen.com/v3/videos/${videoId}`, { headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! } }, 30_000);
+  const res = await fetch(`https://api.heygen.com/v3/videos/${videoId}`, { headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! } });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -439,22 +440,18 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       weeklyAdId = existing._id;
       if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
       const existingHeyGenVideoId = existing.heygenVideoId;
+      // Existing HeyGen video: trigger webhook and immediately continue cron.
       if (existingHeyGenVideoId) {
         console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existingHeyGenVideoId}`);
-        const webhookUrl = `${process.env.BASE_URL}/api/webhooks/heygen`;
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenStatusValue = heygenStatus?.data?.status;
         if (heygenStatusValue === "completed") {
-          const webhookRes = await fetchWithTimeout(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event_type: "avatar_video.success", event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: heygenStatus.data.video_url } }),
-          }, 120_000);
-          const webhookText = await webhookRes.text();
-          if (!webhookRes.ok) throw new Error(`Existing HeyGen webhook failed (${webhookRes.status}): ${webhookText || "<empty response>"}`);
-          let webhookData: any = null;
-          try { webhookData = webhookText ? JSON.parse(webhookText) : null; } catch { throw new Error(`Existing HeyGen webhook returned invalid JSON: ${webhookText}`); }
-          if (!webhookData?.ok) throw new Error(`Existing HeyGen webhook failed: ${JSON.stringify(webhookData)}`);
+          const videoUrl = heygenStatus?.data?.video_url;
+          if (!videoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} is completed but has no video_url.`);
+          const webhookUrl = `${process.env.BASE_URL}/api/webhooks/heygen`;
+          void triggerHeyGenWebhook(webhookUrl, { event_type: "avatar_video.success", event_data: { callback_id: weeklyAdId, video_id: existingHeyGenVideoId, url: videoUrl } }, weeklyAdId);
+          result.heygenVideoId = existingHeyGenVideoId;
+          result.videoUrl = videoUrl;
           result.durationMs = Date.now() - start;
           await notifySlackResult("Weekly Ad Result", result);
           return result;
