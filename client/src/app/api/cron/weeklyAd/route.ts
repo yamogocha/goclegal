@@ -39,6 +39,27 @@ export async function POST(req: Request) {
   const unauthorized = verifyCronAuth(req);
   if (unauthorized) return unauthorized;
   const { searchParams } = new URL(req.url);
+
+  // Internal processor: runs B-roll + all publishing using the reusable weeklyAd function.
+  if (searchParams.get("process") === "true") {
+    try {
+      const body = await req.json();
+      const weeklyAdId = body?.weeklyAdId;
+      const heygenVideoId = body?.heygenVideoId;
+      const heygenVideoUrl = body?.heygenVideoUrl;
+      if (!weeklyAdId || !heygenVideoId || !heygenVideoUrl) {
+        return NextResponse.json({ ok: false, error: "Missing weeklyAdId, heygenVideoId, or heygenVideoUrl." }, { status: 400 });
+      }
+      const result = await processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl });
+      return NextResponse.json(result, { status: result?.ok === false ? 500 : 200 });
+    } catch (err) {
+      const error = getErrorMessage(err);
+      console.error("[WEEKLY AD PROCESS ERROR]", error);
+      return NextResponse.json({ ok: false, error }, { status: 500 });
+    }
+  }
+
+  // Normal weekly-ad cron.
   const dryRun = searchParams.get("dryRun") === "true";
   try {
     const result = await generateWeeklyAd({ dryRun });

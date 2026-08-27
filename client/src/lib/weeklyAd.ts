@@ -534,17 +534,20 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       weeklyAdId = existing._id;
       if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
       const existingHeyGenVideoId = existing.heygenVideoId;
-      // Existing HeyGen video: trigger the webhook without waiting for the long publishing pipeline.
+      // Existing HeyGen video: trigger processing asynchronously.
       if (existingHeyGenVideoId) {
         console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existingHeyGenVideoId}`);
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        result.heygenVideoId = existingHeyGenVideoId;
-        result.videoUrl = heygenVideoUrl;
-        result.durationMs = Date.now() - start;
+        const processUrl = `${process.env.BASE_URL}/api/cron/weeklyAd?process=true`;
+        fetch(processUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.CRON_SECRET}` },
+          body: JSON.stringify({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl }),
+        }).catch(err => notifySlackError("Weekly Ad Processing Trigger Failed", err, { weeklyAdId: existing._id }));
+        Object.assign(result, { heygenVideoId: existingHeyGenVideoId, videoUrl: heygenVideoUrl, durationMs: Date.now() - start });
         await notifySlackResult("Weekly Ad Result", result);
-        await processWeeklyAdVideo({ weeklyAdId, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl });
         return result;
       }
 
