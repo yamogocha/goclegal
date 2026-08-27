@@ -12,42 +12,47 @@ const openai = getOpenAI();
 const FADE = 0.35;
 const execFileAsync = promisify(execFile);
 
-type FfmpegCommand = {
-    ffprobe(file: string, callback: (err: Error | null, data: { format?: { duration?: number } }) => void): void;
-    (input?: string): any;
-    setFfmpegPath(path: string): void;
-    setFfprobePath(path: string): void;
-};
-
-let ffmpegInstance: FfmpegCommand | null = null;
+type LocalVideoSandbox = { dir: string; stop: () => Promise<void> };
+type CommandResult = { exitCode: number; stdout: () => Promise<string>; stderr: () => Promise<string> };
 
 async function findBinary(name: "ffmpeg" | "ffprobe"): Promise<string> {
-    const candidates = name === "ffmpeg"
-        ? ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        : ["/usr/bin/ffprobe", "/usr/local/bin/ffprobe"];
-    for (const candidate of candidates) {
-        try {
-            await fs.access(candidate);
-            return candidate;
-        } catch { }
-    }
+    const candidates = name === "ffmpeg" ? ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"] : ["/usr/bin/ffprobe", "/usr/local/bin/ffprobe"];
+    for (const candidate of candidates) { try { await fs.access(candidate); return candidate; } catch { } }
     const { stdout } = await execFileAsync("which", [name]);
     const resolved = stdout.trim();
-    if (!resolved) throw new Error(`${name} executable not found on the GitHub Actions runner.`);
+    if (!resolved) throw new Error(`${name} executable not found.`);
     return resolved;
 }
 
-async function getFfmpeg(): Promise<FfmpegCommand> {
-    if (ffmpegInstance) return ffmpegInstance;
-    const [{ default: ffmpeg }] = await Promise.all([import("fluent-ffmpeg")]);
-    const ffmpegPath = await findBinary("ffmpeg");
-    const ffprobePath = await findBinary("ffprobe");
-    ffmpeg.setFfmpegPath(ffmpegPath);
-    ffmpeg.setFfprobePath(ffprobePath);
-    ffmpegInstance = ffmpeg as FfmpegCommand;
-    console.log(`[FFMPEG] Using ${ffmpegPath}`);
-    console.log(`[FFPROBE] Using ${ffprobePath}`);
-    return ffmpegInstance;
+async function createVideoSandbox(): Promise<LocalVideoSandbox> {
+    const dir = await fs.mkdtemp(path.join("/tmp/", "weekly-video-"));
+    await findBinary("ffmpeg");
+    await findBinary("ffprobe");
+    return { dir, stop: async () => { await fs.rm(dir, { recursive: true, force: true }); } };
+}
+
+async function writeSandboxFile(sandbox: LocalVideoSandbox, sandboxPath: string, data: Buffer): Promise<void> {
+    const target = path.join(sandbox.dir, sandboxPath);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, data);
+}
+
+async function readSandboxFile(sandbox: LocalVideoSandbox, sandboxPath: string): Promise<Buffer> {
+    const data = await fs.readFile(path.join(sandbox.dir, sandboxPath));
+    if (!data) throw new Error(`Sandbox output missing: ${sandboxPath}`);
+    return data;
+}
+
+async function runSandboxCommand(sandbox: LocalVideoSandbox, cmd: string, args: string[]): Promise<CommandResult> {
+    const executable = cmd === "ffmpeg" ? await findBinary("ffmpeg") : cmd === "ffprobe" ? await findBinary("ffprobe") : cmd;
+    try {
+        const result = await execFileAsync(executable, args, { cwd: sandbox.dir, maxBuffer: 20 * 1024 * 1024 });
+        return { exitCode: 0, stdout: async () => result.stdout, stderr: async () => result.stderr };
+    } catch (error: any) {
+        const stdout = typeof error?.stdout === "string" ? error.stdout : "";
+        const stderr = typeof error?.stderr === "string" ? error.stderr : "";
+        return { exitCode: Number(error?.code) || 1, stdout: async () => stdout, stderr: async () => stderr };
+    }
 }
 
 // Types.
