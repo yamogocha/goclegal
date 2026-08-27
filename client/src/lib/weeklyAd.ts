@@ -452,7 +452,17 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
     let instagramPostId = ad.instagramPostId;
     let facebookPostId = ad.facebookPostId;
     if (!instagramPostId || !facebookPostId) {
-      const staticAds = await publishInstagramAndFacebook({ igUserId: process.env.IG_USER_ID!, fbPageId: process.env.FB_PAGE_ID!, userAccessToken: process.env.FB_USER_ACCESS_TOKEN!, pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!, imageUrl: ad.imageUrl, caption });
+      if (!ad.imageUrl) throw new Error(`Weekly ad ${weeklyAdId} has no static imageUrl.`);
+      const imageCheck = await fetch(ad.imageUrl, { method: "HEAD" });
+      if (!imageCheck.ok) throw new Error(`Static ad image is not publicly fetchable: ${ad.imageUrl} (${imageCheck.status})`);
+      const staticAds = await publishInstagramAndFacebook({
+        igUserId: process.env.IG_USER_ID!,
+        fbPageId: process.env.FB_PAGE_ID!,
+        userAccessToken: process.env.FB_USER_ACCESS_TOKEN!,
+        pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!,
+        imageUrl: ad.imageUrl,
+        caption,
+      });
       instagramPostId = staticAds.instagramPostId;
       facebookPostId = staticAds.facebookPostId;
       await serverClient.patch(ad._id).set({ instagramPostId, facebookPostId }).commit();
