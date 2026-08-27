@@ -540,18 +540,11 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        const processUrl = `${process.env.BASE_URL}/api/cron/weeklyAd?process=true`;
-        void fetch(processUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.CRON_SECRET}` },
-          body: JSON.stringify({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl }),
-        }).then(async response => {
-          if (!response.ok) throw new Error(`Weekly ad processing returned HTTP ${response.status}: ${await response.text()}`);
-        }).catch(err => notifySlackError("Weekly Ad Processing Trigger Failed", err, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId }));
         result.heygenVideoId = existingHeyGenVideoId;
         result.videoUrl = heygenVideoUrl;
         result.durationMs = Date.now() - start;
         await notifySlackResult("Weekly Ad Result", result);
+        await processWeeklyAdVideo({ weeklyAdId, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl });
         return result;
       }
 
