@@ -420,8 +420,8 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
     const ad = await client.getDocument(weeklyAdId);
     if (!ad) throw new Error(`Weekly ad not found for ${weeklyAdId}`);
     if (ad.status === "completed") return { ok: true, duplicate: true, weeklyAdId };
-    if (ad.status === "publishing") return { ok: true, duplicate: true, weeklyAdId };
-    await serverClient.patch(ad._id).set({ status: "publishing", heygenVideoId }).commit();
+    // "publishing" means a previous attempt may have stopped; resume the pipeline instead of exiting.
+    await serverClient.patch(ad._id).set({ status: "publishing", heygenVideoId, error: null }).commit();
 
     // Download HeyGen video.
     const download = await fetch(heygenVideoUrl);
@@ -495,23 +495,26 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
       await serverClient.patch(ad._id).set({ gbpMediaName }).commit();
     }
 
-    // Complete and clean up.
-    await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString(), heygenVideoId, brollVideoUrl: reelUrl }).commit();
+    // Mark complete only after every publication succeeds.
+    await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString(), error: null }).commit();
     completed = true;
+
+    // Cleanup temporary assets.
     await deleteSanityAsset(temporaryVideoAssetId);
     await deleteSanityAsset(ad.imageAssetId);
     await serverClient.delete(ad._id).catch(err => console.error("[SANITY] Temporary weeklyAd deletion failed:", err));
     if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
 
-    // Completion Slack notification.
+    // Completion notification must never fail the successful pipeline.
     await notifySlackResult("Weekly Ad Completed", { weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName, durationMs: Date.now() - started }).catch(err => console.error("[SLACK] Completion notification failed:", err));
+
     return { ok: true, weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName };
   } catch (err) {
     if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
     if (!completed) {
       if (temporaryVideoAssetId) await deleteSanityAsset(temporaryVideoAssetId);
-      const ad = await client.getDocument(weeklyAdId).catch(() => null);
-      if (ad?._id) await serverClient.patch(ad._id).set({ status: "pending", error: getErrorMessage(err) }).commit().catch(cleanupErr => console.error("[SANITY] Failed resetting weeklyAd:", cleanupErr));
+      const currentAd = await client.getDocument(weeklyAdId).catch(() => null);
+      if (currentAd?._id) await serverClient.patch(currentAd._id).set({ status: "pending", error: getErrorMessage(err) }).commit().catch(cleanupErr => console.error("[SANITY] Failed resetting weeklyAd:", cleanupErr));
     }
     await notifySlackError("Weekly Ad Processing Failure", err, { weeklyAdId, heygenVideoId });
     throw err;
