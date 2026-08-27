@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 
 export const runtime = "nodejs";
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 // Local B-roll test only; videoAd is loaded dynamically so FFmpeg stays out of the cron bundle.
 export async function GET() {
