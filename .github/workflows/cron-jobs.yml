@@ -162,9 +162,7 @@ jobs:
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running weekly ad"
-
           npx tsx scripts/weeklyAd.ts
 
        # GOOGLE ADS ADJUSTMENTS

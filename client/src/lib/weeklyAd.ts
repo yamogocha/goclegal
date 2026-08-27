@@ -521,6 +521,20 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
   }
 }
 
+export async function waitForHeyGenVideo(videoId: string, timeoutMs = 15 * 60_000): Promise<string> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const status = await getHeyGenVideo(videoId);
+    const state = status?.data?.status;
+    const url = status?.data?.video_url;
+    if (state === "completed" && url) return url;
+    if (state === "failed") throw new Error(`HeyGen video ${videoId} failed: ${status?.data?.failure_reason ?? "unknown reason"}`);
+    console.log(`[HEYGEN] ${videoId}: ${state ?? "processing"}`);
+    await new Promise<void>(resolve => setTimeout(resolve, 10_000));
+  }
+  throw new Error(`HeyGen video ${videoId} timed out after ${timeoutMs / 60000} minutes.`);
+}
+
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
@@ -539,17 +553,12 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       const existingHeyGenVideoId = existing.heygenVideoId;
       // Existing HeyGen video: trigger processing asynchronously.
       if (existingHeyGenVideoId) {
-        console.log(`[WEEKLY AD] Resuming existing HeyGen video for "${title}": ${existingHeyGenVideoId}`);
+        console.log(`[WEEKLY AD] Existing HeyGen video found for "${title}": ${existingHeyGenVideoId}`);
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        const processUrl = `${process.env.BASE_URL}/api/cron/weeklyAd?process=true`;
-        fetch(processUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.CRON_SECRET}` },
-          body: JSON.stringify({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl }),
-        }).catch(err => notifySlackError("Weekly Ad Processing Trigger Failed", err, { weeklyAdId: existing._id }));
-        Object.assign(result, { heygenVideoId: existingHeyGenVideoId, videoUrl: heygenVideoUrl, durationMs: Date.now() - start });
+        Object.assign(result, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, videoUrl: heygenVideoUrl, heygenReady: true });
+        result.durationMs = Date.now() - start;
         await notifySlackResult("Weekly Ad Result", result);
         return result;
       }
