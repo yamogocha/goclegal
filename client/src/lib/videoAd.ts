@@ -5,39 +5,49 @@ import path from "node:path";
 import sharp from "sharp";
 import { getOpenAI, storyboardFromLibraryPrompt } from "./openai";
 import { serverClient } from "@/sanity/serverClient";
-import { Sandbox } from "@vercel/sandbox";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 const openai = getOpenAI();
 const FADE = 0.35;
+const execFileAsync = promisify(execFile);
 
-async function runSandboxCommand(sandbox: Sandbox, cmd: string, args: string[]) {
-    const result = await sandbox.runCommand({ cmd, args });
-    if (result.exitCode !== 0) throw new Error(`Sandbox command failed: ${cmd} ${args.join(" ")}\n${await result.stderr()}`);
-    return result;
+type FfmpegCommand = {
+    ffprobe(file: string, callback: (err: Error | null, data: { format?: { duration?: number } }) => void): void;
+    (input?: string): any;
+    setFfmpegPath(path: string): void;
+    setFfprobePath(path: string): void;
+};
+
+let ffmpegInstance: FfmpegCommand | null = null;
+
+async function findBinary(name: "ffmpeg" | "ffprobe"): Promise<string> {
+    const candidates = name === "ffmpeg"
+        ? ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+        : ["/usr/bin/ffprobe", "/usr/local/bin/ffprobe"];
+    for (const candidate of candidates) {
+        try {
+            await fs.access(candidate);
+            return candidate;
+        } catch { }
+    }
+    const { stdout } = await execFileAsync("which", [name]);
+    const resolved = stdout.trim();
+    if (!resolved) throw new Error(`${name} executable not found on the GitHub Actions runner.`);
+    return resolved;
 }
 
-async function createVideoSandbox(): Promise<Sandbox> {
-    const sandbox = await Sandbox.create({ runtime: "node22", timeout: 10 * 60 * 1000, persistent: false });
-    const cwd = await sandbox.runCommand({ cmd: "pwd", args: [] });
-    if (cwd.exitCode !== 0) throw new Error(`Unable to determine Sandbox working directory.\n${await cwd.stderr()}`);
-    const workdir = (await cwd.stdout()).trim();
-    await runSandboxCommand(sandbox, "npm", ["init", "-y"]);
-    await runSandboxCommand(sandbox, "npm", ["install", "--no-save", "ffmpeg-static", "ffprobe-static"]);
-    await runSandboxCommand(sandbox, "ln", ["-sf", `${workdir}/node_modules/ffmpeg-static/ffmpeg`, "/usr/local/bin/ffmpeg"]);
-    await runSandboxCommand(sandbox, "ln", ["-sf", `${workdir}/node_modules/ffprobe-static/bin/linux/x64/ffprobe`, "/usr/local/bin/ffprobe"]);
-    await runSandboxCommand(sandbox, "ffmpeg", ["-version"]);
-    await runSandboxCommand(sandbox, "ffprobe", ["-version"]);
-    return sandbox;
-}
-
-async function writeSandboxFile(sandbox: Sandbox, sandboxPath: string, data: Buffer) {
-    await sandbox.writeFiles([{ path: sandboxPath, content: data }]);
-}
-
-async function readSandboxFile(sandbox: Sandbox, sandboxPath: string): Promise<Buffer> {
-    const data = await sandbox.readFileToBuffer({ path: sandboxPath });
-    if (!data) throw new Error(`Sandbox output missing: ${sandboxPath}`);
-    return data;
+async function getFfmpeg(): Promise<FfmpegCommand> {
+    if (ffmpegInstance) return ffmpegInstance;
+    const [{ default: ffmpeg }] = await Promise.all([import("fluent-ffmpeg")]);
+    const ffmpegPath = await findBinary("ffmpeg");
+    const ffprobePath = await findBinary("ffprobe");
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+    ffmpegInstance = ffmpeg as FfmpegCommand;
+    console.log(`[FFMPEG] Using ${ffmpegPath}`);
+    console.log(`[FFPROBE] Using ${ffprobePath}`);
+    return ffmpegInstance;
 }
 
 // Types.

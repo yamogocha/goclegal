@@ -145,7 +145,13 @@ jobs:
           echo "Voice ID length: ${#HEYGEN_VOICE_ID}"
 
       - name: Install deps
-        run: npm ci
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+          npm ci
 
       # WEEKLY BLOG
       - name: Weekly blog
