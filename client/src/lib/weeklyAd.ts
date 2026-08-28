@@ -387,17 +387,6 @@ async function saveStaticAdToSanity(imageBuffer: Buffer, filename: string) {
   }
 }
 
-// Temporary Sanity file asset; delete after all publishing completes.
-async function saveReelToSanity(videoBuffer: Buffer, filename: string) {
-  try {
-    const asset = await serverClient.assets.upload("file", videoBuffer, { filename, contentType: "video/mp4" });
-    return { assetId: asset._id, url: asset.url };
-  } catch (err) {
-    await notifySlackError("Weekly Ad Sanity Video Upload Failed", err, { filename });
-    throw err;
-  }
-}
-
 async function deleteSanityAsset(assetId?: string) {
   if (!assetId) return;
   try {
@@ -515,20 +504,6 @@ export async function processWeeklyBrollVideo({ weeklyAdId, heygenVideoId, heyge
   }
 }
 
-async function waitForHeyGenVideo(videoId: string, timeoutMs = 15 * 60_000): Promise<string> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const status = await getHeyGenVideo(videoId);
-    const state = status?.data?.status;
-    const url = status?.data?.video_url;
-    if (state === "completed" && url) return url;
-    if (state === "failed") throw new Error(`HeyGen video ${videoId} failed: ${status?.data?.failure_reason ?? "unknown reason"}`);
-    console.log(`[HEYGEN] ${videoId}: ${state ?? "processing"}`);
-    await new Promise<void>(resolve => setTimeout(resolve, 10_000));
-  }
-  throw new Error(`HeyGen video ${videoId} timed out after ${timeoutMs / 60000} minutes.`);
-}
-
 export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } = {}) {
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
@@ -638,4 +613,7 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
     return { ok: false, error: getErrorMessage(err), weeklyAdId, durationMs: Date.now() - start };
   }
 }
+
+// TEMP: One-time repair for a deleted static weekly-ad image.
+export async function repairWeeklyAdStaticImage(weeklyAdId: string) { const ad = await serverClient.fetch<{ _id: string; title: string; caption: string; hashtags: string[]; slug: string } | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,title,caption,hashtags,slug}`, { id: weeklyAdId }); if (!ad) throw new Error(`Weekly ad not found: ${weeklyAdId}`); console.log(`[REPAIR] Regenerating static ad image for ${ad._id}`); const imageBuffer = await generateImage({ caption: ad.caption, weekNumber: getWeekOfMonth() }); const imageAsset = await saveStaticAdToSanity(imageBuffer, `${ad.slug}.png`); const caption = buildInstagramCaption(ad.caption, ad.hashtags); console.log(`[REPAIR] New Sanity image: ${imageAsset.url}`); const staticAds = await publishInstagramAndFacebook({ igUserId: process.env.IG_USER_ID!, fbPageId: process.env.FB_PAGE_ID!, userAccessToken: process.env.FB_USER_ACCESS_TOKEN!, pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!, imageUrl: imageAsset.url, caption, }); await serverClient.patch(ad._id).set({ imageUrl: imageAsset.url, imageAssetId: imageAsset.assetId, instagramPostId: staticAds.instagramPostId, facebookPostId: staticAds.facebookPostId, error: null, }).commit(); console.log(`[REPAIR] Static ad repaired successfully.`); return { ok: true, weeklyAdId: ad._id, imageUrl: imageAsset.url, imageAssetId: imageAsset.assetId, instagramPostId: staticAds.instagramPostId, facebookPostId: staticAds.facebookPostId, }; }
 
