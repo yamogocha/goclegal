@@ -1,13 +1,13 @@
 import { getErrorMessage } from "@/lib/error";
 import { verifyCronAuth } from "@/lib/oauth";
-import { generateWeeklyAd, processWeeklyAdVideo } from "@/lib/weeklyAd";
+import { generateWeeklyAd } from "@/lib/weeklyAd";
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-// Local B-roll test only; videoAd is loaded dynamically so FFmpeg stays out of the cron bundle.
+// Local B-roll test only.
 export async function GET() {
   try {
     const { generateStoryboard, generateAssets, alignStoryboardToAvatar, storyboardToAlignedTimeline, renderBrollVideo, getVideoDuration } = await import("@/lib/videoAd");
@@ -35,35 +35,15 @@ export async function GET() {
   }
 }
 
+// Production cron entry point: generateWeeklyAd owns the complete workflow.
 export async function POST(req: Request) {
   const unauthorized = verifyCronAuth(req);
   if (unauthorized) return unauthorized;
   const { searchParams } = new URL(req.url);
-
-  // Internal processor: runs B-roll + all publishing using the reusable weeklyAd function.
-  if (searchParams.get("process") === "true") {
-    try {
-      const body = await req.json();
-      const weeklyAdId = body?.weeklyAdId;
-      const heygenVideoId = body?.heygenVideoId;
-      const heygenVideoUrl = body?.heygenVideoUrl;
-      if (!weeklyAdId || !heygenVideoId || !heygenVideoUrl) {
-        return NextResponse.json({ ok: false, error: "Missing weeklyAdId, heygenVideoId, or heygenVideoUrl." }, { status: 400 });
-      }
-      const result = await processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl });
-      return NextResponse.json(result, { status: result?.ok === false ? 500 : 200 });
-    } catch (err) {
-      const error = getErrorMessage(err);
-      console.error("[WEEKLY AD PROCESS ERROR]", error);
-      return NextResponse.json({ ok: false, error }, { status: 500 });
-    }
-  }
-
-  // Normal weekly-ad cron.
   const dryRun = searchParams.get("dryRun") === "true";
   try {
     const result = await generateWeeklyAd({ dryRun });
-    const failed = !result?.ok || result?.igError || result?.youtubeError || result?.gbpError;
+    const failed = !result?.ok;
     if (failed) {
       console.error("[WEEKLY AD ROUTE FAILED]", JSON.stringify(result, null, 2));
       return NextResponse.json({ ok: false, result }, { status: 500 });

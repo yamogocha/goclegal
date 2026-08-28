@@ -1,51 +1,39 @@
-// scripts/weeklyAd.ts
 import { getErrorMessage } from "@/lib/error";
-import { generateWeeklyAd, getHeyGenVideo, processWeeklyAdVideo, waitForHeyGenVideo } from "../src/lib/weeklyAd";
+import { generateWeeklyAd, processWeeklyBrollVideo } from "../src/lib/weeklyAd";
 
 async function main() {
   const dryRun = process.env.DRY_RUN === "true";
+  const weeklyAdId = process.env.WEEKLY_AD_ID;
+  const heygenVideoId = process.env.HEYGEN_VIDEO_ID;
+  const heygenVideoUrl = process.env.HEYGEN_VIDEO_URL;
   const start = Date.now();
+
   console.log("[WEEKLY AD] Starting job");
-  console.log(JSON.stringify({ dryRun, startedAt: new Date().toISOString() }, null, 2));
+  console.log(JSON.stringify({ dryRun, weeklyAdId, heygenVideoId, startedAt: new Date().toISOString() }, null, 2));
 
   try {
-    const result = await generateWeeklyAd({ dryRun });
-    if (!result) throw new Error("Weekly ad returned empty result.");
-
-    if (!result.ok) throw new Error(result.error ?? "Weekly ad generation failed.");
-    if (dryRun) {
-      console.log("[WEEKLY AD] Dry run complete.");
-      console.log(JSON.stringify({ ok: true, result }, null, 2));
-      process.exit(0);
-    }
-
-    // GitHub Actions owns the long-running B-roll/publishing process.
-    if (result.weeklyAdId && result.heygenVideoId) {
-      const heygenVideoId = result.heygenVideoId;
-      const heygenStatus = await getHeyGenVideo(heygenVideoId);
-      let heygenVideoUrl = heygenStatus?.data?.video_url;
-
-      if (!heygenVideoUrl) {
-        heygenVideoUrl = await waitForHeyGenVideo(heygenVideoId);
-      }
-
+    // GitHub repository_dispatch path: process the completed HeyGen video.
+    if (weeklyAdId && heygenVideoId && heygenVideoUrl) {
       console.log(`[WEEKLY AD] Processing HeyGen video ${heygenVideoId} on GitHub runner.`);
-      const processed = await processWeeklyAdVideo({
-        weeklyAdId: result.weeklyAdId,
-        heygenVideoId,
-        heygenVideoUrl,
-      });
-
-      if (!processed?.ok) throw new Error("Weekly ad video processing failed.");
-
-      console.log("::group::Weekly Ad Result");
-      console.log(JSON.stringify({ ok: true, durationMs: Date.now() - start, result: processed }, null, 2));
+      const result = await processWeeklyBrollVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl });
+      if (!result?.ok) throw new Error("Weekly B-roll processing failed.");
+      console.log("::group::Weekly Ad Processing Result");
+      console.log(JSON.stringify({ ok: true, durationMs: Date.now() - start, result }, null, 2));
       console.log("::endgroup::");
       console.log("[WEEKLY AD SUCCESS]");
       process.exit(0);
     }
 
-    throw new Error("Weekly ad did not return weeklyAdId and heygenVideoId.");
+    // Normal Monday cron path: create static ad + HeyGen video.
+    const result = await generateWeeklyAd({ dryRun });
+    if (!result) throw new Error("Weekly ad returned empty result.");
+    if (!result.ok) throw new Error(result.error ?? "Weekly ad generation failed.");
+
+    console.log("::group::Weekly Ad Result");
+    console.log(JSON.stringify({ ok: true, durationMs: Date.now() - start, result }, null, 2));
+    console.log("::endgroup::");
+    console.log("[WEEKLY AD SUCCESS]");
+    process.exit(0);
   } catch (err) {
     const error = getErrorMessage(err);
     console.error("[WEEKLY AD SCRIPT ERROR]", error);

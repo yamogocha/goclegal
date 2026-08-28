@@ -9,11 +9,8 @@ import { getErrorMessage, notifySlackError, notifySlackResult } from "./error";
 import { serverClient } from "@/sanity/serverClient";
 
 export const runtime = "nodejs";
-
-const ACTIVE_STATUSES = ["pending", "publishing", "completed"] as const;
 type WeeklyAdRecord = { _id: string; title: string; status: string; heygenVideoId?: string; };
-async function findCompletedWeeklyAd(title: string): Promise<WeeklyAdRecord | null> { return serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title && status in $statuses][0]{_id,title,status,heygenVideoId}`, { title, statuses: ACTIVE_STATUSES }); }
-async function skipIfCompleted(title: string): Promise<WeeklyAdRecord | null> { const existing = await findCompletedWeeklyAd(title); if (existing) console.log(`[WEEKLY AD] Skipping "${title}" — existing ${existing.status} ad already exists: ${existing._id}`); return existing; }
+
 async function markWeeklyAdFailed(adId: string | undefined, error: unknown) { if (!adId) return; await serverClient.patch(adId).set({ status: "failed", error: getErrorMessage(error) }).commit(); }
 
 const openai = getOpenAI();
@@ -27,12 +24,12 @@ const CreativeSchema = z.object({
 });
 type Creative = z.infer<typeof CreativeSchema>;
 
-export function getWeekOfMonth(date: Date = new Date()): 1 | 2 | 3 | 4 {
+function getWeekOfMonth(date: Date = new Date()): 1 | 2 | 3 | 4 {
   const week = Math.ceil(date.getDate() / 7);
   return Math.min(week, 4) as 1 | 2 | 3 | 4;
 }
 
-export async function generateScript(params: { title: string; headline: string }): Promise<Script> {
+async function generateScript(params: { title: string; headline: string }): Promise<Script> {
   try {
     const prompt = weeklyVideoPrompt(params);
 
@@ -57,7 +54,7 @@ export async function generateScript(params: { title: string; headline: string }
   }
 }
 
-export async function generateCaption(params: { title: string; headline: string }): Promise<Creative> {
+async function generateCaption(params: { title: string; headline: string }): Promise<Creative> {
   try {
     const prompt = weeklyAdCaptionPrompt(params);
 
@@ -82,7 +79,7 @@ export async function generateCaption(params: { title: string; headline: string 
   }
 }
 
-export async function generateImage({ caption, template = "instagram", weekNumber }: { caption: string; template?: "instagram" | "youtube"; weekNumber?: 1 | 2 | 3 | 4 }) {
+async function generateImage({ caption, template = "instagram", weekNumber }: { caption: string; template?: "instagram" | "youtube"; weekNumber?: 1 | 2 | 3 | 4 }) {
   try {
     const week = weekNumber ?? getWeekOfMonth();
     const templateName = template === "instagram" ? `instagram-ad-${week}.png` : `youtube-short-${week}.png`;
@@ -123,7 +120,7 @@ export async function generateImage({ caption, template = "instagram", weekNumbe
   }
 }
 
-export async function createHeyGenVideo({
+async function createHeyGenVideo({
   script,
   date,
   adId,
@@ -153,12 +150,12 @@ export async function createHeyGenVideo({
   return videoId;
 }
 
-export function buildInstagramCaption(message: string, hashtags: string[]) {
+function buildInstagramCaption(message: string, hashtags: string[]) {
   const tags = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
   return `${message}\n\n${tags}`.trim();
 }
 
-export async function publishInstagramAndFacebook(opts: { igUserId: string; fbPageId: string; userAccessToken: string; pageAccessToken: string; imageUrl: string; caption: string }) {
+async function publishInstagramAndFacebook(opts: { igUserId: string; fbPageId: string; userAccessToken: string; pageAccessToken: string; imageUrl: string; caption: string }) {
   // INSTAGRAM
   const igCreateUrl = `https://graph.facebook.com/v20.0/${opts.igUserId}/media`;
   const igForm = new URLSearchParams();
@@ -221,7 +218,7 @@ export async function publishInstagramAndFacebook(opts: { igUserId: string; fbPa
   return { instagramPostId: igPublishData.id, facebookPostId: fbData.post_id ?? fbData.id };
 }
 
-export async function publishInstagramReel(opts: {
+async function publishInstagramReel(opts: {
   igUserId: string;
   userAccessToken: string;
   reelUrl: string;
@@ -281,7 +278,7 @@ export async function publishInstagramReel(opts: {
   }
 }
 
-export async function publishFacebookReel(opts: {
+async function publishFacebookReel(opts: {
   fbPageId: string;
   pageAccessToken: string;
   reelUrl: string;
@@ -301,7 +298,7 @@ export async function publishFacebookReel(opts: {
   return data.id;
 }
 
-export async function uploadYoutubeVideo({ videoBuffer, title, description }: { videoBuffer: Buffer; title: string; description: string }) {
+async function uploadYoutubeVideo({ videoBuffer, title, description }: { videoBuffer: Buffer; title: string; description: string }) {
   const accessToken = await getGoogleAccessToken();
   const initRes = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
     method: "POST",
@@ -351,7 +348,7 @@ export async function uploadYoutubeVideo({ videoBuffer, title, description }: { 
   return uploadData.id as string;
 }
 
-export async function uploadGBPMedia({ accountId, locationId, imageUrl }: { accountId: string; locationId: string; imageUrl: string }) {
+async function uploadGBPMedia({ accountId, locationId, imageUrl }: { accountId: string; locationId: string; imageUrl: string }) {
   const accessToken = await getGoogleAccessToken();
   const url = `https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/media`;
   const payload = { mediaFormat: "PHOTO", locationAssociation: { category: "ADDITIONAL" }, sourceUrl: imageUrl };
@@ -373,14 +370,14 @@ export async function uploadGBPMedia({ accountId, locationId, imageUrl }: { acco
   return data.name as string;
 }
 
-export async function getHeyGenVideo(videoId: string) {
+async function getHeyGenVideo(videoId: string) {
   const res = await fetch(`https://api.heygen.com/v3/videos/${videoId}`, { headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! } });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 // Temporary Sanity image asset; delete after all publishing completes.
-export async function saveStaticAdToSanity(imageBuffer: Buffer, filename: string) {
+async function saveStaticAdToSanity(imageBuffer: Buffer, filename: string) {
   try {
     const asset = await serverClient.assets.upload("image", imageBuffer, { filename, contentType: "image/png" });
     return { assetId: asset._id, url: asset.url };
@@ -391,7 +388,7 @@ export async function saveStaticAdToSanity(imageBuffer: Buffer, filename: string
 }
 
 // Temporary Sanity file asset; delete after all publishing completes.
-export async function saveReelToSanity(videoBuffer: Buffer, filename: string) {
+async function saveReelToSanity(videoBuffer: Buffer, filename: string) {
   try {
     const asset = await serverClient.assets.upload("file", videoBuffer, { filename, contentType: "video/mp4" });
     return { assetId: asset._id, url: asset.url };
@@ -401,7 +398,7 @@ export async function saveReelToSanity(videoBuffer: Buffer, filename: string) {
   }
 }
 
-export async function deleteSanityAsset(assetId?: string) {
+async function deleteSanityAsset(assetId?: string) {
   if (!assetId) return;
   try {
     await serverClient.delete(assetId);
@@ -411,16 +408,23 @@ export async function deleteSanityAsset(assetId?: string) {
   }
 }
 
-export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl }: { weeklyAdId: string; heygenVideoId: string; heygenVideoUrl: string }) {
+export async function processWeeklyBrollVideo({ weeklyAdId, heygenVideoId, heygenVideoUrl }: { weeklyAdId: string; heygenVideoId: string; heygenVideoUrl: string }) {
   const started = Date.now();
   let tempAvatarPath: string | undefined;
   let temporaryVideoAssetId: string | undefined;
   let completed = false;
+
   try {
+    // Load the existing weekly ad record.
     const ad = await client.getDocument(weeklyAdId);
     if (!ad) throw new Error(`Weekly ad not found for ${weeklyAdId}`);
-    if (ad.status === "completed") return { ok: true, duplicate: true, weeklyAdId };
-    // "publishing" means a previous attempt may have stopped; resume the pipeline instead of exiting.
+    if (ad.status === "completed") return { ok: true, duplicate: true, weeklyAdId, heygenVideoId, instagramPostId: ad.instagramPostId, facebookPostId: ad.facebookPostId, instagramReelId: ad.instagramReelId, facebookReelId: ad.facebookReelId, youtubeVideoId: ad.youtubeVideoId, gbpMediaName: ad.gbpMediaName };
+
+    // Static Instagram/Facebook posts are created by generateWeeklyAd().
+    const instagramPostId = ad.instagramPostId;
+    const facebookPostId = ad.facebookPostId;
+
+    // Mark the existing record as publishing.
     await serverClient.patch(ad._id).set({ status: "publishing", heygenVideoId, error: null }).commit();
 
     // Download HeyGen video.
@@ -442,31 +446,11 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
     temporaryVideoAssetId = rendered.assetId;
     const reelUrl = rendered.url;
 
-    // Download rendered B-roll video.
+    // Download rendered B-roll video for YouTube.
     const renderedDownload = await fetch(reelUrl);
     if (!renderedDownload.ok) throw new Error(`Unable to download rendered B-roll video: ${renderedDownload.status} ${renderedDownload.statusText}`);
     const renderedBuffer = Buffer.from(await renderedDownload.arrayBuffer());
     const caption = buildInstagramCaption(ad.caption, ad.hashtags);
-
-    // Static Instagram + Facebook.
-    let instagramPostId = ad.instagramPostId;
-    let facebookPostId = ad.facebookPostId;
-    if (!instagramPostId || !facebookPostId) {
-      if (!ad.imageUrl) throw new Error(`Weekly ad ${weeklyAdId} has no static imageUrl.`);
-      const imageCheck = await fetch(ad.imageUrl, { method: "HEAD" });
-      if (!imageCheck.ok) throw new Error(`Static ad image is not publicly fetchable: ${ad.imageUrl} (${imageCheck.status})`);
-      const staticAds = await publishInstagramAndFacebook({
-        igUserId: process.env.IG_USER_ID!,
-        fbPageId: process.env.FB_PAGE_ID!,
-        userAccessToken: process.env.FB_USER_ACCESS_TOKEN!,
-        pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!,
-        imageUrl: ad.imageUrl,
-        caption,
-      });
-      instagramPostId = staticAds.instagramPostId;
-      facebookPostId = staticAds.facebookPostId;
-      await serverClient.patch(ad._id).set({ instagramPostId, facebookPostId }).commit();
-    }
 
     // Instagram Reel.
     let instagramReelId = ad.instagramReelId;
@@ -505,33 +489,33 @@ export async function processWeeklyAdVideo({ weeklyAdId, heygenVideoId, heygenVi
       await serverClient.patch(ad._id).set({ gbpMediaName }).commit();
     }
 
-    // Mark complete only after every publication succeeds.
+    // Complete only after every B-roll publication succeeds.
     await serverClient.patch(ad._id).set({ status: "completed", completedAt: new Date().toISOString(), error: null }).commit();
     completed = true;
 
-    // Cleanup temporary assets.
-    await deleteSanityAsset(temporaryVideoAssetId);
-    await deleteSanityAsset(ad.imageAssetId);
-    await serverClient.delete(ad._id).catch(err => console.error("[SANITY] Temporary weeklyAd deletion failed:", err));
+    // Delete only the temporary rendered B-roll asset and local HeyGen file.
+    if (temporaryVideoAssetId) await deleteSanityAsset(temporaryVideoAssetId);
     if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
 
-    // Completion notification must never fail the successful pipeline.
-    await notifySlackResult("Weekly Ad Completed", { weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName, durationMs: Date.now() - started }).catch(err => console.error("[SLACK] Completion notification failed:", err));
+    // Static post IDs are preserved from generateWeeklyAd().
+    await notifySlackResult("Weekly Ad Completed", { weeklyAdId, videoUrl: reelUrl, heygenVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, youtubeVideoId, gbpMediaName, durationMs: Date.now() - started }).catch(err => console.error("[SLACK] Completion notification failed:", err));
 
-    return { ok: true, weeklyAdId, videoUrl: reelUrl, heygenVideoId, youtubeVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, gbpMediaName };
+    return { ok: true, weeklyAdId, videoUrl: reelUrl, heygenVideoId, instagramPostId, facebookPostId, instagramReelId, facebookReelId, youtubeVideoId, gbpMediaName };
   } catch (err) {
     if (tempAvatarPath) await fs.promises.unlink(tempAvatarPath).catch(() => { });
+
     if (!completed) {
       if (temporaryVideoAssetId) await deleteSanityAsset(temporaryVideoAssetId);
       const currentAd = await client.getDocument(weeklyAdId).catch(() => null);
       if (currentAd?._id) await serverClient.patch(currentAd._id).set({ status: "pending", error: getErrorMessage(err) }).commit().catch(cleanupErr => console.error("[SANITY] Failed resetting weeklyAd:", cleanupErr));
     }
+
     await notifySlackError("Weekly Ad Processing Failure", err, { weeklyAdId, heygenVideoId });
     throw err;
   }
 }
 
-export async function waitForHeyGenVideo(videoId: string, timeoutMs = 15 * 60_000): Promise<string> {
+async function waitForHeyGenVideo(videoId: string, timeoutMs = 15 * 60_000): Promise<string> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const status = await getHeyGenVideo(videoId);
@@ -549,63 +533,63 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
   const start = Date.now();
   const result: any = { ok: true, dryRun, durationMs: 0 };
   let weeklyAdId: string | undefined;
-  let imageAssetId: string | undefined;
   try {
     const post = await client.fetch<{ title: string; headline: string; slug: string; date: string }>(`*[_type=="post" && defined(date)] | order(date desc)[0]{title,headline,"slug":slug.current,date}`);
     if (!post) throw new Error("No blog post found.");
     const { title, headline, slug, date } = post;
 
-    // Resume an existing weekly ad before generating anything new.
+    // Existing records only resume B-roll/video processing.
     const existing = await serverClient.fetch<WeeklyAdRecord | null>(`*[_type=="weeklyAd" && title==$title][0]{_id,title,status,heygenVideoId}`, { title });
     if (existing) {
       weeklyAdId = existing._id;
       if (existing.status === "completed") return { ...result, skipped: true, reason: "completed", weeklyAdId: existing._id, heygenVideoId: existing.heygenVideoId, durationMs: Date.now() - start };
+
       const existingHeyGenVideoId = existing.heygenVideoId;
-      // Existing HeyGen video: trigger processing asynchronously.
+
+      // Existing HeyGen video: process B-roll and publish all remaining platforms now.
       if (existingHeyGenVideoId) {
         console.log(`[WEEKLY AD] Existing HeyGen video found for "${title}": ${existingHeyGenVideoId}`);
         const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
         const heygenVideoUrl = heygenStatus?.data?.video_url;
         if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        Object.assign(result, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, videoUrl: heygenVideoUrl, heygenReady: true });
+        console.log(`[WEEKLY AD] Processing existing HeyGen video ${existingHeyGenVideoId} on GitHub runner.`);
+        const processed = await processWeeklyBrollVideo({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl });
+        Object.assign(result, processed, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId });
         result.durationMs = Date.now() - start;
         await notifySlackResult("Weekly Ad Result", result);
         return result;
       }
 
-      // Existing record without HeyGen can be reused instead of creating another weeklyAd.
+      // Existing record without HeyGen: create HeyGen; its webhook will process B-roll.
       console.log(`[WEEKLY AD] Existing ad has no HeyGen video yet: ${existing._id}`);
-      const existingAd = await serverClient.fetch<{ _id: string; imageAssetId?: string; imageUrl?: string; script: string } | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,imageAssetId,imageUrl,script}`, { id: existing._id });
+      const existingAd = await serverClient.fetch<{ _id: string; script: string } | null>(`*[_type=="weeklyAd" && _id==$id][0]{_id,script}`, { id: existing._id });
       if (!existingAd) throw new Error(`Weekly ad not found: ${existing._id}`);
-      imageAssetId = existingAd.imageAssetId;
       const heygenVideoId = await createHeyGenVideo({ script: existingAd.script, date, adId: existing._id });
       await serverClient.patch(existing._id).set({ heygenVideoId, status: "pending" }).commit();
       Object.assign(result, { heygenVideoId, weeklyAdId: existing._id });
+
       if (dryRun) {
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 5000));
           const status = await getHeyGenVideo(heygenVideoId);
-          if (status.data.status === "completed") {
-            result.videoUrl = status.data.video_url;
-            result.durationMs = Date.now() - start;
-            return result;
-          }
+          if (status.data.status === "completed") { result.videoUrl = status.data.video_url; result.durationMs = Date.now() - start; return result; }
           if (status.data.status === "failed") throw new Error(status.data.failure_reason);
         }
         throw new Error("HeyGen timed out.");
       }
+
       result.durationMs = Date.now() - start;
       await notifySlackResult("Weekly Ad Result", result);
       return result;
     }
 
-    // Generate a new weekly ad only when no existing record exists.
+    // New weekly ad: generate script, caption, static image, and publish static posts immediately.
     const { script } = await generateScript({ title, headline });
     const { caption, hashtags } = await generateCaption({ title, headline });
     const imageBuffer = await generateImage({ caption, weekNumber: getWeekOfMonth() });
     const imageAsset = await saveStaticAdToSanity(imageBuffer, `${slug}.png`);
-    imageAssetId = imageAsset.assetId;
 
+    // Create the record before external publishing so the image remains tracked.
     const weeklyAd = await serverClient.create({
       _type: "weeklyAd",
       status: "pending",
@@ -615,24 +599,31 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
       caption,
       hashtags,
       imageUrl: imageAsset.url,
-      imageAssetId,
+      imageAssetId: imageAsset.assetId,
     });
     weeklyAdId = weeklyAd._id;
 
-    // Generate HeyGen exactly once for the newly created weekly ad.
+    // Publish static Instagram + Facebook immediately.
+    const staticAds = await publishInstagramAndFacebook({
+      igUserId: process.env.IG_USER_ID!,
+      fbPageId: process.env.FB_PAGE_ID!,
+      userAccessToken: process.env.FB_USER_ACCESS_TOKEN!,
+      pageAccessToken: process.env.FB_PAGE_ACCESS_TOKEN!,
+      imageUrl: imageAsset.url,
+      caption: buildInstagramCaption(caption, hashtags),
+    });
+    await serverClient.patch(weeklyAdId).set({ instagramPostId: staticAds.instagramPostId, facebookPostId: staticAds.facebookPostId }).commit();
+
+    // Generate HeyGen exactly once; webhook handles B-roll/video publishing for new videos.
     const heygenVideoId = await createHeyGenVideo({ script, date, adId: weeklyAdId });
     await serverClient.patch(weeklyAdId).set({ heygenVideoId }).commit();
-    Object.assign(result, { heygenVideoId, weeklyAdId });
+    Object.assign(result, { weeklyAdId, heygenVideoId, imageUrl: imageAsset.url, instagramPostId: staticAds.instagramPostId, facebookPostId: staticAds.facebookPostId });
 
     if (dryRun) {
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 5000));
         const status = await getHeyGenVideo(heygenVideoId);
-        if (status.data.status === "completed") {
-          result.videoUrl = status.data.video_url;
-          result.durationMs = Date.now() - start;
-          return result;
-        }
+        if (status.data.status === "completed") { result.videoUrl = status.data.video_url; result.durationMs = Date.now() - start; return result; }
         if (status.data.status === "failed") throw new Error(status.data.failure_reason);
       }
       throw new Error("HeyGen timed out.");

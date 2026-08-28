@@ -7,7 +7,6 @@ on:
     - cron: "0 15 * * 1" # Weekly Google Ads Adjustments → Monday 8:00 AM PST
     - cron: "0 16 */2 * *" # Google Ads Optimization → Every 2 days @ 9:00 AM PST
     - cron: "0 10 * * *" # Daily Google Ads Budget Control at 10 UTC
-
   workflow_dispatch:
     inputs:
       job:
@@ -23,65 +22,97 @@ on:
           - optimize
           - adjust
           - budget
+  repository_dispatch:
+    types:
+      - weekly-ad-ready
 
-# TOP LEVEL ENV
 env:
   NODE_ENV: production
-
   BASE_URL: ${{ secrets.BASE_URL }}
   AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-
-  # OpenAI
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-  # HeyGen
   HEYGEN_API_KEY: ${{ secrets.HEYGEN_API_KEY }}
   HEYGEN_AVATAR_ID: ${{ secrets.HEYGEN_AVATAR_ID }}
   HEYGEN_VOICE_ID: ${{ secrets.HEYGEN_VOICE_ID }}
-
-  # Vercel Blob
   BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-
-  # Facebook / Instagram
   FB_USER_ACCESS_TOKEN: ${{ secrets.FB_USER_ACCESS_TOKEN }}
   FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
   FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
   IG_USER_ID: ${{ secrets.IG_USER_ID }}
-
-  # Google Business Profile
   GBP_ACCOUNT_ID: ${{ secrets.GBP_ACCOUNT_ID }}
   GBP_LOCATION_ID: ${{ secrets.GBP_LOCATION_ID }}
-
-  # Google OAuth
   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
   GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-
-  # Google Ads
   GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
   GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
   GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
-  GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
   GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-
-  # Sanity
   SANITY_API_TOKEN: ${{ secrets.SANITY_API_TOKEN }}
   SANITY_PROJECT_ID: ${{ secrets.SANITY_PROJECT_ID }}
   SANITY_DATASET: ${{ secrets.SANITY_DATASET }}
-
- # Slack
   SLACK_ALERTS_URL: ${{ secrets.SLACK_ALERTS_URL }}
   SLACK_REPORTS_URL: ${{ secrets.SLACK_REPORTS_URL }}
 
 jobs:
-  run-crons:
+  process-weekly-ad:
+    if: github.event_name == 'repository_dispatch' && github.event.action == 'weekly-ad-ready'
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install FFmpeg
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify weekly ad payload
+        env:
+          WEEKLY_AD_ID: ${{ github.event.client_payload.weeklyAdId }}
+          HEYGEN_VIDEO_ID: ${{ github.event.client_payload.heygenVideoId }}
+          HEYGEN_VIDEO_URL: ${{ github.event.client_payload.heygenVideoUrl }}
+        run: |
+          set -euo pipefail
+          test -n "$WEEKLY_AD_ID" || { echo "❌ Missing weeklyAdId"; exit 1; }
+          test -n "$HEYGEN_VIDEO_ID" || { echo "❌ Missing heygenVideoId"; exit 1; }
+          test -n "$HEYGEN_VIDEO_URL" || { echo "❌ Missing heygenVideoUrl"; exit 1; }
+          echo "Weekly ad: $WEEKLY_AD_ID"
+          echo "HeyGen video: $HEYGEN_VIDEO_ID"
+
+      - name: Process HeyGen B-roll and publishing
+        env:
+          WEEKLY_AD_ID: ${{ github.event.client_payload.weeklyAdId }}
+          HEYGEN_VIDEO_ID: ${{ github.event.client_payload.heygenVideoId }}
+          HEYGEN_VIDEO_URL: ${{ github.event.client_payload.heygenVideoUrl }}
+        run: |
+          set -euo pipefail
+          echo "[CRON] Processing HeyGen video $HEYGEN_VIDEO_ID"
+          npx tsx scripts/weeklyAd.ts
+
+  run-crons:
+    if: github.event_name != 'repository_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,7 +127,6 @@ jobs:
       - name: Verify required env vars
         run: |
           set -euo pipefail
-
           required_vars=(
             OPENAI_API_KEY
             BLOB_READ_WRITE_TOKEN
@@ -115,36 +145,23 @@ jobs:
             SLACK_ALERTS_URL
             SLACK_REPORTS_URL
           )
-
           for var in "${required_vars[@]}"; do
             if [ -z "${!var:-}" ]; then
               echo "❌ Missing required env var: $var"
               exit 1
             fi
           done
-
           echo "✅ Environment validation passed"
-
-      - name: Print Blob token debug
-        run: |
-          set -euo pipefail
-
-          if [ -z "${BLOB_READ_WRITE_TOKEN:-}" ]; then
-            echo "❌ BLOB_READ_WRITE_TOKEN missing"
-            exit 1
-          fi
-
-          echo "✅ Blob token exists"
-          echo "Prefix: ${BLOB_READ_WRITE_TOKEN:0:20}"
-          echo "Length: ${#BLOB_READ_WRITE_TOKEN}"
 
       - name: Verify HeyGen env
         run: |
-          echo "API Key length: ${#HEYGEN_API_KEY}"
-          echo "Avatar ID length: ${#HEYGEN_AVATAR_ID}"
-          echo "Voice ID length: ${#HEYGEN_VOICE_ID}"
+          set -euo pipefail
+          test -n "${HEYGEN_API_KEY:-}" || { echo "❌ HEYGEN_API_KEY missing"; exit 1; }
+          test -n "${HEYGEN_AVATAR_ID:-}" || { echo "❌ HEYGEN_AVATAR_ID missing"; exit 1; }
+          test -n "${HEYGEN_VOICE_ID:-}" || { echo "❌ HEYGEN_VOICE_ID missing"; exit 1; }
+          echo "✅ HeyGen environment passed"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -153,17 +170,13 @@ jobs:
           ffprobe -version
           npm ci
 
-      # WEEKLY BLOG
       - name: Weekly blog
         if: github.event.schedule == '0 16 * * 1' || github.event.inputs.job == 'blog' || github.event.inputs.job == 'all'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running weekly blog"
-
           npx tsx scripts/weeklyBlog.ts
 
-      # WEEKLY AD
       - name: Weekly ad
         if: github.event.schedule == '0 17 * * 1' || github.event.inputs.job == 'ad' || github.event.inputs.job == 'all'
         run: |
@@ -171,51 +184,37 @@ jobs:
           echo "[CRON] Running weekly ad"
           npx tsx scripts/weeklyAd.ts
 
-       # GOOGLE ADS ADJUSTMENTS
       - name: Weekly Google Ads Adjustments
         if: github.event.schedule == '0 15 * * 1' || github.event.inputs.job == 'adjust' || github.event.inputs.job == 'all'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running Google Ads adjustments"
-
           npx tsx scripts/googleAds/adjust.ts
 
-      # GOOGLE ADS SETUP
-      - name: Google Ads Setup (one-time)
+      - name: Google Ads Setup
         if: github.event.inputs.job == 'setup'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running Google Ads setup"
-
           npx tsx scripts/googleAds/setup.ts
 
-      # GOOGLE ADS OPTIMIZATION
       - name: Google Ads Optimization
         if: github.event.schedule == '0 16 */2 * *' || github.event.inputs.job == 'optimize' || github.event.inputs.job == 'all'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running Google Ads optimization"
-
           npx tsx scripts/googleAds/optimize.ts
 
-      # GOOGLE ADS BUDGET CONTROL
       - name: Google Ads Budget Control
         if: github.event.schedule == '0 10 * * *' || github.event.inputs.job == 'budget' || github.event.inputs.job == 'all'
         run: |
           set -euo pipefail
-
           echo "[CRON] Running Google Ads budget control"
-
           npx tsx scripts/googleAds/budget.ts
 
-      # FINAL STATUS
       - name: Workflow completed
         if: success()
-        run: |
-          echo "✅ Cron workflow completed successfully"
+        run: echo "✅ Cron workflow completed successfully"
 
       - name: Workflow failed
         if: failure()
