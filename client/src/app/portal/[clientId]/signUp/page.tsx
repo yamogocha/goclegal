@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type FormData = {
@@ -110,27 +110,58 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedRef = useRef(false);
 
-  // Load client and normalize Sanity null values.
+  // Load only after the API validates admin session or client token.
   useEffect(() => {
     async function load() {
       try {
         const query = token ? `?token=${encodeURIComponent(token)}` : "";
         const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, { cache: "no-store" });
         const data = await res.json();
+        if (res.status === 401) {
+          router.replace("/login");
+          return;
+        }
         if (!res.ok) throw new Error(data.error || "Unable to load intake");
         const normalized: Partial<FormData> = {};
         for (const field of stringFields) normalized[field] = typeof data.client?.[field] === "string" ? data.client[field] : "";
         setMode(data.mode);
         setForm((prev) => ({ ...prev, ...normalized }));
+        loadedRef.current = true;
       } catch (error) {
         console.error("LOAD SIGNUP ERROR", error);
+        router.replace("/login");
       } finally {
         setLoading(false);
       }
     }
     void load();
-  }, [clientId, token]);
+  }, [clientId, token, router]);
+
+  // Autosave scalar fields 700ms after the user stops typing.
+  useEffect(() => {
+    if (!loadedRef.current || !mode) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const body = Object.fromEntries(stringFields.map((field) => [field, form[field] ?? ""]));
+        const query = token ? `?token=${encodeURIComponent(token)}` : "";
+        const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 401) router.replace("/login");
+      } catch (error) {
+        console.error("AUTOSAVE ERROR", error);
+      }
+    }, 700);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [form, clientId, token, mode, router]);
 
   // Update text fields only.
   const updateText = (field: StringField, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -160,7 +191,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     );
   };
 
-  // Render textarea with a guaranteed string value.
+  // Render textarea.
   const textarea = (field: StringField, label: string) => {
     const required = !optionalFields.has(field);
     return (
@@ -204,11 +235,12 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     );
   };
 
-  // Submit the complete intake as multipart FormData.
+  // Submit the complete intake.
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
       const body = new FormData();
       for (const [key, value] of Object.entries(form)) {
         if (value instanceof File) body.append(key, value);
@@ -217,6 +249,10 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       if (token) body.append("token", token);
       const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp`, { method: "POST", body });
       const data = await response.json();
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || "Unable to submit intake");
       alert("Your intake has been submitted.");
       if (mode === "admin") router.push(`/portal/${encodeURIComponent(clientId)}`);
@@ -228,6 +264,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   }
 
   if (loading) return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  if (!mode) return null;
 
   return (
     <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8">
@@ -246,7 +283,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
             <h1 className="text-center text-4xl font-bold tracking-tight text-[#00305b] sm:text-5xl">Tell Us About Your Case</h1>
             <p className="mt-3 text-center font-montserrat leading-7 text-gray-600">Please provide the information below so our team can begin reviewing your case.</p>
           </div>
-
           <form onSubmit={submit} className="space-y-8">
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Client Information</h2>
@@ -258,7 +294,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("clientSsnLast4", "Last 4 of SSN")}
               </div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Auto Insurance</h2>
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -267,7 +302,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("clientClaimNumber", "Claim Number")}
               </div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Health Insurance</h2>
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -275,7 +309,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("clientHealthInsuranceMemberNumber", "Member Number")}
               </div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Injuries & Medical Care</h2>
               <div className="mt-6 space-y-6">
@@ -284,7 +317,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {textarea("medicalProvider", "Name and Address of Medical Provider")}
               </div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
               <div className="mt-6 space-y-5">
@@ -293,7 +325,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {upload("declarationPage", "Client’s Declaration Page")}
               </div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Collision Information</h2>
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -304,7 +335,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
               <div className="mt-6">{textarea("collisionDescription", "Collision Description")}</div>
             </section>
-
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Other Driver / Defendant</h2>
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -315,7 +345,6 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("defendantClaimNumber", "Defendant Claim Number")}
               </div>
             </section>
-
             <div className="flex justify-end">
               <button
                 type="submit"
