@@ -63,9 +63,9 @@ export async function POST(req: Request) {
     const clientId = crypto.randomUUID();
     const clientAccessToken = crypto.randomBytes(32).toString("hex");
     const now = new Date().toISOString();
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const baseUrl = process.env.BASE_URL;
 
-    if (!baseUrl) return NextResponse.json({ error: "NEXT_PUBLIC_APP_URL is not configured" }, { status: 500 });
+    if (!baseUrl) return NextResponse.json({ error: "BASE_URL is not configured" }, { status: 500 });
 
     const consentedAt = smsConsent.consentedAt || now;
     const collectedBy = smsConsent.collectedBy || session.user?.email || session.user?.name || "GOC Legal Staff";
