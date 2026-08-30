@@ -121,7 +121,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, { cache: "no-store" });
         const data = await res.json();
         if (res.status === 401) {
-          router.replace("/login");
+          window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
           return;
         }
         if (!res.ok) throw new Error(data.error || "Unable to load intake");
@@ -132,7 +132,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         loadedRef.current = true;
       } catch (error) {
         console.error("LOAD SIGNUP ERROR", error);
-        router.replace("/login");
+        window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
       } finally {
         setLoading(false);
       }
@@ -153,7 +153,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (res.status === 401) router.replace("/login");
+        if (res.status === 401) {
+          window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
+        }
       } catch (error) {
         console.error("AUTOSAVE ERROR", error);
       }
@@ -250,7 +252,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp`, { method: "POST", body });
       const data = await response.json();
       if (response.status === 401) {
-        router.replace("/login");
+        window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
         return;
       }
       if (!response.ok) throw new Error(data.error || "Unable to submit intake");

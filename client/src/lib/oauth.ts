@@ -48,7 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 });
 
 export default auth((req) => {
-  if (!req.auth) return NextResponse.redirect(new URL("/login", req.url));
+  if (!req.auth) return NextResponse.redirect(new URL(`/api/auth/signin?callbackUrl=${encodeURIComponent(req.url)}`, req.url));
 });
 
 export const config = {
