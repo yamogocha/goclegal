@@ -1,4 +1,4 @@
-import { AlignmentType, BorderStyle, Document, Footer, HeightRule, Packer, PageNumber, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, VerticalAlign, WidthType } from "docx";
+import { AlignmentType, BorderStyle, Document, Footer, HeightRule, Packer, PageNumber, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, Textbox, VerticalAlign, WidthType } from "docx";
 import { buildCourtTitle, buildFormInterrogatoryIntroLines, buildInterrogatoryResponseLines, buildIntroLines, buildPlaintiffAttorneyLines, buildPlaintiffCaptionLines, buildPlaintiffCaptionRightLines, buildProofOfServiceLines } from "./tempates";
 import { getOpenAI, finalResponsePrompt } from "@/lib/openai";
 
@@ -36,7 +36,7 @@ let pdfjsLib: any;
 const FONT = "Times New Roman";
 const ROWS_PER_PAGE = 28;
 const ROW_HEIGHT = 480;
-const LINE_HEIGHT = 240;
+const LINE_HEIGHT = 210;
 const BODY_FIRST_LINE_INDENT = 360;
 const PLEADING_VISUAL_WIDTH = 100;
 const PLEADING_FIRST_LINE_WIDTH = 94;
@@ -198,6 +198,26 @@ function paginate(lines: PleadingLine[]) {
   return pages;
 }
 
+function buildCaptionLineOverlay() {
+  const line = Array(25).fill("│").join("\n");
+  return new Textbox({
+    children: [
+      new Paragraph({
+        spacing: { before: .1, after: .1 },
+        children: [new TextRun({ text: line })],
+      }),
+    ],
+    style: {
+      width: ".1pt",
+      height: "123pt",
+      position: "absolute",
+      left: "267pt",
+      top: "260pt",
+      wrapStyle: "none",
+    },
+  });
+}
+
 function buildRows(lines: PleadingLine[]) {
   const rows: TableRow[] = [];
 
@@ -352,6 +372,7 @@ function buildRows(lines: PleadingLine[]) {
 async function generateDocx(pleadingLines: PleadingLine[], title: string) {
   const pages = paginate(pleadingLines);
   const children: (Paragraph | Table)[] = [];
+  children.push(buildCaptionLineOverlay());
 
   pages.forEach((pageLines, index) => {
     children.push(
@@ -421,7 +442,6 @@ function insertCaptionSection(
       captionRightText: rightLines[i]?.text || "",
     } as any);
   }
-
   pleadingLines.push({ text: "" });
   pleadingLines.push({ text: "" });
 }

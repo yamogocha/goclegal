@@ -35,11 +35,9 @@ export function buildPlaintiffCaptionLines(
 ) {
   return [
     { text: `${plaintiffName.toUpperCase()}`, stacked: true },
-    { text: "Plaintiffs," },
-    { text: "vs." },
+    { text: "Plaintiffs,\nvs." },
     { text: `${defendantName.toUpperCase()}`, stacked: true },
-    { text: "Defendants." },
-    // don't remove these two empty lines it creates empty page in the doc
+    { text: "Defendants.\n________________________________________" },
     { text: "" },
     { text: "" },
   ];
@@ -57,7 +55,6 @@ export function buildPlaintiffCaptionRightLines(caseNumber: string, documentTitl
 
   return [
     { text: `Case No.: ${caseNumber}`, stacked: true },
-    { text: "" },
     { text: stackedTitle, stacked: true },
   ];
 }
@@ -231,7 +228,7 @@ export function buildInterrogatoryResponseLines(
   questionLines: string[] = [],
 ): InterrogatoryResponseLine[] {
   const questionBlocks = isSpecial ? [{ text: question, firstLine: true }] : [...(question ? [{ text: question, firstLine: true }] : []),
-      ...questionLines.map((text) => ({ text, firstLine: true, }))];
+  ...questionLines.map((text) => ({ text, firstLine: true, }))];
   return [
     { text: `${isSpecial ? "SPECIAL" : "FORM"} ${number}`, bold: true },
     ...questionBlocks,
