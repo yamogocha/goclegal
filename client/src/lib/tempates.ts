@@ -35,9 +35,10 @@ export function buildPlaintiffCaptionLines(
 ) {
   return [
     { text: `${plaintiffName.toUpperCase()}`, stacked: true },
-    { text: "Plaintiffs,\nvs." },
+    { text: "Plaintiffs," },
+    { text: "vs." },
     { text: `${defendantName.toUpperCase()}`, stacked: true },
-    { text: "Defendants.\n________________________________________" },
+    { text: "Defendants.\n________________________________________", stacked: true },
     { text: "" },
     { text: "" },
   ];
@@ -65,9 +66,9 @@ export function buildIntroLines(
   setNumber: string
 ) {
   return [
-    { text: `PROPOUNDING PARTY: ${plaintiffName}` },
-    { text: `RESPONDING PARTY: ${defendantName}` },
-    { text: `SET NUMBER: ${setNumber}` },
+    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName }] },
+    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName }] },
+    { runs: [{ text: "SET NUMBER: ", bold: true }, { text: setNumber }] },
 
     { text: " Pursuant to Code of Civil Procedure section 2030.210, et seq, Responding Party responds", firstLine: true },
     { text: "to Propounding Party’s Special Interrogatories, Set No. one, as follows:" },
@@ -126,9 +127,9 @@ export function buildFormInterrogatoryIntroLines(
   setNumber: string
 ) {
   return [
-    { text: `PROPOUNDING PARTY: ${defendantName}` },
-    { text: `RESPONDING PARTY: ${plaintiffName}` },
-    { text: `SET NUMBER: ${setNumber}` },
+    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName }] },
+    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName }] },
+    { runs: [{ text: "SET NUMBER: ", bold: true }, { text: setNumber }] },
 
     { text: 'Plaintiff (“Plaintiff” and/or “Responding Party”) hereby responds to Form Interrogatories', firstLine: true },
     { text: '(Set one) propounded by Defendant ("Defendant" and/or "Propounding Party") as follows:' },
@@ -237,59 +238,43 @@ export function buildInterrogatoryResponseLines(
   ];
 }
 
-export function buildProofOfServiceLines(serviceDate: string) {
+export function buildProofOfServiceLines(caseNumber: string, serviceDate: string) {
   return [
     { text: "PROOF OF SERVICE", center: true, bold: true },
-    { text: "" },
-
-    { text: "DENISE WINKELSTEIN v. CITY OF OAKLAND", center: true },
-    { text: "Case No. unknown", center: true },
-    { text: "" },
-
-    { text: `I, Gregory O'Connell, declare that I am employed in the County of Alameda, State of`, center: true },
-    { text: `California. I am over the age of 18 and am not a party to this action. My business address is 10`, center: true },
-    { text: `Villanova Drive, Oakland, CA 94611. On ${serviceDate}, I served the following document(s):`, center: true },
-    { text: "" },
-
+    { text: `DENISE WINKELSTEIN v. CITY OF OAKLAND`, center: true },
+    { text: `Case No. ${caseNumber}`, center: true },
+    { text: `\tI, Gregory O'Connell, declare that I am employed in the County of Alameda, State of` },
+    { text: `California. I am over the age of 18 and am not a party to this action. My business address is 10` },
+    { text: `Villanova Drive, Oakland, CA 94611. On ${serviceDate}, I served the following` },
+    { text: "document(s):" },
     { text: "RESPONSES TO SPECIAL INTERROGATORIES", center: true, bold: true },
+
+    { runs: [{ text: "___\t" }, { text: "BY ELECTRONIC MAIL (E-MAIL)", bold: true }, { text: " I caused the said document to be transmitted by\n\telectronic mail to the e-mail address(es) indicated on the service list." }], stacked: true },
     { text: "" },
 
-    { text: "___ BY ELECTRONIC MAIL (E-MAIL) I caused the said document to be transmitted by" },
-    { text: "electronic mail to the e-mail address(es) indicated on the service list.", indent: true },
+    { runs: [{ text: "___\t" }, { text: "BY MAIL", bold: true }, { text: " By placing a true copy thereof enclosed in a sealed envelope. I placed each such\n\tsealed envelope, with postage thereon fully prepaid for first-class mail, for collection and" }], stacked: true },
+    { text: "\tmailing at Alameda, California, following ordinary business practices to the addressee(s)\n\tnoted on the service list.", stacked: true },
     { text: "" },
 
-    { text: "___ BY MAIL By placing a true copy thereof enclosed in a sealed envelope. I placed each such" },
-    { text: "sealed envelope, with postage thereon fully prepaid for first-class mail, for collection and", indent: true },
-    { text: "mailing at Alameda, California, following ordinary business practices to the addressee(s)", indent: true },
-    { text: "noted on the service list.", indent: true },
+    { runs: [{ text: "___\t" }, { text: "BY FACSIMILE", bold: true }, { text: " I caused the said document to be transmitted by facsimile machine to the\n\tnumber indicated on the service list." }], stacked: true },
     { text: "" },
 
-    { text: "___ BY FACSIMILE I caused the said document to be transmitted by facsimile machine to the" },
-    { text: "number indicated on the service list.", indent: true },
+    { runs: [{ text: "___\t" }, { text: "BY PERSONAL SERVICE", bold: true }, { text: " By placing a true copy thereof enclosed in a sealed envelope.\n\tI caused each such envelope to be delivered by hand to the addressee(s) noted on the service" }], stacked: true },
+    { text: "\tlist." },
     { text: "" },
 
-    { text: "___ BY PERSONAL SERVICE By placing a true copy thereof enclosed in a sealed envelope." },
-    { text: "I caused each such envelope to be delivered by hand to the addressee(s) noted on the service", indent: true },
-    { text: "list.", indent: true },
+    { runs: [{ text: "___\t" }, { text: "BY PROFESSIONAL MESSENGER SERVICE", bold: true }, { text: " By placing and true copy thereof in a\n\tsealed envelope and causing said envelope to be delivered by professional messenger" }], stacked: true },
+    { text: "\tservice to the addressee(s) listed on the service list." },
     { text: "" },
 
-    { text: "___ BY PROFESSIONAL MESSENGER SERVICE By placing and true copy thereof in a" },
-    { text: "sealed envelope and causing said envelope to be delivered by professional messenger", indent: true },
-    { text: "service to the addressee(s) listed on the service list.", indent: true },
+    { runs: [{ text: "___\t" }, { text: "BY FEDERAL EXPRESS", bold: true }, { text: " By enclosing a true copy of the documents in a Federal Express\n\tenvelope, sealing and depositing the envelope, with delivery fees prepaid or provided for," }], stacked: true },
+    { text: "\tand instructions to deliver overnight, with an office or delivery box regularly maintained by\n\tFederal Express in Alameda, California.", stacked: true },
     { text: "" },
 
-    { text: "___ BY FEDERAL EXPRESS By enclosing a true copy of the documents in a Federal Express" },
-    { text: "envelope, sealing and depositing the envelope, with delivery fees prepaid or provided for,", indent: true },
-    { text: "and instructions to deliver overnight, with an office or delivery box regularly maintained by", indent: true },
-    { text: "Federal Express in Alameda, California.", indent: true },
-    { text: "" },
-
-    { text: `I declare under penalty of perjury under the laws of the State of California that the`, indent: true },
+    { text: `\tI declare under penalty of perjury under the laws of the State of California that the` },
     { text: `foregoing is true and correct. Executed on ${serviceDate}, at Alameda, California.` },
     { text: "" },
-
-    { text: "___________________" },
-    { text: "Gregory O'Connell" },
+    { text: "___________________\nGregory O'Connell", right: true, stacked: true },
   ];
 }
 

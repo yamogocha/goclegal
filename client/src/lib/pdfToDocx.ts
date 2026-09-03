@@ -36,7 +36,7 @@ let pdfjsLib: any;
 const FONT = "Times New Roman";
 const ROWS_PER_PAGE = 28;
 const ROW_HEIGHT = 480;
-const LINE_HEIGHT = 210;
+const LINE_HEIGHT = 235;
 const BODY_FIRST_LINE_INDENT = 360;
 const PLEADING_VISUAL_WIDTH = 100;
 const PLEADING_FIRST_LINE_WIDTH = 94;
@@ -63,10 +63,17 @@ export type CaseMetadata = {
 export type PleadingLine = {
   text: string;
   center?: boolean;
+  right?: boolean;
   bold?: boolean;
   firstLine?: boolean;
   indent?: boolean;
   stacked?: boolean;
+  runs?: { text: string; bold?: boolean }[];
+  captionLeftText?: string;
+  captionLeftStacked?: boolean;
+  captionRightText?: string;
+  captionRightStacked?: boolean;
+  captionRightBold?: boolean;
 };
 
 // PDFJS
@@ -209,7 +216,7 @@ function buildCaptionLineOverlay() {
     ],
     style: {
       width: ".1pt",
-      height: "123pt",
+      height: "140pt",
       position: "absolute",
       left: "267pt",
       top: "260pt",
@@ -224,11 +231,18 @@ function buildRows(lines: PleadingLine[]) {
   const capped = [...lines];
   while (capped.length < ROWS_PER_PAGE) capped.push({ text: "" });
 
-  function buildStackedRuns(text: string, bold = false) {
-    return (text || "")
-      .split("\n")
-      .filter((x) => x.trim() !== "")
-      .map((part, index) => new TextRun({ text: part, bold, size: 24, font: FONT, break: index > 0 ? 1 : 0 }));
+  function buildStackedRuns(text: string, bold = false, stacked = true) {
+    const parts = (text || "").split("\n").filter((x) => x.trim() !== "");
+
+    if (!stacked) { return [new TextRun({ text: text || "", bold, size: 24, font: FONT })] }
+
+    return parts.map((part, index) => new TextRun({ text: part, bold, size: 24, font: FONT, break: index > 0 ? 1 : 0 }));
+  }
+
+  function buildRuns(runs: { text: string; bold?: boolean }[]) {
+    return runs.flatMap((run) =>
+      run.text.split("\n").map((text, i) => new TextRun({ text, bold: run.bold, size: 24, font: FONT, break: i > 0 ? 1 : 0 }))
+    );
   }
 
   function isEmptyCaptionRow(line: any) {
@@ -244,79 +258,32 @@ function buildRows(lines: PleadingLine[]) {
     const contentChildren: (Paragraph | Table)[] = [];
 
     if (isCaptionRow) {
-      contentChildren.push(
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          layout: TableLayoutType.FIXED,
-          columnWidths: [4470, 4470],
-          borders: {
-            top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE },
-            right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
-          },
-          rows: [
-            new TableRow({
-              children: [
-                new TableCell({
-                  width: { size: 50, type: WidthType.PERCENTAGE },
-                  borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
-                  margins: { top: 0, bottom: 0, left: 60, right: 60 },
-                  children: [
-                    new Paragraph({
-                      spacing: { before: 0, after: 0, line: LINE_HEIGHT },
-                      children: buildStackedRuns(line.captionLeftText || ""),
-                    }),
-                  ],
-                }),
-                new TableCell({
-                  width: { size: 50, type: WidthType.PERCENTAGE },
-                  borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
-                  margins: { top: 0, bottom: 0, left: 60, right: 60 },
-                  children: [
-                    new Paragraph({
-                      spacing: { before: 0, after: 0, line: LINE_HEIGHT },
-                      children: buildStackedRuns(line.captionRightText || "", line.captionRightBold ?? true),
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        }),
-      );
-    } else {
-      let paragraphChildren: TextRun[] = [];
+      const leftLines = (line.captionLeftText || "").split("\n").filter(x => x.trim() !== "");
+      const rightLines = (line.captionRightText || "").split("\n").filter(x => x.trim() !== "");
+      const visualLines = Math.max(leftLines.length, rightLines.length);
+      const captionRuns: TextRun[] = [];
 
-      const interrogatoryMatch = line.text.match(/^(INTERROGATORY NO\.\s*\d+:)(.*)$/i);
-      const headerLabelMatch = line.text.match(/^(PROPOUNDING PARTY:|RESPONDING PARTY:|SET NUMBER:)(.*)$/i);
-      const serviceMethodMatch = line.text.match(/^(___\s+)?(BY ELECTRONIC MAIL \(E-MAIL\)|BY MAIL|BY FACSIMILE|BY PERSONAL SERVICE|BY PROFESSIONAL MESSENGER SERVICE|BY FEDERAL EXPRESS)(.*)$/i);
-
-      if (interrogatoryMatch) {
-        paragraphChildren = [
-          new TextRun({ text: interrogatoryMatch[1], bold: true, size: 24, font: FONT }),
-          new TextRun({ text: interrogatoryMatch[2] || "", size: 24, font: FONT }),
-        ];
-      } else if (headerLabelMatch) {
-        paragraphChildren = [
-          new TextRun({ text: headerLabelMatch[1], bold: true, size: 24, font: FONT }),
-          new TextRun({ text: headerLabelMatch[2] || "", size: 24, font: FONT }),
-        ];
-      } else if (serviceMethodMatch) {
-        paragraphChildren = [
-          ...(serviceMethodMatch[1] ? [new TextRun({ text: serviceMethodMatch[1], size: 24, font: FONT })] : []),
-          new TextRun({ text: serviceMethodMatch[2], bold: true, size: 24, font: FONT }),
-          new TextRun({ text: serviceMethodMatch[3] || "", size: 24, font: FONT }),
-        ];
-      } else if (line.stacked) {
-        paragraphChildren = buildStackedRuns(line.text);
-      } else {
-        paragraphChildren = [new TextRun({ text: line.text, bold: !!line.bold, size: 24, font: FONT })];
+      for (let i = 0; i < visualLines; i++) {
+        if (i > 0) captionRuns.push(new TextRun({ break: 1 }));
+        captionRuns.push(new TextRun({ text: leftLines[i] || "", size: 24, font: FONT }));
+        captionRuns.push(new TextRun({ text: "\t" }));
+        captionRuns.push(new TextRun({ text: rightLines[i] || "", bold: line.captionRightBold ?? true, size: 24, font: FONT }));
       }
-
-      const isSignature = line.text === "___________________" || line.text === "Gregory O'Connell";
+      contentChildren.push(new Paragraph({ spacing: { before: 0, after: 0, line: LINE_HEIGHT }, tabStops: [{ type: "left", position: 5200 }], children: captionRuns }));
+    } else {
+      const interrogatoryMatch = line.text.match(/^(INTERROGATORY NO\.\s*\d+:)(.*)$/i);
+      const paragraphChildren: TextRun[] = line.runs
+        ? buildRuns(line.runs)
+        : interrogatoryMatch
+          ? [
+            new TextRun({ text: interrogatoryMatch[1], bold: true, size: 24, font: FONT }),
+            new TextRun({ text: interrogatoryMatch[2] || "", size: 24, font: FONT }),
+          ]
+          : buildStackedRuns(line.text, !!line.bold, !!line.stacked);
 
       contentChildren.push(
         new Paragraph({
-          alignment: isSignature ? AlignmentType.RIGHT : line.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+          alignment: line.center ? AlignmentType.CENTER : line.right ? AlignmentType.RIGHT : AlignmentType.LEFT,
           indent: { left: line.indent ? 420 : 0, firstLine: line.firstLine ? BODY_FIRST_LINE_INDENT : 0 },
           spacing: { before: 0, after: 0, line: LINE_HEIGHT },
           children: paragraphChildren,
@@ -437,23 +404,20 @@ function insertCaptionSection(
 
   for (let i = 0; i < totalRows; i++) {
     pleadingLines.push({
-      text: leftLines[i]?.text || "",
+      text: "",
       captionLeftText: leftLines[i]?.text || "",
+      captionLeftStacked: leftLines[i]?.stacked ?? false,
       captionRightText: rightLines[i]?.text || "",
+      captionRightStacked: rightLines[i]?.stacked ?? false,
     } as any);
   }
   pleadingLines.push({ text: "" });
   pleadingLines.push({ text: "" });
 }
 
-function insertIntroductorySection(
-  pleadingLines: PleadingLine[],
-  plaintiffName: string,
-  defendantName: string,
-  setNumber: string,
-) {
+function insertIntroductorySection(pleadingLines: PleadingLine[], plaintiffName: string, defendantName: string, setNumber: string) {
   buildIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
-    pleadingLines.push({ text: line.text, firstLine: line.firstLine }),
+    pleadingLines.push({ text: line.text || "", runs: line.runs, firstLine: line.firstLine })
   );
 }
 
@@ -464,7 +428,7 @@ function insertFormInterrogatoryIntroductorySection(
   setNumber: string,
 ) {
   buildFormInterrogatoryIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
-    pleadingLines.push({ text: line.text, firstLine: line.firstLine, bold: line.bold, center: line.center }),
+    pleadingLines.push({ text: line.text || "", firstLine: line.firstLine, bold: line.bold, center: line.center, runs: line.runs, }),
   );
 
   pleadingLines.push({ text: "" });
@@ -557,6 +521,12 @@ function insertAttorneyVerificationSection(
       captionRightBold: false,
     } as any);
   }
+}
+
+function insertProofOfServiceSection(pleadingLines: PleadingLine[], caseNumber: string, serviceDate: string) {
+  buildProofOfServiceLines(caseNumber, serviceDate).forEach((line) => {
+    pleadingLines.push({ text: line.text || "", center: line.center, right: line.right, bold: line.bold, stacked: line.stacked, runs: line.runs });
+  });
 }
 
 function measurePleadingWidth(text: string) {
