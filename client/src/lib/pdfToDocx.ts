@@ -1,5 +1,5 @@
-import { AlignmentType, BorderStyle, Document, Footer, HeightRule, Packer, PageNumber, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, Textbox, VerticalAlign, WidthType } from "docx";
-import { buildCourtTitle, buildFormInterrogatoryIntroLines, buildInterrogatoryResponseLines, buildIntroLines, buildPlaintiffAttorneyLines, buildPlaintiffCaptionLines, buildPlaintiffCaptionRightLines, buildProofOfServiceLines } from "./tempates";
+import { SectionType, AlignmentType, BorderStyle, Document, Footer, HeightRule, Packer, PageNumber, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, Textbox, VerticalAlign, WidthType } from "docx";
+import { buildCourtTitle, buildFormInterrogatoryIntroLines, buildInterrogatoryResponseLines, buildIntroLines, buildPlaintiffAttorneyLines, buildPlaintiffCaptionLines, buildPlaintiffCaptionRightLines, buildProofOfServiceLines, buildServiceListLines } from "./tempates";
 import { getOpenAI, finalResponsePrompt } from "@/lib/openai";
 
 const openai = getOpenAI();
@@ -34,12 +34,15 @@ let pdfjsLib: any;
 // ======================================================
 
 const FONT = "Times New Roman";
-const ROWS_PER_PAGE = 28;
-const ROW_HEIGHT = 480;
-const LINE_HEIGHT = 235;
 const BODY_FIRST_LINE_INDENT = 360;
 const PLEADING_VISUAL_WIDTH = 100;
 const PLEADING_FIRST_LINE_WIDTH = 94;
+
+type PageLayout = { rowsPerPage: number; rowHeight: number; lineHeight: number };
+
+const PLEADING_LAYOUT: PageLayout = { rowsPerPage: 28, rowHeight: 475, lineHeight: 235 };
+
+const PROOF_OF_SERVICE_LAYOUT: PageLayout = { rowsPerPage: 28, rowHeight: 435, lineHeight: 215 };
 
 export type Interrogatory = {
   number: string;
@@ -54,10 +57,15 @@ export type FormInterrogatory = {
 };
 
 export type CaseMetadata = {
-  caseNumber?: string;
-  plaintiffName?: string;
-  defendantName?: string;
-  setNumber?: string;
+  caseNumber: string;
+  plaintiffName: string;
+  defendantName: string;
+  setNumber: string;
+  title: string;
+  serviceDate: string
+  defendantAttorney: string;
+  defendantAttorneyAddress: string;
+  defendantAttorneyEmail: string;
 };
 
 export type PleadingLine = {
@@ -199,9 +207,11 @@ function buildFooter(title: string) {
 }
 
 // PAGINATE
-function paginate(lines: PleadingLine[]) {
+function paginate(lines: PleadingLine[], rowsPerPage: number) {
   const pages: PleadingLine[][] = [];
-  for (let i = 0; i < lines.length; i += ROWS_PER_PAGE) pages.push(lines.slice(i, i + ROWS_PER_PAGE));
+  for (let i = 0; i < lines.length; i += rowsPerPage) {
+    pages.push(lines.slice(i, i + rowsPerPage));
+  }
   return pages;
 }
 
@@ -216,7 +226,7 @@ function buildCaptionLineOverlay() {
     ],
     style: {
       width: ".1pt",
-      height: "140pt",
+      height: "135pt",
       position: "absolute",
       left: "267pt",
       top: "260pt",
@@ -225,11 +235,11 @@ function buildCaptionLineOverlay() {
   });
 }
 
-function buildRows(lines: PleadingLine[]) {
+function buildRows(lines: PleadingLine[], layout: PageLayout) {
   const rows: TableRow[] = [];
 
   const capped = [...lines];
-  while (capped.length < ROWS_PER_PAGE) capped.push({ text: "" });
+  while (capped.length < layout.rowsPerPage) capped.push({ text: "" });
 
   function buildStackedRuns(text: string, bold = false, stacked = true) {
     const parts = (text || "").split("\n").filter((x) => x.trim() !== "");
@@ -249,7 +259,7 @@ function buildRows(lines: PleadingLine[]) {
     return (line.captionLeftText || "").trim() === "" && (line.captionRightText || "").trim() === "";
   }
 
-  for (let i = 0; i < ROWS_PER_PAGE; i++) {
+  for (let i = 0; i < layout.rowsPerPage; i++) {
     const line: any = capped[i];
     const isCaptionRow = line.captionLeftText !== undefined || line.captionRightText !== undefined;
 
@@ -269,7 +279,7 @@ function buildRows(lines: PleadingLine[]) {
         captionRuns.push(new TextRun({ text: "\t" }));
         captionRuns.push(new TextRun({ text: rightLines[i] || "", bold: line.captionRightBold ?? true, size: 24, font: FONT }));
       }
-      contentChildren.push(new Paragraph({ spacing: { before: 0, after: 0, line: LINE_HEIGHT }, tabStops: [{ type: "left", position: 5200 }], children: captionRuns }));
+      contentChildren.push(new Paragraph({ spacing: { before: 0, after: 0, line: layout.lineHeight }, tabStops: [{ type: "left", position: 5200 }], children: captionRuns }));
     } else {
       const interrogatoryMatch = line.text.match(/^(INTERROGATORY NO\.\s*\d+:)(.*)$/i);
       const paragraphChildren: TextRun[] = line.runs
@@ -285,7 +295,7 @@ function buildRows(lines: PleadingLine[]) {
         new Paragraph({
           alignment: line.center ? AlignmentType.CENTER : line.right ? AlignmentType.RIGHT : AlignmentType.LEFT,
           indent: { left: line.indent ? 420 : 0, firstLine: line.firstLine ? BODY_FIRST_LINE_INDENT : 0 },
-          spacing: { before: 0, after: 0, line: LINE_HEIGHT },
+          spacing: { before: 0, after: 0, line: layout.lineHeight },
           children: paragraphChildren,
         }),
       );
@@ -293,7 +303,7 @@ function buildRows(lines: PleadingLine[]) {
 
     rows.push(
       new TableRow({
-        height: { value: ROW_HEIGHT, rule: HeightRule.ATLEAST },
+        height: { value: layout.rowHeight, rule: HeightRule.ATLEAST },
         cantSplit: true,
         children: [
           new TableCell({
@@ -304,7 +314,7 @@ function buildRows(lines: PleadingLine[]) {
             },
             children: [
               new Paragraph({
-                spacing: { before: 0, after: 0, line: LINE_HEIGHT },
+                spacing: { before: 0, after: 0, line: layout.lineHeight },
                 children: [new TextRun({ text: String(i + 1), size: 20, font: FONT })],
               }),
             ],
@@ -336,47 +346,66 @@ function buildRows(lines: PleadingLine[]) {
   return rows;
 }
 
-async function generateDocx(pleadingLines: PleadingLine[], title: string) {
-  const pages = paginate(pleadingLines);
-  const children: (Paragraph | Table)[] = [];
-  children.push(buildCaptionLineOverlay());
+async function generateDocx(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const proofLines: PleadingLine[] = [];
+  const serviceListLines: PleadingLine[] = [];
 
-  pages.forEach((pageLines, index) => {
-    children.push(
-      new Table({
-        layout: TableLayoutType.FIXED,
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        columnWidths: [260, 80, 8940],
-        borders: {
-          top: { style: BorderStyle.NONE },
-          bottom: { style: BorderStyle.NONE },
-          left: { style: BorderStyle.NONE },
-          right: { style: BorderStyle.NONE },
-          insideHorizontal: { style: BorderStyle.NONE },
-          insideVertical: { style: BorderStyle.NONE },
-        },
-        rows: buildRows(pageLines),
-      }),
-    );
+  insertProofOfServiceSection(proofLines, caseMetadata);
+  insertServiceListSection(serviceListLines, caseMetadata);
 
-    if (index < pages.length - 1) {
-      children.push(new Paragraph({ pageBreakBefore: true }));
-    }
-  });
+  function buildSectionChildren(
+    lines: PleadingLine[],
+    layout: PageLayout,
+  ): (Paragraph | Table)[] {
+    const sectionChildren: (Paragraph | Table)[] = [];
+    const pages = paginate(lines, layout.rowsPerPage);
+
+    pages.forEach((pageLines, index) => {
+      sectionChildren.push(
+        new Table({
+          layout: TableLayoutType.FIXED,
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          columnWidths: [260, 80, 8940],
+          borders: {
+            top: { style: BorderStyle.NONE },
+            bottom: { style: BorderStyle.NONE },
+            left: { style: BorderStyle.NONE },
+            right: { style: BorderStyle.NONE },
+            insideHorizontal: { style: BorderStyle.NONE },
+            insideVertical: { style: BorderStyle.NONE },
+          },
+          rows: buildRows(pageLines, layout),
+        }),
+      );
+
+      if (index < pages.length - 1) {
+        sectionChildren.push(new Paragraph({ pageBreakBefore: true }));
+      }
+    });
+
+    return sectionChildren;
+  }
+
+  const pleadingChildren = [buildCaptionLineOverlay(), ...buildSectionChildren(pleadingLines, PLEADING_LAYOUT)];
+
+  const proofChildren = buildSectionChildren(proofLines, PROOF_OF_SERVICE_LAYOUT);
+
+  const serviceListChildren = buildSectionChildren(serviceListLines, PROOF_OF_SERVICE_LAYOUT);
+
+  const pageMargins = { left: 720, right: 720, top: 720, bottom: 720, footer: 1800 };
 
   const doc = new Document({
     compatibility: { noExtraLineSpacing: true, doNotExpandShiftReturn: true },
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: { left: 720, right: 720, top: 720, bottom: 720, footer: 1800 },
-          },
-        },
-        footers: { default: buildFooter(title) },
-        children,
-      },
-    ],
+    sections: [{
+      properties: { page: { margin: pageMargins } },
+      footers: { default: buildFooter(caseMetadata.title) }, children: pleadingChildren
+    }, {
+      properties: { type: SectionType.NEXT_PAGE, page: { margin: pageMargins, pageNumbers: { start: 1 } } },
+      footers: { default: buildFooter("PROOF OF SERVICE") }, children: proofChildren
+    }, {
+      properties: { type: SectionType.NEXT_PAGE, page: { margin: pageMargins, pageNumbers: { start: 1 } } },
+      footers: { default: buildFooter("SERVICE LIST") }, children: serviceListChildren
+    }]
   });
 
   return await Packer.toBuffer(doc);
@@ -391,15 +420,10 @@ function insertCourtTitleSection(pleadingLines: PleadingLine[]) {
   buildCourtTitle().forEach((line) => pleadingLines.push({ text: line.text, center: line.center, bold: line.bold }));
 }
 
-function insertCaptionSection(
-  pleadingLines: PleadingLine[],
-  plaintiffName: string,
-  defendantName: string,
-  caseNumber: string,
-  documentTitle: string,
-) {
+function insertCaptionSection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const { caseNumber, plaintiffName, defendantName, title } = caseMetadata
   const leftLines = buildPlaintiffCaptionLines(plaintiffName, defendantName);
-  const rightLines = buildPlaintiffCaptionRightLines(caseNumber, documentTitle);
+  const rightLines = buildPlaintiffCaptionRightLines(caseNumber, title);
   const totalRows = Math.max(leftLines.length, rightLines.length);
 
   for (let i = 0; i < totalRows; i++) {
@@ -415,18 +439,15 @@ function insertCaptionSection(
   pleadingLines.push({ text: "" });
 }
 
-function insertIntroductorySection(pleadingLines: PleadingLine[], plaintiffName: string, defendantName: string, setNumber: string) {
+function insertIntroductorySection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const { plaintiffName, defendantName, setNumber } = caseMetadata
   buildIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
     pleadingLines.push({ text: line.text || "", runs: line.runs, firstLine: line.firstLine })
   );
 }
 
-function insertFormInterrogatoryIntroductorySection(
-  pleadingLines: PleadingLine[],
-  plaintiffName: string,
-  defendantName: string,
-  setNumber: string,
-) {
+function insertFormInterrogatoryIntroductorySection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const { plaintiffName, defendantName, setNumber } = caseMetadata
   buildFormInterrogatoryIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
     pleadingLines.push({ text: line.text || "", firstLine: line.firstLine, bold: line.bold, center: line.center, runs: line.runs, }),
   );
@@ -490,11 +511,7 @@ function insertFormInterrogatoryResponses(
   });
 }
 
-function insertAttorneyVerificationSection(
-  pleadingLines: PleadingLine[],
-  plaintiffName: string,
-  signatureDate: string,
-) {
+function insertAttorneyVerificationSection(pleadingLines: PleadingLine[], plaintiffName: string, signatureDate: string) {
   const leftLines = [
     `DATED: ${signatureDate}`,
   ];
@@ -523,10 +540,17 @@ function insertAttorneyVerificationSection(
   }
 }
 
-function insertProofOfServiceSection(pleadingLines: PleadingLine[], caseNumber: string, serviceDate: string) {
-  buildProofOfServiceLines(caseNumber, serviceDate).forEach((line) => {
+function insertProofOfServiceSection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const { caseNumber, plaintiffName, defendantName, serviceDate } = caseMetadata
+  buildProofOfServiceLines(caseNumber, plaintiffName, defendantName, serviceDate).forEach((line) => {
     pleadingLines.push({ text: line.text || "", center: line.center, right: line.right, bold: line.bold, stacked: line.stacked, runs: line.runs });
   });
+}
+
+function insertServiceListSection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
+  const { caseNumber, plaintiffName, defendantName, defendantAttorney, defendantAttorneyAddress, defendantAttorneyEmail } = caseMetadata
+  buildServiceListLines(caseNumber, plaintiffName, defendantName, defendantAttorney, defendantAttorneyAddress, defendantAttorneyEmail).forEach(line =>
+    pleadingLines.push({ text: line.text, center: line.center, bold: line.bold, stacked: line.stacked }))
 }
 
 function measurePleadingWidth(text: string) {
@@ -664,19 +688,19 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
 
 export async function buildSpecialInterrogatoryDocx(
   interrogatories: any[],
-  metadata: { caseNumber: string; plaintiffName: string; defendantName: string; setNumber: string; title: string },
+  caseMetadata: CaseMetadata,
 ) {
   const pleadingLines: PleadingLine[] = [];
 
-  insertPlaintiffAttorneySection(pleadingLines, metadata.plaintiffName);
+  insertPlaintiffAttorneySection(pleadingLines, caseMetadata.plaintiffName);
   pleadingLines.push({ text: "" });
   insertCourtTitleSection(pleadingLines);
-  insertCaptionSection(pleadingLines, metadata.plaintiffName, metadata.defendantName, metadata.caseNumber, metadata.title);
-  insertIntroductorySection(pleadingLines, metadata.defendantName, metadata.plaintiffName, metadata.setNumber);
+  insertCaptionSection(pleadingLines, caseMetadata);
+  insertIntroductorySection(pleadingLines, caseMetadata);
   insertInterrogatoryResponses(pleadingLines, interrogatories);
-  insertAttorneyVerificationSection(pleadingLines, metadata.plaintiffName, signatureDate);
+  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, signatureDate);
 
-  return await generateDocx(pleadingLines, metadata.title);
+  return await generateDocx(pleadingLines, caseMetadata);
 }
 
 export async function loadFormInterrogatoryPdfQuestions(buffer: ArrayBuffer) {
@@ -790,17 +814,17 @@ export async function loadFormInterrogatoryPdfQuestions(buffer: ArrayBuffer) {
 
 export async function buildFormInterrogatoryDocx(
   interrogatories: any[],
-  metadata: { caseNumber: string; plaintiffName: string; defendantName: string; setNumber: string; title: string },
+  caseMetadata: CaseMetadata,
 ) {
   const pleadingLines: PleadingLine[] = [];
 
-  insertPlaintiffAttorneySection(pleadingLines, metadata.plaintiffName);
+  insertPlaintiffAttorneySection(pleadingLines, caseMetadata.plaintiffName);
   pleadingLines.push({ text: "" });
   insertCourtTitleSection(pleadingLines);
-  insertCaptionSection(pleadingLines, metadata.plaintiffName, metadata.defendantName, metadata.caseNumber, metadata.title);
-  insertFormInterrogatoryIntroductorySection(pleadingLines, metadata.defendantName, metadata.plaintiffName, metadata.setNumber);
+  insertCaptionSection(pleadingLines, caseMetadata);
+  insertFormInterrogatoryIntroductorySection(pleadingLines, caseMetadata);
   insertFormInterrogatoryResponses(pleadingLines, interrogatories);
-  insertAttorneyVerificationSection(pleadingLines, metadata.plaintiffName, signatureDate);
+  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, signatureDate);
 
-  return await generateDocx(pleadingLines, metadata.title);
+  return await generateDocx(pleadingLines, caseMetadata);
 }

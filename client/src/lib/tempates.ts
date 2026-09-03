@@ -238,16 +238,17 @@ export function buildInterrogatoryResponseLines(
   ];
 }
 
-export function buildProofOfServiceLines(caseNumber: string, serviceDate: string) {
+export function buildProofOfServiceLines(caseNumber: string, plaintiffName: string, defendantName: string, serviceDate: string) {
   return [
     { text: "PROOF OF SERVICE", center: true, bold: true },
-    { text: `DENISE WINKELSTEIN v. CITY OF OAKLAND`, center: true },
-    { text: `Case No. ${caseNumber}`, center: true },
-    { text: `\tI, Gregory O'Connell, declare that I am employed in the County of Alameda, State of` },
-    { text: `California. I am over the age of 18 and am not a party to this action. My business address is 10` },
-    { text: `Villanova Drive, Oakland, CA 94611. On ${serviceDate}, I served the following` },
-    { text: "document(s):" },
+    { text: `${plaintiffName} v. ${defendantName}\nCase No. ${caseNumber}`, center: true, stacked: true },
+    { text: "" },
+    { text: `\tI, Gregory O'Connell, declare that I am employed in the County of Alameda, State of\nCalifornia. I am over the age of 18 and am not a party to this action. My business address is 10`, stacked: true },
+    { text: `Villanova Drive, Oakland, CA 94611. On ${serviceDate}, I served the following document(s):` },
+
+    { text: "" },
     { text: "RESPONSES TO SPECIAL INTERROGATORIES", center: true, bold: true },
+    { text: "" },
 
     { runs: [{ text: "___\t" }, { text: "BY ELECTRONIC MAIL (E-MAIL)", bold: true }, { text: " I caused the said document to be transmitted by\n\telectronic mail to the e-mail address(es) indicated on the service list." }], stacked: true },
     { text: "" },
@@ -271,11 +272,23 @@ export function buildProofOfServiceLines(caseNumber: string, serviceDate: string
     { text: "\tand instructions to deliver overnight, with an office or delivery box regularly maintained by\n\tFederal Express in Alameda, California.", stacked: true },
     { text: "" },
 
-    { text: `\tI declare under penalty of perjury under the laws of the State of California that the` },
-    { text: `foregoing is true and correct. Executed on ${serviceDate}, at Alameda, California.` },
+    { text: `\tI declare under penalty of perjury under the laws of the State of California that the\nforegoing is true and correct. Executed on ${serviceDate}, at Alameda, California.`, stacked: true },
+    { text: "" },
     { text: "" },
     { text: "___________________\nGregory O'Connell", right: true, stacked: true },
   ];
+}
+
+export function buildServiceListLines(caseNumber: string, plaintiffName: string, defendantName: string, defendantAttorney: string, defendantAttorneyAddress: string, defendantAttorneyEmail: string) {
+  return [
+    { text: "SERVICE LIST", center: true, bold: true },
+    { text: `${plaintiffName} v. ${defendantName}\nCase No. ${caseNumber}`, center: true, stacked: true },
+    { text: "" },
+    { text: `${defendantAttorney}`, stacked: true },
+    { text: `${defendantAttorneyAddress}`, stacked: true },
+    { text: `${defendantAttorneyEmail}`, stacked: true },
+    { text: `Attorneys for Defendant, ${defendantName}`, bold: true },
+  ]
 }
 
 export type Objection = {
