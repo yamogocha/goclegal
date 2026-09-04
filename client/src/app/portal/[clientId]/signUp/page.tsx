@@ -3,6 +3,7 @@ import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+type UploadedFile = { url: string; name: string };
 type FormData = {
   clientName: string;
   clientPhone: string;
@@ -17,8 +18,9 @@ type FormData = {
   injuries: string;
   medicalCare: string;
   medicalProvider: string;
-  driverLicense: File | null;
-  healthInsuranceCards: File | null;
+  driverLicense: File[];
+  healthInsuranceCards: File[];
+  medicalRecords: File[];
   declarationPage: File | null;
   collisionLocation: string;
   collisionDate: string;
@@ -32,8 +34,8 @@ type FormData = {
   defendantClaimNumber: string;
 };
 
-type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCards" | "declarationPage">;
-type FileField = "driverLicense" | "healthInsuranceCards" | "declarationPage";
+type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "declarationPage">;
+type FileField = "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "declarationPage";
 
 const initialForm: FormData = {
   clientName: "",
@@ -49,8 +51,9 @@ const initialForm: FormData = {
   injuries: "",
   medicalCare: "",
   medicalProvider: "",
-  driverLicense: null,
-  healthInsuranceCards: null,
+  driverLicense: [],
+  healthInsuranceCards: [],
+  medicalRecords: [],
   declarationPage: null,
   collisionLocation: "",
   collisionDate: "",
@@ -65,6 +68,8 @@ const initialForm: FormData = {
 };
 
 const optionalFields = new Set<StringField | FileField>([
+  "driverLicense",
+  "medicalRecords",
   "declarationPage",
   "policeDepartment",
   "policeReportNumber",
@@ -106,6 +111,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   const { clientId } = use(params);
   const { token } = use(searchParams);
   const [form, setForm] = useState<FormData>(initialForm);
+  const [uploadedFiles, setUploadedFiles] = useState<Record<FileField, UploadedFile[]>>({ driverLicense: [], healthInsuranceCards: [], medicalRecords: [], declarationPage: [] });
   const [mode, setMode] = useState<"admin" | "client" | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -127,7 +133,19 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         if (!res.ok) throw new Error(data.error || "Unable to load intake");
         const normalized: Partial<FormData> = {};
         for (const field of stringFields) normalized[field] = typeof data.client?.[field] === "string" ? data.client[field] : "";
+        const files = (field: FileField): UploadedFile[] => {
+          const value = data.client?.[field];
+          if (!value) return [];
+          const list = Array.isArray(value) ? value : [value];
+          return list.filter((item: any) => item?.asset?.url).map((item: any) => ({ url: item.asset.url, name: item.asset.originalFilename || item.asset.filename || "Uploaded file" }));
+        };
         setMode(data.mode);
+        setUploadedFiles({
+          driverLicense: files("driverLicense"),
+          healthInsuranceCards: files("healthInsuranceCards"),
+          medicalRecords: files("medicalRecords"),
+          declarationPage: files("declarationPage"),
+        });
         setForm((prev) => ({ ...prev, ...normalized }));
         loadedRef.current = true;
       } catch (error) {
@@ -153,9 +171,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (res.status === 401) {
-          window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
-        }
+        if (res.status === 401) window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
       } catch (error) {
         console.error("AUTOSAVE ERROR", error);
       }
@@ -168,8 +184,8 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   // Update text fields only.
   const updateText = (field: StringField, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  // Update file fields only.
-  const updateFile = (field: FileField, value: File | null) => setForm((prev) => ({ ...prev, [field]: value }));
+  // Update new file fields only.
+  const updateFile = (field: FileField, value: File[] | File | null) => setForm((prev) => ({ ...prev, [field]: value }));
 
   // Render text input.
   const input = (field: StringField, label: string, type = "text") => {
@@ -215,24 +231,73 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     );
   };
 
-  // Render file upload.
-  const upload = (field: FileField, label: string) => {
+  // Render file upload with persisted and newly selected files.
+  const upload = (field: FileField, label: string, multiple = false) => {
     const required = !optionalFields.has(field);
-    const file = form[field];
+    const value = form[field];
+    const newFiles = Array.isArray(value) ? value : value instanceof File ? [value] : [];
+    const existingFiles = uploadedFiles[field] || [];
     return (
       <div className="space-y-2">
         <label htmlFor={field} className="block font-montserrat font-semibold text-slate-800">
           {label}
           {required && <span className="text-red-600"> *</span>}
         </label>
+        {existingFiles.length > 0 && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 font-montserrat text-xs font-semibold uppercase tracking-wide text-slate-500">Already uploaded</p>
+            <div className="space-y-2">
+              {existingFiles.map((file, index) => (
+                <a
+                  key={`${file.url}-${index}`}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-md bg-white px-3 py-2 font-montserrat text-sm text-[#00305b] transition hover:bg-slate-100"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">✓</span>
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  <span className="shrink-0 text-xs font-semibold text-slate-500">View</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {newFiles.length > 0 && (
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
+            <p className="mb-2 font-montserrat text-xs font-semibold uppercase tracking-wide text-slate-500">New files</p>
+            <div className="space-y-2">
+              {newFiles.map((file, index) => (
+                <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 font-montserrat text-sm text-slate-700">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">+</span>
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <label
           htmlFor={field}
           className="flex min-h-14 cursor-pointer items-center justify-between gap-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 transition hover:border-[#00305b] hover:bg-slate-100"
         >
-          <span className="truncate font-montserrat text-slate-600">{file instanceof File ? file.name : "Choose file"}</span>
+          <span className="font-montserrat text-sm text-slate-600">{existingFiles.length || newFiles.length ? "Add more files" : "Choose file"}</span>
           <span className="shrink-0 rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-4 py-2 font-montserrat text-sm font-semibold text-white shadow-sm">Upload</span>
         </label>
-        <input id={field} name={field} type="file" accept="image/*,.pdf" required={required} className="hidden" onChange={(e) => updateFile(field, e.target.files?.[0] ?? null)} />
+        <input
+          id={field}
+          name={field}
+          type="file"
+          accept="image/*,.pdf"
+          multiple={multiple}
+          required={required && existingFiles.length === 0 && newFiles.length === 0}
+          className="hidden"
+          onChange={(e) => {
+            const selected = Array.from(e.target.files ?? []);
+            if (!selected.length) return;
+            updateFile(field, multiple ? [...newFiles, ...selected] : selected[0]);
+            e.target.value = "";
+          }}
+        />
       </div>
     );
   };
@@ -245,7 +310,8 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const body = new FormData();
       for (const [key, value] of Object.entries(form)) {
-        if (value instanceof File) body.append(key, value);
+        if (Array.isArray(value)) value.forEach((file) => body.append(key, file));
+        else if (value instanceof File) body.append(key, value);
         else body.append(key, value ?? "");
       }
       if (token) body.append("token", token);
@@ -322,8 +388,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
               <div className="mt-6 space-y-5">
-                {upload("driverLicense", "Photo of California Driver License")}
-                {upload("healthInsuranceCards", "Photo of Health Insurance Cards")}
+                {upload("driverLicense", "Photos of California Driver License", true)}
+                {upload("healthInsuranceCards", "Photos of Health Insurance Cards", true)}
+                {upload("medicalRecords", "Photos of Medical Records", true)}
                 {upload("declarationPage", "Client’s Declaration Page")}
               </div>
             </section>
