@@ -268,8 +268,8 @@ function buildRows(lines: PleadingLine[], layout: PageLayout) {
     const contentChildren: (Paragraph | Table)[] = [];
 
     if (isCaptionRow) {
-      const leftLines = (line.captionLeftText || "").split("\n").filter(x => x.trim() !== "");
-      const rightLines = (line.captionRightText || "").split("\n").filter(x => x.trim() !== "");
+      const leftLines = (line.captionLeftText || "").split("\n").filter((x: string) => x.trim() !== "");
+      const rightLines = (line.captionRightText || "").split("\n").filter((x: string) => x.trim() !== "");
       const visualLines = Math.max(leftLines.length, rightLines.length);
       const captionRuns: TextRun[] = [];
 
