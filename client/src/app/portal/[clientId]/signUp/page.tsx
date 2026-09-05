@@ -37,7 +37,7 @@ type FormData = {
   defendantClaimNumber: string;
 };
 
-type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "declarationPage">;
+type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "vehicleDamagePhotos" | "declarationPage">;
 type FileField = "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "vehicleDamagePhotos" | "declarationPage";
 
 const initialForm: FormData = {
