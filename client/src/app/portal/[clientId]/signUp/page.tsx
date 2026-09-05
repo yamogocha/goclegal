@@ -76,6 +76,7 @@ const initialForm: FormData = {
 const optionalFields = new Set<StringField | FileField>([
   "driverLicense",
   "medicalRecords",
+  "vehicleDamagePhotos",
   "declarationPage",
   "policeDepartment",
   "policeReportNumber",
