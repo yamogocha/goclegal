@@ -18,9 +18,12 @@ type FormData = {
   injuries: string;
   medicalCare: string;
   medicalProvider: string;
+  clientVehicle: string;
+  defendantVehicle: string;
   driverLicense: File[];
   healthInsuranceCards: File[];
   medicalRecords: File[];
+  vehicleDamagePhotos: File[];
   declarationPage: File | null;
   collisionLocation: string;
   collisionDate: string;
@@ -35,7 +38,7 @@ type FormData = {
 };
 
 type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "declarationPage">;
-type FileField = "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "declarationPage";
+type FileField = "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "vehicleDamagePhotos" | "declarationPage";
 
 const initialForm: FormData = {
   clientName: "",
@@ -51,9 +54,12 @@ const initialForm: FormData = {
   injuries: "",
   medicalCare: "",
   medicalProvider: "",
+  clientVehicle: "",
+  defendantVehicle: "",
   driverLicense: [],
   healthInsuranceCards: [],
   medicalRecords: [],
+  vehicleDamagePhotos: [],
   declarationPage: null,
   collisionLocation: "",
   collisionDate: "",
@@ -111,7 +117,13 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   const { clientId } = use(params);
   const { token } = use(searchParams);
   const [form, setForm] = useState<FormData>(initialForm);
-  const [uploadedFiles, setUploadedFiles] = useState<Record<FileField, UploadedFile[]>>({ driverLicense: [], healthInsuranceCards: [], medicalRecords: [], declarationPage: [] });
+  const [uploadedFiles, setUploadedFiles] = useState<Record<FileField, UploadedFile[]>>({
+    driverLicense: [],
+    healthInsuranceCards: [],
+    medicalRecords: [],
+    vehicleDamagePhotos: [],
+    declarationPage: [],
+  });
   const [mode, setMode] = useState<"admin" | "client" | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -151,6 +163,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           driverLicense: files("driverLicense"),
           healthInsuranceCards: files("healthInsuranceCards"),
           medicalRecords: files("medicalRecords"),
+          vehicleDamagePhotos: files("vehicleDamagePhotos"),
           declarationPage: files("declarationPage"),
         });
         setForm((prev) => ({ ...prev, ...normalized }));
@@ -368,6 +381,8 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       clientAutoInsurance: "Auto Insurance",
       clientPolicyNumber: "Policy Number",
       clientClaimNumber: "Claim Number",
+      clientVehicle: "Year, Make, and Model of Your Car",
+      defendantVehicle: "Year, Make, and Model of the Car That Hit You",
       clientHealthInsurance: "Health Insurance",
       clientHealthInsuranceMemberNumber: "Member Number",
       injuries: "Description of Injuries",
@@ -475,6 +490,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Auto Insurance</h2>
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                {input("clientVehicle", "Year, Make, and Model of Your Car")}
                 {input("clientAutoInsurance", "Auto Insurance")}
                 {input("clientPolicyNumber", "Policy Number")}
                 {input("clientClaimNumber", "Claim Number")}
@@ -499,6 +515,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
               <div className="mt-6 space-y-5">
                 {upload("driverLicense", "Photos of California Driver License", true)}
+                {upload("vehicleDamagePhotos", "Photos of Damage to Your Car", true)}
                 {upload("healthInsuranceCards", "Photos of Health Insurance Cards", true)}
                 {upload("medicalRecords", "Photos of Medical Records", true)}
                 {upload("declarationPage", "Client’s Declaration Page")}
@@ -509,6 +526,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
                 {input("collisionLocation", "Collision Location")}
                 {input("collisionDate", "Collision Date", "date")}
+                {input("defendantVehicle", "Year, Make, and Model of the Car That Hit You")}
                 {input("policeDepartment", "Police Department")}
                 {input("policeReportNumber", "Police Report Number")}
               </div>

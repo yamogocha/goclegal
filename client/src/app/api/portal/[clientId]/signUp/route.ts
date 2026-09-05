@@ -6,15 +6,17 @@ import { getClientAccess } from "@/lib/oauth";
 
 const scalarFields = [
     "clientName", "clientPhone", "clientDob", "clientEmail", "clientSsnLast4",
+    "clientVehicle",
     "clientAutoInsurance", "clientPolicyNumber", "clientClaimNumber",
     "clientHealthInsurance", "clientHealthInsuranceMemberNumber", "injuries",
     "medicalCare", "medicalProvider", "collisionLocation", "collisionDate",
     "collisionDescription", "policeDepartment", "policeReportNumber",
+    "defendantVehicle",
     "defendantName", "defendantInsurance", "defendantAdjuster",
     "defendantPolicyNumber", "defendantClaimNumber",
 ] as const;
 
-const arrayFileFields = ["driverLicense", "healthInsuranceCards", "medicalRecords"] as const;
+const arrayFileFields = ["driverLicense", "healthInsuranceCards", "medicalRecords", "vehicleDamagePhotos"] as const;
 
 const getRecord = async (clientId: string) => serverClient.fetch(
     groq`*[_type=="clientType" && (_id==$clientId || clientId==$clientId)][0]{
@@ -43,15 +45,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ clie
         const record = await client.fetch(
             groq`*[_type=="clientType" && (_id==$clientId || clientId==$clientId)][0]{
                 clientName,clientPhone,clientDob,clientEmail,clientSsnLast4,
+                clientVehicle,
                 clientAutoInsurance,clientPolicyNumber,clientClaimNumber,
                 clientHealthInsurance,clientHealthInsuranceMemberNumber,
                 injuries,medicalCare,medicalProvider,collisionLocation,collisionDate,
                 collisionDescription,policeDepartment,policeReportNumber,
+                defendantVehicle,
                 defendantName,defendantInsurance,defendantAdjuster,
                 defendantPolicyNumber,defendantClaimNumber,intakeStatus,
                 "driverLicense": driverLicense[]{asset->{_id,url,originalFilename,filename}},
                 "healthInsuranceCards": healthInsuranceCards[]{asset->{_id,url,originalFilename,filename}},
                 "medicalRecords": medicalRecords[]{asset->{_id,url,originalFilename,filename}},
+                "vehicleDamagePhotos": vehicleDamagePhotos[]{asset->{_id,url,originalFilename,filename}},
                 "declarationPage": declarationPage{asset->{_id,url,originalFilename,filename}}
             }`,
             { clientId },
@@ -238,7 +243,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ c
 
         const { field, assetId } = await req.json();
 
-        if (!["driverLicense", "healthInsuranceCards", "medicalRecords", "declarationPage"].includes(field)) {
+        if (!["driverLicense", "healthInsuranceCards", "medicalRecords", "vehicleDamagePhotos", "declarationPage"].includes(field)) {
             return NextResponse.json({ error: "Invalid file field" }, { status: 400 });
         }
 

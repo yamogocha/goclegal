@@ -14,6 +14,7 @@ export const clientType = defineType({
         defineField({ name: "clientEmail", title: "Client Email", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientSsnLast4", title: "Last 4 of SSN", type: "string", validation: Rule => Rule.required().length(4) }),
         // Auto insurance
+        defineField({ name: "clientVehicle", title: "Client Vehicle", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientAutoInsurance", title: "Auto Insurance", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientPolicyNumber", title: "Auto Policy Number", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientClaimNumber", title: "Auto Claim Number", type: "string", validation: Rule => Rule.required() }),
@@ -28,10 +29,12 @@ export const clientType = defineType({
         defineField({ name: "driverLicense", title: "California Driver License", type: "array", of: [{ type: "file", options: { accept: "image/*,.pdf" } }] }),
         defineField({ name: "healthInsuranceCards", title: "Health Insurance Cards", type: "array", of: [{ type: "file", options: { accept: "image/*,.pdf" } }], validation: Rule => Rule.required().min(1) }),
         defineField({ name: "medicalRecords", title: "Medical Records", type: "array", of: [{ type: "file", options: { accept: "image/*,.pdf" } }] }),
+        defineField({ name: "vehicleDamagePhotos", title: "Vehicle Damage Photos", type: "array", of: [{ type: "file", options: { accept: "image/*,.pdf" } }] }),
         defineField({ name: "declarationPage", title: "Client’s Declaration Page", type: "file", options: { accept: "image/*,.pdf" } }),
         // Collision
         defineField({ name: "collisionLocation", title: "Collision Location", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "collisionDate", title: "Collision Date", type: "date", validation: Rule => Rule.required() }),
+        defineField({ name: "defendantVehicle", title: "Other Vehicle", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "collisionDescription", title: "Collision Description", type: "text" }),
         defineField({ name: "policeDepartment", title: "Police Department", type: "string" }),
         defineField({ name: "policeReportNumber", title: "Police Report Number", type: "string" }),
