@@ -118,6 +118,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   const router = useRouter();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(false);
+  const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Load only after the API validates admin session or client token.
   useEffect(() => {
@@ -201,7 +202,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           name={field}
           type={type}
           value={form[field] || ""}
-          required={required}
+          aria-required={required}
           onChange={(e) => updateText(field, e.target.value)}
           className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 font-montserrat text-gray-500 outline-none transition focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/15"
         />
@@ -222,7 +223,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           id={field}
           name={field}
           value={form[field] || ""}
-          required={required}
+          aria-required={required}
           onChange={(e) => updateText(field, e.target.value)}
           rows={5}
           className="w-full resize-none rounded-lg border border-slate-300 bg-white px-4 py-3 font-montserrat leading-6 text-gray-500 outline-none transition focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/15"
@@ -289,7 +290,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           type="file"
           accept="image/*,.pdf"
           multiple={multiple}
-          required={required && existingFiles.length === 0 && newFiles.length === 0}
+          aria-required={required}
           className="hidden"
           onChange={(e) => {
             const selected = Array.from(e.target.files ?? []);
@@ -305,7 +306,44 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   // Submit the complete intake.
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setBanner(null);
+
+    // Validate required fields manually so we can show our own banner.
+    const missing: string[] = [];
+    const requiredLabels: Partial<Record<StringField | FileField, string>> = {
+      clientName: "Client Name",
+      clientPhone: "Client Phone",
+      clientDob: "Date of Birth",
+      clientEmail: "Client Email",
+      clientSsnLast4: "Last 4 of SSN",
+      clientAutoInsurance: "Auto Insurance",
+      clientPolicyNumber: "Policy Number",
+      clientClaimNumber: "Claim Number",
+      clientHealthInsurance: "Health Insurance",
+      clientHealthInsuranceMemberNumber: "Member Number",
+      injuries: "Description of Injuries",
+      medicalCare: "Description of Medical Care Received",
+      medicalProvider: "Name and Address of Medical Provider",
+      healthInsuranceCards: "Health Insurance Cards",
+      collisionLocation: "Collision Location",
+      collisionDate: "Collision Date",
+    };
+
+    for (const field of stringFields) {
+      if (!optionalFields.has(field) && !String(form[field] ?? "").trim()) missing.push(requiredLabels[field] || field);
+    }
+    const healthInsuranceFiles = [...uploadedFiles.healthInsuranceCards, ...(Array.isArray(form.healthInsuranceCards) ? form.healthInsuranceCards : [])];
+    if (healthInsuranceFiles.length === 0) missing.push(requiredLabels.healthInsuranceCards || "Health Insurance Cards");
+    if (missing.length > 0) {
+      setBanner({
+        type: "error",
+        message: `Please complete the following required field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setSubmitting(true);
+
     try {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const body = new FormData();
@@ -315,17 +353,30 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         else body.append(key, value ?? "");
       }
       if (token) body.append("token", token);
-      const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp`, { method: "POST", body });
+      const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp`, {
+        method: "POST",
+        body,
+      });
       const data = await response.json();
       if (response.status === 401) {
         window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
         return;
       }
       if (!response.ok) throw new Error(data.error || "Unable to submit intake");
-      alert("Your intake has been submitted.");
-      if (mode === "admin") router.push(`/portal/${encodeURIComponent(clientId)}`);
+      setBanner({
+        type: "success",
+        message: "Your intake has been successfully submitted. Thank you!",
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (mode === "admin") {
+        setTimeout(() => router.push(`/portal/${encodeURIComponent(clientId)}`), 1500);
+      }
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      setBanner({
+        type: "error",
+        message: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSubmitting(false);
     }
@@ -347,6 +398,16 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               >
                 ← Profile
               </Link>
+            )}
+            {banner && (
+              <div
+                role="alert"
+                className={`mb-6 rounded-lg border px-5 py-4 font-montserrat text-sm font-semibold ${
+                  banner.type === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                {banner.message}
+              </div>
             )}
             <h1 className="text-center text-4xl font-bold tracking-tight text-[#00305b] sm:text-5xl">Tell Us About Your Case</h1>
             <p className="mt-3 text-center font-montserrat leading-7 text-gray-600">Please provide the information below so our team can begin reviewing your case.</p>
