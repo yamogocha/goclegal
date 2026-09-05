@@ -49,10 +49,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ clie
                 collisionDescription,policeDepartment,policeReportNumber,
                 defendantName,defendantInsurance,defendantAdjuster,
                 defendantPolicyNumber,defendantClaimNumber,intakeStatus,
-                "driverLicense": driverLicense[]{asset->{url,originalFilename,filename}},
-                "healthInsuranceCards": healthInsuranceCards[]{asset->{url,originalFilename,filename}},
-                "medicalRecords": medicalRecords[]{asset->{url,originalFilename,filename}},
-                "declarationPage": declarationPage{asset->{url,originalFilename,filename}}
+                "driverLicense": driverLicense[]{asset->{_id,url,originalFilename,filename}},
+                "healthInsuranceCards": healthInsuranceCards[]{asset->{_id,url,originalFilename,filename}},
+                "medicalRecords": medicalRecords[]{asset->{_id,url,originalFilename,filename}},
+                "declarationPage": declarationPage{asset->{_id,url,originalFilename,filename}}
             }`,
             { clientId },
             { cache: "no-store" }
@@ -222,6 +222,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
 
         return NextResponse.json({
             error: error instanceof Error ? error.message : "Unable to submit intake",
+        }, { status: 500 });
+    }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ clientId: string }> }) {
+    try {
+        const { clientId } = await params;
+        const token = req.nextUrl.searchParams.get("token") || undefined;
+        const access = await authorize(clientId, token);
+        if (!access) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const existing = await getRecord(clientId);
+        if (!existing?._id) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+
+        const { field, assetId } = await req.json();
+
+        if (!["driverLicense", "healthInsuranceCards", "medicalRecords", "declarationPage"].includes(field)) {
+            return NextResponse.json({ error: "Invalid file field" }, { status: 400 });
+        }
+
+        if (!assetId) return NextResponse.json({ error: "Missing asset ID" }, { status: 400 });
+
+        if (field === "declarationPage") {
+            await serverClient.patch(existing._id).unset([field]).commit();
+        } else {
+            await serverClient.patch(existing._id).set({
+                [field]: (existing[field] || []).filter((file: any) => file?.asset?._ref !== assetId),
+            }).commit();
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("DELETE SIGNUP FILE ERROR", error);
+        return NextResponse.json({
+            error: error instanceof Error ? error.message : "Unable to remove file",
         }, { status: 500 });
     }
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type UploadedFile = { url: string; name: string };
+type UploadedFile = { url: string; name: string; assetId: string };
 type FormData = {
   clientName: string;
   clientPhone: string;
@@ -138,7 +138,13 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           const value = data.client?.[field];
           if (!value) return [];
           const list = Array.isArray(value) ? value : [value];
-          return list.filter((item: any) => item?.asset?.url).map((item: any) => ({ url: item.asset.url, name: item.asset.originalFilename || item.asset.filename || "Uploaded file" }));
+          return list
+            .filter((item: any) => item?.asset?.url)
+            .map((item: any) => ({
+              url: item.asset.url,
+              name: item.asset.originalFilename || item.asset.filename || "Uploaded file",
+              assetId: item.asset._id || item.asset._ref,
+            }));
         };
         setMode(data.mode);
         setUploadedFiles({
@@ -232,6 +238,42 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     );
   };
 
+  // Remove an uploaded or newly selected file.
+  const removeFile = async (field: FileField, index: number, persisted: boolean) => {
+    if (!persisted) {
+      const value = form[field];
+      const files = Array.isArray(value) ? value : value instanceof File ? [value] : [];
+      updateFile(
+        field,
+        files.filter((_, i) => i !== index),
+      );
+      return;
+    }
+    const file = uploadedFiles[field][index];
+    if (!file) return;
+
+    try {
+      const query = token ? `?token=${encodeURIComponent(token)}` : "";
+      const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field, assetId: file.assetId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to remove file");
+      setUploadedFiles((prev) => ({
+        ...prev,
+        [field]: prev[field].filter((_, i) => i !== index),
+      }));
+      setBanner({ type: "success", message: "File removed successfully." });
+    } catch (error) {
+      setBanner({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to remove file.",
+      });
+    }
+  };
+
   // Render file upload with persisted and newly selected files.
   const upload = (field: FileField, label: string, multiple = false) => {
     const required = !optionalFields.has(field);
@@ -249,17 +291,21 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
             <p className="mb-2 font-montserrat text-xs font-semibold uppercase tracking-wide text-slate-500">Already uploaded</p>
             <div className="space-y-2">
               {existingFiles.map((file, index) => (
-                <a
-                  key={`${file.url}-${index}`}
-                  href={file.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 rounded-md bg-white px-3 py-2 font-montserrat text-sm text-[#00305b] transition hover:bg-slate-100"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">✓</span>
-                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                  <span className="shrink-0 text-xs font-semibold text-slate-500">View</span>
-                </a>
+                <div key={`${file.url}-${index}`} className="flex items-center gap-3 rounded-md bg-white px-3 py-2 font-montserrat text-sm text-[#00305b]">
+                  <a
+                    href={`/api/portal/${encodeURIComponent(clientId)}/file?url=${encodeURIComponent(file.url)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 flex-1 items-center gap-3 hover:text-[#004c8f]"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">✓</span>
+                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    <span className="shrink-0 text-xs font-semibold text-slate-500">View</span>
+                  </a>
+                  <button type="button" onClick={() => removeFile(field, index, true)} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50">
+                    Remove
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -272,6 +318,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 font-montserrat text-sm text-slate-700">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">+</span>
                   <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  <button type="button" onClick={() => removeFile(field, index, false)} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50">
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
