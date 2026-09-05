@@ -93,6 +93,7 @@ const stringFields: StringField[] = [
   "clientDob",
   "clientEmail",
   "clientSsnLast4",
+  "clientVehicle",
   "clientAutoInsurance",
   "clientPolicyNumber",
   "clientClaimNumber",
@@ -106,13 +107,13 @@ const stringFields: StringField[] = [
   "collisionDescription",
   "policeDepartment",
   "policeReportNumber",
+  "defendantVehicle",
   "defendantName",
   "defendantInsurance",
   "defendantAdjuster",
   "defendantPolicyNumber",
   "defendantClaimNumber",
 ];
-
 export default function ClientSignupPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ token?: string }> }) {
   const { clientId } = use(params);
   const { token } = use(searchParams);

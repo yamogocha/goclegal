@@ -24,6 +24,7 @@ const getRecord = async (clientId: string) => serverClient.fetch(
         driverLicense,
         healthInsuranceCards,
         medicalRecords,
+        vehicleDamagePhotos,
         declarationPage
     }`,
     { clientId },
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
                 driverLicense,
                 healthInsuranceCards,
                 medicalRecords,
+                vehicleDamagePhotos,
                 declarationPage
             }`,
             { clientId },
@@ -141,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
             const uploaded = [];
 
             for (const file of files) {
-                console.log(`Uploading ${field}: ${file.name} (${file.size} bytes)`);
+                console.log(`Uploading ${field}: ${file.name}(${file.size} bytes)`);
 
                 const asset = await serverClient.assets.upload(
                     "file",
@@ -155,7 +157,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
                 console.log(`Sanity asset created: ${asset._id}`);
 
                 uploaded.push({
-                    _key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    _key: `${Date.now()} - ${Math.random().toString(36).slice(2)}`,
                     _type: "file",
                     asset: {
                         _type: "reference",
@@ -207,6 +209,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
             driverLicense: Array.isArray(patchData.driverLicense) ? patchData.driverLicense.length : 0,
             healthInsuranceCards: Array.isArray(patchData.healthInsuranceCards) ? patchData.healthInsuranceCards.length : 0,
             medicalRecords: Array.isArray(patchData.medicalRecords) ? patchData.medicalRecords.length : 0,
+            vehicleDamagePhotos: Array.isArray(patchData.vehicleDamagePhotos) ? patchData.vehicleDamagePhotos.length : 0,
             declarationPage: !!patchData.declarationPage,
         });
 
