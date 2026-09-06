@@ -13,6 +13,8 @@ export const clientType = defineType({
         defineField({ name: "clientDob", title: "Date of Birth", type: "date", validation: Rule => Rule.required() }),
         defineField({ name: "clientEmail", title: "Client Email", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientSsnLast4", title: "Last 4 of SSN", type: "string", validation: Rule => Rule.required().length(4) }),
+        defineField({ name: "clientHonorific", title: "Client Honorific", type: "string", options: { list: [{ title: "Mr.", value: "Mr." }, { title: "Ms.", value: "Ms." }] } }),
+        defineField({ name: "clientPronoun", title: "Client Pronoun", type: "string", options: { list: [{ title: "His", value: "his" }, { title: "Her", value: "her" }, { title: "Their", value: "their" }] } }),
         // Auto insurance
         defineField({ name: "clientVehicle", title: "Client Vehicle", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientAutoInsurance", title: "Auto Insurance", type: "string", validation: Rule => Rule.required() }),
@@ -38,12 +40,21 @@ export const clientType = defineType({
         defineField({ name: "collisionDescription", title: "Collision Description", type: "text" }),
         defineField({ name: "policeDepartment", title: "Police Department", type: "string" }),
         defineField({ name: "policeReportNumber", title: "Police Report Number", type: "string" }),
+        defineField({ name: "collisionTime", title: "Collision Time", type: "string" }),
         // Defendant
         defineField({ name: "defendantName", title: "Defendant Name", type: "string" }),
         defineField({ name: "defendantInsurance", title: "Defendant Insurance", type: "string" }),
         defineField({ name: "defendantAdjuster", title: "Defendant Adjuster", type: "string" }),
         defineField({ name: "defendantPolicyNumber", title: "Defendant Policy Number", type: "string" }),
         defineField({ name: "defendantClaimNumber", title: "Defendant Claim Number", type: "string" }),
+        defineField({ name: "defendantCdl", title: "Defendant CDL", type: "string" }),
+        defineField({ name: "defendantDob", title: "Defendant Date of Birth", type: "date" }),
+        defineField({ name: "defendantEmail", title: "Defendant Email", type: "string" }),
+        defineField({ name: "defendantAddress", title: "Defendant Address", type: "text" }),
+        defineField({ name: "defendantInsuranceEmail", title: "Defendant Insurance Email", type: "string" }),
+        defineField({ name: "defendantInsuranceAddress", title: "Defendant Insurance Address", type: "text" }),
+        // Uber claim reference.
+        defineField({ name: "uberReferenceNumber", title: "Uber Reference Number", type: "string" }),
         // Intake
         defineField({
             name: "intakeStatus",

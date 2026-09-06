@@ -80,7 +80,10 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
             <div className="font-bold text-2xl text-[#00305b]">Client Sign-Up</div>
             <div className="font-montserrat text-gray-500 mt-1">Client intake portal.</div>
           </Link>
-
+          <Link href={`/portal/${encodeURIComponent(clientId)}/notices`} className="h-full border rounded-lg p-5 hover:bg-gray-50 transition flex flex-col justify-center">
+            <div className="font-bold text-2xl text-[#00305b]">Notices</div>
+            <div className="font-montserrat text-gray-500 mt-1">Generate and download client notices.</div>
+          </Link>
           {hasInterrogatories ? (
             <Link href={interrogatoryHref} className="h-full border rounded-lg p-5 hover:bg-gray-50 transition flex flex-col justify-center">
               <div className="font-bold text-2xl text-[#00305b]">Interrogatories</div>
