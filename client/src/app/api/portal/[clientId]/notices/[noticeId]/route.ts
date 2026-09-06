@@ -31,7 +31,6 @@ export async function GET(
         (_id == $clientId || clientId == $clientId)
       ][0]{
         clientName,
-        clientHonorific,
         clientPronoun,
         clientEmail,
         clientPhone,

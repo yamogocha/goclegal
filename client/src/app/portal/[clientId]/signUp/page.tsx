@@ -12,7 +12,6 @@ type FormData = {
   clientDob: string;
   clientEmail: string;
   clientSsnLast4: string;
-  clientHonorific: string;
   clientPronoun: string;
   clientAutoInsurance: string;
   clientPolicyNumber: string;
@@ -59,7 +58,6 @@ const initialForm: FormData = {
   clientDob: "",
   clientEmail: "",
   clientSsnLast4: "",
-  clientHonorific: "",
   clientPronoun: "",
   clientAutoInsurance: "",
   clientPolicyNumber: "",
@@ -97,7 +95,6 @@ const initialForm: FormData = {
 };
 
 const optionalFields = new Set<StringField | FileField>([
-  "clientHonorific",
   "clientPronoun",
   "driverLicense",
   "medicalRecords",
@@ -127,7 +124,6 @@ const stringFields: StringField[] = [
   "clientDob",
   "clientEmail",
   "clientSsnLast4",
-  "clientHonorific",
   "clientPronoun",
   "clientVehicle",
   "clientAutoInsurance",
@@ -633,14 +629,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("clientDob", "Date of Birth", "date")}
                 {input("clientEmail", "Client Email", "email")}
                 {input("clientSsnLast4", "Last 4 of SSN")}
-                {select("clientHonorific", "Client Honorific", [
-                  { label: "Mr.", value: "Mr." },
-                  { label: "Ms.", value: "Ms." },
-                ])}
                 {select("clientPronoun", "Client Pronoun", [
                   { label: "His", value: "his" },
                   { label: "Her", value: "her" },
-                  { label: "Their", value: "their" },
                 ])}
               </div>
             </section>

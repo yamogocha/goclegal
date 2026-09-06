@@ -2,25 +2,15 @@ import Docxtemplater from "docxtemplater";
 import PizZip from "pizzip";
 
 export const NOTICE_TYPES = {
-    representation: {
-        title: "Notice of Representation",
-        filename: "notice-of-representation.docx",
-    },
-    preservation: {
-        title: "Evidence Preservation",
-        filename: "preservation-of-evidence.docx",
-    },
-    uberPreservation: {
-        title: "Uber Evidence Preservation",
-        filename: "uber-evidence-preservation.docx",
-    },
+    representation: { title: "Notice of Representation", filename: "notice-of-representation.docx" },
+    preservation: { title: "Evidence Preservation", filename: "preservation-of-evidence.docx" },
+    uberPreservation: { title: "Uber Evidence Preservation", filename: "uber-evidence-preservation.docx" }
 } as const;
 
 export type NoticeId = keyof typeof NOTICE_TYPES;
 
 export type NoticeClient = {
     clientName?: string | null;
-    clientHonorific?: string | null;
     clientPronoun?: string | null;
     clientEmail?: string | null;
     clientPhone?: string | null;
@@ -50,22 +40,14 @@ const formatDate = (value?: string | null): string => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return text(value);
 
-    return date.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-    }).toUpperCase();
+    return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
 };
-
-const getLastName = (name?: string | null): string => {
-    if (!name) return "";
-    const parts = name.trim().split(/\s+/);
-    return parts[parts.length - 1];
-};
+const getLastName = (name?: string | null): string => { if (!name) return ""; const parts = name.trim().split(/\s+/); return parts[parts.length - 1] };
+export function getClientHonorific(pronoun?: string): string { return pronoun === "her" ? "Ms." : "Mr." }
 
 const getPlaceholders = (client: NoticeClient): Record<string, string> => ({
     "CLIENT NAME": text(client.clientName),
-    "CLIENT HONORIFIC": text(client.clientHonorific),
+    "CLIENT HONORIFIC": text(getClientHonorific(client.clientPronoun ?? "")),
     "CLIENT PRONOUN": text(client.clientPronoun),
     "CLIENT EMAIL": text(client.clientEmail),
     "CLIENT PHONE": text(client.clientPhone),
@@ -97,26 +79,12 @@ export async function buildNoticeDocx(
 ): Promise<Buffer> {
     const notice = NOTICE_TYPES[noticeId];
     const templateUrl = new URL(`/notices/${notice.filename}`, requestUrl);
-
     const response = await fetch(templateUrl);
-
-    if (!response.ok) {
-        throw new Error(
-            `Notice template not found: ${templateUrl.pathname} (${response.status})`,
-        );
-    }
-
+    if (!response.ok) { throw new Error(`Notice template not found: ${templateUrl.pathname} (${response.status})`) }
     const templateBuffer = Buffer.from(await response.arrayBuffer());
     const zip = new PizZip(templateBuffer);
 
-    const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        delimiters: {
-            start: "[",
-            end: "]",
-        },
-    });
+    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, delimiters: { start: "[", end: "]" } });
 
     doc.render(getPlaceholders(client));
 

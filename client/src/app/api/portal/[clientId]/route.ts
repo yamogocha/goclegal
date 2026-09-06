@@ -36,7 +36,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clientI
         defendantAdjuster,
         defendantPolicyNumber,
         defendantClaimNumber,
-        clientHonorific,
         clientPronoun,
         collisionTime,
         defendantCdl,

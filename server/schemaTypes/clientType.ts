@@ -13,8 +13,7 @@ export const clientType = defineType({
         defineField({ name: "clientDob", title: "Date of Birth", type: "date", validation: Rule => Rule.required() }),
         defineField({ name: "clientEmail", title: "Client Email", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientSsnLast4", title: "Last 4 of SSN", type: "string", validation: Rule => Rule.required().length(4) }),
-        defineField({ name: "clientHonorific", title: "Client Honorific", type: "string", options: { list: [{ title: "Mr.", value: "Mr." }, { title: "Ms.", value: "Ms." }] } }),
-        defineField({ name: "clientPronoun", title: "Client Pronoun", type: "string", options: { list: [{ title: "His", value: "his" }, { title: "Her", value: "her" }, { title: "Their", value: "their" }] } }),
+        defineField({ name: "clientPronoun", title: "Client Pronoun", type: "string", options: { list: [{ title: "His", value: "his" }, { title: "Her", value: "her" }] } }),
         // Auto insurance
         defineField({ name: "clientVehicle", title: "Client Vehicle", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientAutoInsurance", title: "Auto Insurance", type: "string", validation: Rule => Rule.required() }),
@@ -98,12 +97,7 @@ export const clientType = defineType({
             fields: [
                 defineField({ name: "consented", title: "Consented", type: "boolean", initialValue: false }),
                 defineField({ name: "consentedAt", title: "Consented At", type: "datetime" }),
-                defineField({
-                    name: "method",
-                    title: "Consent Method",
-                    type: "string",
-                    options: { list: [{ title: "Phone / Verbal", value: "phone" }, { title: "Written", value: "written" }, { title: "Website", value: "website" }] },
-                }),
+                defineField({ name: "method", title: "Consent Method", type: "string", options: { list: [{ title: "Phone / Verbal", value: "phone" }, { title: "Written", value: "written" }, { title: "Website", value: "website" }] } }),
                 defineField({ name: "source", title: "Consent Source", type: "string" }),
                 defineField({ name: "collectedBy", title: "Collected By", type: "string" }),
                 defineField({ name: "consentText", title: "Consent Language Used", type: "text" }),
@@ -117,18 +111,8 @@ export const clientType = defineType({
             of: [{
                 type: "object",
                 fields: [
-                    defineField({
-                        name: "direction",
-                        title: "Direction",
-                        type: "string",
-                        options: { list: [{ title: "Outbound", value: "outbound" }, { title: "Inbound", value: "inbound" }] },
-                    }),
-                    defineField({
-                        name: "channel",
-                        title: "Channel",
-                        type: "string",
-                        options: { list: [{ title: "SMS", value: "sms" }, { title: "Email", value: "email" }] },
-                    }),
+                    defineField({ name: "direction", title: "Direction", type: "string", options: { list: [{ title: "Outbound", value: "outbound" }, { title: "Inbound", value: "inbound" }] } }),
+                    defineField({ name: "channel", title: "Channel", type: "string", options: { list: [{ title: "SMS", value: "sms" }, { title: "Email", value: "email" }] } }),
                     defineField({
                         name: "type",
                         title: "Message Type",
@@ -149,12 +133,7 @@ export const clientType = defineType({
                         },
                     }),
                     defineField({ name: "message", title: "Message", type: "text" }),
-                    defineField({
-                        name: "status",
-                        title: "Status",
-                        type: "string",
-                        options: { list: [{ title: "Queued", value: "queued" }, { title: "Sent", value: "sent" }, { title: "Delivered", value: "delivered" }, { title: "Failed", value: "failed" }, { title: "Received", value: "received" }] },
-                    }),
+                    defineField({ name: "status", title: "Status", type: "string", options: { list: [{ title: "Queued", value: "queued" }, { title: "Sent", value: "sent" }, { title: "Delivered", value: "delivered" }, { title: "Failed", value: "failed" }, { title: "Received", value: "received" }] } }),
                     defineField({ name: "providerMessageId", title: "Provider Message ID", type: "string" }),
                     defineField({ name: "sentAt", title: "Sent At", type: "datetime" }),
                     defineField({ name: "deliveredAt", title: "Delivered At", type: "datetime" }),

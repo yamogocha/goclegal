@@ -6,14 +6,8 @@ export const interrogatoryType = defineType({
   type: "document",
   fields: [
     // Existing client is required.
-    defineField({
-      name: "client",
-      title: "Client",
-      type: "reference",
-      to: [{ type: "clientType" }],
-      validation: Rule => Rule.required(),
-    }),
-    defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string", hidden: true }),
+    defineField({ name: "client", title: "Client", type: "reference", to: [{ type: "clientType" }], validation: Rule => Rule.required() }),
+    defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string" }),
     defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: Rule => Rule.required() }),
     defineField({
       name: "metadata",
@@ -28,21 +22,9 @@ export const interrogatoryType = defineType({
         defineField({ name: "defendantAttorneyEmail", title: "Defendant Attorney Email", type: "string" }),
         defineField({ name: "setNumber", title: "Set Number", type: "string" }),
         defineField({ name: "title", title: "Title", type: "string" }),
-        defineField({ name: "uploadedPdfName", title: "Uploaded PDF Name", type: "string" }),
       ],
     }),
-    defineField({
-      name: "interrogatoryType",
-      title: "Interrogatory Type",
-      type: "string",
-      options: {
-        list: [
-          { title: "Special", value: "special" },
-          { title: "Form", value: "form" },
-        ],
-      },
-      validation: Rule => Rule.required(),
-    }),
+    defineField({ name: "interrogatoryType", title: "Interrogatory Type", type: "string", options: { list: [{ title: "Special", value: "special" }, { title: "Form", value: "form" }] }, validation: Rule => Rule.required() }),
     defineField({
       name: "interrogatories",
       title: "Interrogatories",
@@ -59,19 +41,7 @@ export const interrogatoryType = defineType({
         ],
       }],
     }),
-    defineField({
-      name: "status",
-      type: "string",
-      initialValue: "draft",
-      options: {
-        list: [
-          { title: "Draft", value: "draft" },
-          { title: "Attorney Review", value: "attorney-review" },
-          { title: "Ready To File", value: "ready-to-file" },
-          { title: "Filed", value: "filed" },
-        ],
-      },
-    }),
+    defineField({ name: "status", type: "string", initialValue: "draft", options: { list: [{ title: "Draft", value: "draft" }, { title: "Attorney Review", value: "attorney-review" }, { title: "Ready To File", value: "ready-to-file" }, { title: "Filed", value: "filed" }] } }),
     defineField({ name: "createdAt", type: "datetime" }),
     defineField({ name: "updatedAt", type: "datetime" }),
   ],
