@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 type Interrogatory = {
   _key?: string;
@@ -120,6 +121,9 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
     <main className="min-h-screen relative font-montserrat bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-center md:justify-center p-0 md:p-8">
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
       <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
+        <div className="mb-7">
+          <Image src="/blue-logo.png" alt="GOC Legal" width={192} height={80} className="h-auto w-48 object-contain" priority />
+        </div>
         <div className="sticky top-0 z-20 mb-4 text-center rounded-md px-4 py-2 text-green-700 font-medium">{saveStatus}</div>
 
         {!interrogatories.length ? (

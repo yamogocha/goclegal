@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type UploadedFile = { url: string; name: string; assetId: string };
 
@@ -649,6 +650,11 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       <div className="relative z-10 mx-auto w-full max-w-7xl">
         <div className="rounded-none bg-white p-5 shadow-[0_8px_35px_rgba(0,0,0,0.2)] md:rounded-xl sm:p-8 lg:p-10">
           <div className="mb-9">
+            {mode === "client" && (
+              <div className="mb-10">
+                <Image src="/blue-logo.png" alt="GOC Legal" width={192} height={80} className="h-auto w-48 object-contain" priority />
+              </div>
+            )}
             {mode === "admin" && (
               <Link
                 href={`/portal/${encodeURIComponent(clientId)}`}

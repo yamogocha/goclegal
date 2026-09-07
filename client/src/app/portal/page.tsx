@@ -1,9 +1,14 @@
 "use client";
+
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
-type SearchResult = { clientId: string; clientName: string; clientPhone: string };
+type SearchResult = {
+  clientId: string;
+  clientName: string;
+  clientPhone: string;
+};
 
 const CONSENT_TEXT =
   "I agree to receive SMS/text messages from GOC Legal, P.C. regarding my legal matter, including client intake requests, document or information requests, appointment or treatment reminders, attorney communications, and case-related updates. Message frequency varies based on my case and communication needs. Message and data rates may apply. I can reply STOP to opt out or HELP for assistance. SMS consent is voluntary and is not a condition of receiving legal services.";
@@ -20,37 +25,82 @@ export default function AdminPage() {
   const [smsConsent, setSmsConsent] = useState(false);
   const [consentNotes, setConsentNotes] = useState(CONSENT_TEXT);
   const [creatingClient, setCreatingClient] = useState(false);
-  const [loadedRecent, setLoadedRecent] = useState(false);
 
-  // Load recent clients for the admin dashboard.
-  async function loadRecentClients() {
-    if (!isAdmin || loadedRecent) return;
-    try {
-      const res = await fetch("/api/portal?recent=true");
-      if (!res.ok) return;
-      const data = await res.json();
-      setRecentClients(Array.isArray(data) ? data : []);
-      setLoadedRecent(true);
-    } catch (error) {
-      console.error("LOAD RECENT CLIENTS ERROR", error);
+  // Load recent clients after the admin session is authenticated.
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let cancelled = false;
+
+    async function loadRecentClients() {
+      try {
+        const res = await fetch("/api/portal?recent=true", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+
+        const data: unknown = await res.json();
+
+        if (cancelled) return;
+
+        setRecentClients(Array.isArray(data) ? (data as SearchResult[]) : []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("LOAD RECENT CLIENTS ERROR", error);
+        }
+      }
     }
-  }
+
+    void loadRecentClients();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
 
   // Search clients for the admin dashboard.
   async function searchClients(value: string) {
     setQuery(value);
+
     const search = value.trim();
+
     if (!search) {
       setResults([]);
       return;
     }
+
     try {
-      const res = await fetch(`/api/portal?q=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/portal?q=${encodeURIComponent(search)}`, {
+        cache: "no-store",
+      });
+
       if (!res.ok) return;
-      const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
+
+      const data: unknown = await res.json();
+
+      setResults(Array.isArray(data) ? (data as SearchResult[]) : []);
     } catch (error) {
       console.error("SEARCH CLIENTS ERROR", error);
+    }
+  }
+
+  // Refresh recent clients after creating a client.
+  async function refreshRecentClients() {
+    if (!isAdmin) return;
+
+    try {
+      const res = await fetch("/api/portal?recent=true", {
+        cache: "no-store",
+      });
+
+      if (!res.ok) return;
+
+      const data: unknown = await res.json();
+
+      setRecentClients(Array.isArray(data) ? (data as SearchResult[]) : []);
+    } catch (error) {
+      console.error("REFRESH RECENT CLIENTS ERROR", error);
     }
   }
 
@@ -66,7 +116,9 @@ export default function AdminPage() {
   // Create the client and record website SMS consent.
   async function createClient() {
     if (!newClientName.trim() || !newClientPhone.trim() || !smsConsent) return;
+
     setCreatingClient(true);
+
     try {
       const res = await fetch("/api/portal", {
         method: "POST",
@@ -84,11 +136,19 @@ export default function AdminPage() {
           },
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to submit SMS consent");
+
+      const data: unknown = await res.json();
+
+      if (!res.ok) {
+        const errorMessage = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string" ? data.error : "Unable to submit SMS consent";
+
+        throw new Error(errorMessage);
+      }
+
       resetNewClientForm();
-      setLoadedRecent(false);
-      if (isAdmin) await loadRecentClients();
+
+      // Refresh the list so the new client appears immediately.
+      await refreshRecentClients();
     } catch (error) {
       console.error("CREATE CLIENT ERROR", error);
       alert(error instanceof Error ? error.message : "Unable to submit SMS consent");
@@ -97,20 +157,21 @@ export default function AdminPage() {
     }
   }
 
-  if (status === "loading") return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  if (status === "loading") {
+    return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  }
 
   const displayClients = query.trim() ? results : recentClients;
 
   return (
-    <main
-      onMouseEnter={isAdmin ? loadRecentClients : undefined}
-      className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8"
-    >
+    <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8">
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
+
       <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
         {isAdmin ? (
           <>
             <h1 className="text-3xl font-bold mb-5 text-[#00305b]">Admin Dashboard</h1>
+
             <div className="relative">
               <input
                 value={query}
@@ -124,6 +185,7 @@ export default function AdminPage() {
                   <h2 className="font-semibold text-[#00305b] font-montserrat">Recent Clients</h2>
                 </div>
               )}
+
               {query.trim() && results.length === 0 && <div className="py-8 text-center text-gray-500 font-montserrat">No clients found.</div>}
 
               {displayClients.map((item, index) => (
@@ -164,6 +226,7 @@ export default function AdminPage() {
                           className="w-full rounded-lg border border-gray-300 px-4 py-3.5 font-montserrat text-gray-500 outline-none transition focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
                         />
                       </div>
+
                       <div>
                         <label className="mb-2 block text-xl font-semibold text-[#00305b]">Client Phone</label>
                         <input
@@ -181,8 +244,10 @@ export default function AdminPage() {
                     <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-5">
                       <div className="flex items-start gap-3">
                         <input id="smsConsent" type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-1 h-5 w-5 cursor-pointer accent-[#00305b]" />
+
                         <label htmlFor="smsConsent" className="cursor-pointer">
                           <div className="text-xl font-semibold text-[#00305b]">Client completed SMS consent</div>
+
                           <div className="mt-1 font-montserrat leading-6 text-gray-500">Confirm only after the client has submitted the public GOC Legal SMS consent form.</div>
                         </label>
                       </div>
@@ -196,6 +261,7 @@ export default function AdminPage() {
                       >
                         Cancel
                       </button>
+
                       <button
                         onClick={createClient}
                         disabled={creatingClient || !newClientName.trim() || !newClientPhone.trim() || !smsConsent}
@@ -213,12 +279,14 @@ export default function AdminPage() {
           <div className="w-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="border-b border-gray-200 pb-4">
               <h1 className="text-3xl font-bold text-[#00305b]">GOC Legal SMS Messaging</h1>
+
               <p className="mt-2 font-montserrat leading-6 text-gray-500">Choose whether you would like to receive case-related text messages from GOC Legal, P.C.</p>
             </div>
 
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
               <div>
                 <label className="mb-2 block text-xl font-semibold text-[#00305b]">Client Name</label>
+
                 <input
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
@@ -227,8 +295,10 @@ export default function AdminPage() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-3.5 font-montserrat text-gray-500 outline-none transition focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/10"
                 />
               </div>
+
               <div>
                 <label className="mb-2 block text-xl font-semibold text-[#00305b]">Mobile Phone</label>
+
                 <input
                   value={newClientPhone}
                   onChange={(e) => setNewClientPhone(e.target.value)}
@@ -244,6 +314,7 @@ export default function AdminPage() {
             <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 <input id="smsConsent" type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-1 h-5 w-5 cursor-pointer accent-[#00305b]" />
+
                 <label htmlFor="smsConsent" className="cursor-pointer font-montserrat leading-6 text-gray-500">
                   {CONSENT_TEXT}
                 </label>
@@ -258,7 +329,9 @@ export default function AdminPage() {
               <Link href="/privacy-policy" className="text-[#00305b] underline">
                 Privacy Policy
               </Link>
+
               <span> {" • "} </span>
+
               <Link href="/terms-of-service" className="text-[#00305b] underline">
                 Terms of Service
               </Link>
@@ -268,6 +341,7 @@ export default function AdminPage() {
               <Link href="/" className="w-full rounded-md border border-gray-300 px-5 py-3.5 text-center font-montserrat text-[#00305b] transition hover:bg-gray-50 sm:w-auto">
                 No Thanks
               </Link>
+
               <button
                 onClick={createClient}
                 disabled={creatingClient || !newClientName.trim() || !newClientPhone.trim() || !smsConsent}
