@@ -36,15 +36,18 @@ type FormData = {
   policeReportNumber: string;
   defendantName: string;
   defendantInsurance: string;
-  defendantAdjuster: string;
   defendantPolicyNumber: string;
   defendantClaimNumber: string;
-  defendantCdl: string;
-  defendantDob: string;
   defendantEmail: string;
   defendantAddress: string;
   defendantInsuranceEmail: string;
   defendantInsuranceAddress: string;
+  defendantCdl: string;
+  defendantDob: string;
+  defendantAdjuster: string;
+  defendantAttorney: string;
+  defendantAttorneyAddress: string;
+  defendantAttorneyEmail: string;
   uberReferenceNumber: string;
 };
 
@@ -82,15 +85,18 @@ const initialForm: FormData = {
   policeReportNumber: "",
   defendantName: "",
   defendantInsurance: "",
-  defendantAdjuster: "",
   defendantPolicyNumber: "",
   defendantClaimNumber: "",
-  defendantCdl: "",
-  defendantDob: "",
   defendantEmail: "",
   defendantAddress: "",
   defendantInsuranceEmail: "",
   defendantInsuranceAddress: "",
+  defendantCdl: "",
+  defendantDob: "",
+  defendantAdjuster: "",
+  defendantAttorney: "",
+  defendantAttorneyAddress: "",
+  defendantAttorneyEmail: "",
   uberReferenceNumber: "",
 };
 
@@ -106,15 +112,18 @@ const optionalFields = new Set<StringField | FileField>([
   "collisionDescription",
   "defendantName",
   "defendantInsurance",
-  "defendantAdjuster",
   "defendantPolicyNumber",
   "defendantClaimNumber",
-  "defendantCdl",
-  "defendantDob",
   "defendantEmail",
   "defendantAddress",
   "defendantInsuranceEmail",
   "defendantInsuranceAddress",
+  "defendantCdl",
+  "defendantDob",
+  "defendantAdjuster",
+  "defendantAttorney",
+  "defendantAttorneyAddress",
+  "defendantAttorneyEmail",
   "uberReferenceNumber",
 ]);
 
@@ -143,15 +152,18 @@ const stringFields: StringField[] = [
   "defendantVehicle",
   "defendantName",
   "defendantInsurance",
-  "defendantAdjuster",
   "defendantPolicyNumber",
   "defendantClaimNumber",
-  "defendantCdl",
-  "defendantDob",
   "defendantEmail",
   "defendantAddress",
   "defendantInsuranceEmail",
   "defendantInsuranceAddress",
+  "defendantCdl",
+  "defendantDob",
+  "defendantAdjuster",
+  "defendantAttorney",
+  "defendantAttorneyAddress",
+  "defendantAttorneyEmail",
   "uberReferenceNumber",
 ];
 
@@ -181,7 +193,10 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     async function load() {
       try {
         const query = token ? `?token=${encodeURIComponent(token)}` : "";
-        const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, { cache: "no-store" });
+        const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, {
+          cache: "no-store",
+        });
+
         const data = await res.json();
 
         if (res.status === 401) {
@@ -194,11 +209,14 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         const normalized: Partial<FormData> = {};
 
         for (const field of stringFields) {
-          normalized[field] = typeof data.client?.[field] === "string" ? data.client[field] : "";
+          const value = data.client?.[field];
+
+          normalized[field] = typeof value === "string" ? value : value ? String(value) : "";
         }
 
         const files = (field: FileField): UploadedFile[] => {
           const value = data.client?.[field];
+
           if (!value) return [];
 
           const list = Array.isArray(value) ? value : [value];
@@ -265,9 +283,13 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     };
   }, [form, clientId, token, mode, router]);
 
-  const updateText = (field: StringField, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateText = (field: StringField, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
-  const updateFile = (field: FileField, value: File[] | File | null) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateFile = (field: FileField, value: File[] | File | null) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const input = (field: StringField, label: string, type = "text") => {
     const required = !optionalFields.has(field);
@@ -278,6 +300,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           {label}
           {required && <span className="text-red-600"> *</span>}
         </label>
+
         <input
           id={field}
           name={field}
@@ -300,6 +323,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           {label}
           {required && <span className="text-red-600"> *</span>}
         </label>
+
         <select
           id={field}
           name={field}
@@ -309,6 +333,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 font-montserrat text-gray-500 outline-none transition focus:border-[#00305b] focus:ring-2 focus:ring-[#00305b]/15"
         >
           <option value="">Select...</option>
+
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -328,6 +353,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           {label}
           {required && <span className="text-red-600"> *</span>}
         </label>
+
         <textarea
           id={field}
           name={field}
@@ -350,10 +376,12 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         field,
         files.filter((_, i) => i !== index),
       );
+
       return;
     }
 
     const file = uploadedFiles[field][index];
+
     if (!file) return;
 
     try {
@@ -394,7 +422,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   const upload = (field: FileField, label: string, multiple = false) => {
     const required = !optionalFields.has(field);
     const value = form[field];
+
     const newFiles = Array.isArray(value) ? value : value instanceof File ? [value] : [];
+
     const existingFiles = uploadedFiles[field] || [];
 
     return (
@@ -407,6 +437,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         {existingFiles.length > 0 && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="mb-2 font-montserrat text-xs font-semibold uppercase tracking-wide text-slate-500">Already uploaded</p>
+
             <div className="space-y-2">
               {existingFiles.map((file, index) => (
                 <div key={`${file.url}-${index}`} className="flex items-center gap-3 rounded-md bg-white px-3 py-2 font-montserrat text-sm text-[#00305b]">
@@ -417,9 +448,12 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                     className="flex min-w-0 flex-1 items-center gap-3 hover:text-[#004c8f]"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">✓</span>
+
                     <span className="min-w-0 flex-1 truncate">{file.name}</span>
+
                     <span className="shrink-0 text-xs font-semibold text-slate-500">View</span>
                   </a>
+
                   <button type="button" onClick={() => removeFile(field, index, true)} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50">
                     Remove
                   </button>
@@ -432,11 +466,14 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         {newFiles.length > 0 && (
           <div className="rounded-lg border border-slate-200 bg-white p-3">
             <p className="mb-2 font-montserrat text-xs font-semibold uppercase tracking-wide text-slate-500">New files</p>
+
             <div className="space-y-2">
               {newFiles.map((file, index) => (
                 <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 font-montserrat text-sm text-slate-700">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">+</span>
+
                   <span className="min-w-0 flex-1 truncate">{file.name}</span>
+
                   <button type="button" onClick={() => removeFile(field, index, false)} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50">
                     Remove
                   </button>
@@ -451,6 +488,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           className="flex min-h-14 cursor-pointer items-center justify-between gap-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 transition hover:border-[#00305b] hover:bg-slate-100"
         >
           <span className="font-montserrat text-sm text-slate-600">{existingFiles.length || newFiles.length ? "Add more files" : "Choose file"}</span>
+
           <span className="shrink-0 rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-4 py-2 font-montserrat text-sm font-semibold text-white shadow-sm">Upload</span>
         </label>
 
@@ -464,6 +502,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           className="hidden"
           onChange={(e) => {
             const selected = Array.from(e.target.files ?? []);
+
             if (!selected.length) return;
 
             updateFile(field, multiple ? [...newFiles, ...selected] : selected[0]);
@@ -520,14 +559,20 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         message: `Please complete the following required field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`,
       });
 
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
       return;
     }
 
     setSubmitting(true);
 
     try {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
 
       const body = new FormData();
 
@@ -541,7 +586,9 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         }
       }
 
-      if (token) body.append("token", token);
+      if (token) {
+        body.append("token", token);
+      }
 
       const response = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp`, {
         method: "POST",
@@ -564,10 +611,15 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         message: "Your intake has been successfully submitted. Thank you!",
       });
 
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
 
       if (mode === "admin") {
-        setTimeout(() => router.push(`/portal/${encodeURIComponent(clientId)}`), 1500);
+        setTimeout(() => {
+          router.push(`/portal/${encodeURIComponent(clientId)}`);
+        }, 1500);
       }
     } catch (error) {
       setBanner({
@@ -575,7 +627,10 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         message: error instanceof Error ? error.message : "Something went wrong. Please try again.",
       });
 
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -620,6 +675,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
           </div>
 
           <form onSubmit={submit} className="space-y-8">
+            {/* Client information */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Client Information</h2>
 
@@ -629,6 +685,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                 {input("clientDob", "Date of Birth", "date")}
                 {input("clientEmail", "Client Email", "email")}
                 {input("clientSsnLast4", "Last 4 of SSN")}
+
                 {select("clientPronoun", "Client Pronoun", [
                   { label: "His", value: "his" },
                   { label: "Her", value: "her" },
@@ -636,6 +693,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
             </section>
 
+            {/* Auto insurance */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Auto Insurance</h2>
 
@@ -647,6 +705,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
             </section>
 
+            {/* Health insurance */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Health Insurance</h2>
 
@@ -656,6 +715,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
             </section>
 
+            {/* Injuries and medical care */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Injuries & Medical Care</h2>
 
@@ -666,6 +726,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
             </section>
 
+            {/* Documents */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
 
@@ -678,6 +739,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               </div>
             </section>
 
+            {/* Collision information */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Collision Information</h2>
 
@@ -693,24 +755,41 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
               <div className="mt-6">{textarea("collisionDescription", "Collision Description")}</div>
             </section>
 
+            {/* Defendant information - client view */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Other Driver / Defendant</h2>
 
               <div className="mt-6 grid gap-6 lg:grid-cols-2">
                 {input("defendantName", "Defendant Name")}
                 {input("defendantInsurance", "Defendant Insurance")}
-                {input("defendantAdjuster", "Defendant Adjuster")}
                 {input("defendantPolicyNumber", "Defendant Policy Number")}
                 {input("defendantClaimNumber", "Defendant Claim Number")}
-                {input("defendantCdl", "Defendant CDL")}
-                {input("defendantDob", "Defendant Date of Birth", "date")}
-                {input("defendantEmail", "Defendant Email", "email")}
                 {textarea("defendantAddress", "Defendant Address")}
-                {input("defendantInsuranceEmail", "Defendant Insurance Email", "email")}
-                {textarea("defendantInsuranceAddress", "Defendant Insurance Address")}
               </div>
             </section>
 
+            {/* Attorney-only information */}
+            {mode === "admin" && (
+              <section className="rounded-xl border border-[#00305b]/20 bg-slate-50 p-6 shadow-sm sm:p-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#00305b]">Attorney Information</h2>
+                  <p className="mt-2 font-montserrat text-sm text-slate-500">These fields are visible to the attorney/staff only.</p>
+                </div>
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {input("defendantEmail", "Defendant Email", "email")}
+                  {input("defendantInsuranceEmail", "Defendant Insurance Email", "email")}
+                  {input("defendantCdl", "Defendant CDL")}
+                  {input("defendantDob", "Defendant Date of Birth", "date")}
+                  {input("defendantAdjuster", "Defendant Adjuster")}
+                  {input("defendantAttorney", "Defendant Attorney")}
+                  {textarea("defendantInsuranceAddress", "Defendant Insurance Address")}
+                  {textarea("defendantAttorneyAddress", "Defendant Attorney Address")}
+                  {input("defendantAttorneyEmail", "Defendant Attorney Email", "email")}
+                </div>
+              </section>
+            )}
+
+            {/* Uber claim */}
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-2xl font-bold text-[#00305b]">Uber Claim</h2>
 

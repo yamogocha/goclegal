@@ -7,7 +7,6 @@ export const interrogatoryType = defineType({
   fields: [
     // Existing client is required.
     defineField({ name: "client", title: "Client", type: "reference", to: [{ type: "clientType" }], validation: Rule => Rule.required() }),
-    defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string" }),
     defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: Rule => Rule.required() }),
     defineField({
       name: "metadata",
@@ -17,9 +16,6 @@ export const interrogatoryType = defineType({
         defineField({ name: "caseNumber", title: "Case Number", type: "string" }),
         defineField({ name: "plaintiffName", title: "Plaintiff Name", type: "string" }),
         defineField({ name: "defendantName", title: "Defendant Name", type: "string" }),
-        defineField({ name: "defendantAttorney", title: "Defendant Attorney", type: "string" }),
-        defineField({ name: "defendantAttorneyAddress", title: "Defendant Attorney Address", type: "text" }),
-        defineField({ name: "defendantAttorneyEmail", title: "Defendant Attorney Email", type: "string" }),
         defineField({ name: "setNumber", title: "Set Number", type: "string" }),
         defineField({ name: "title", title: "Title", type: "string" }),
       ],

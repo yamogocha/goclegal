@@ -99,7 +99,6 @@ async function getPdfJs() {
 }
 
 // HELPERS
-const signatureDate = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 function normalize(text: string) {
   return text.replace(/\s+/g, " ").replace(/[‐-–—]/g, "-").trim();
@@ -511,9 +510,9 @@ function insertFormInterrogatoryResponses(
   });
 }
 
-function insertAttorneyVerificationSection(pleadingLines: PleadingLine[], plaintiffName: string, signatureDate: string) {
+function insertAttorneyVerificationSection(pleadingLines: PleadingLine[], plaintiffName: string, serviceDate: string) {
   const leftLines = [
-    `DATED: ${signatureDate}`,
+    `DATED: ${serviceDate}`,
   ];
 
   const rightLines = [
@@ -698,7 +697,7 @@ export async function buildSpecialInterrogatoryDocx(
   insertCaptionSection(pleadingLines, caseMetadata);
   insertIntroductorySection(pleadingLines, caseMetadata);
   insertInterrogatoryResponses(pleadingLines, interrogatories);
-  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, signatureDate);
+  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, caseMetadata.serviceDate);
 
   return await generateDocx(pleadingLines, caseMetadata);
 }
@@ -824,7 +823,7 @@ export async function buildFormInterrogatoryDocx(
   insertCaptionSection(pleadingLines, caseMetadata);
   insertFormInterrogatoryIntroductorySection(pleadingLines, caseMetadata);
   insertFormInterrogatoryResponses(pleadingLines, interrogatories);
-  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, signatureDate);
+  insertAttorneyVerificationSection(pleadingLines, caseMetadata.plaintiffName, caseMetadata.serviceDate);
 
   return await generateDocx(pleadingLines, caseMetadata);
 }
