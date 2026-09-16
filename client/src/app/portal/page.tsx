@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 type SearchResult = {
   clientId: string;
@@ -159,6 +159,24 @@ export default function AdminPage() {
 
   if (status === "loading") {
     return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  }
+
+  if (!session) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-100 p-5">
+        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
+          <h1 className="mb-4 text-2xl font-bold text-[#00305b]">GOC Legal Admin</h1>
+          <p className="mb-6 text-gray-600 font-montserrat font-medium">Sign in with your authorized Google account to access case management.</p>
+          <button
+            type="button"
+            onClick={() => void signIn("google", { callbackUrl: "/portal" })}
+            className="w-full rounded-md bg-[#00305b] py-3 font-montserrat text-white transition hover:bg-[#004c8f]"
+          >
+            Sign in with Google
+          </button>
+        </div>
+      </main>
+    );
   }
 
   const displayClients = query.trim() ? results : recentClients;
