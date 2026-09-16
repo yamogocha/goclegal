@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
   try {
     const { clientName, clientPhone, smsConsent } = await req.json();
-    const normalizedClientName = clientName?.trim().toUpperCase();
+    const normalizedClientName = clientName?.trim();
     const normalizedClientPhone = clientPhone?.trim();
 
 
