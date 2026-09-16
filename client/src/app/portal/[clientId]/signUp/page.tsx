@@ -179,6 +179,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     vehicleDamagePhotos: [],
     declarationPage: [],
   });
+  const [viewFile, setViewFile] = useState<{ url: string; name: string; type: "image" | "pdf" } | null>(null);
   const [mode, setMode] = useState<"admin" | "client" | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -197,21 +198,15 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/signUp${query}`, {
           cache: "no-store",
         });
-
         const data = await res.json();
-
         if (res.status === 401) {
           window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
           return;
         }
-
         if (!res.ok) throw new Error(data.error || "Unable to load intake");
-
         const normalized: Partial<FormData> = {};
-
         for (const field of stringFields) {
           const value = data.client?.[field];
-
           normalized[field] = typeof value === "string" ? value : value ? String(value) : "";
         }
 
@@ -245,7 +240,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
         loadedRef.current = true;
       } catch (error) {
         console.error("LOAD SIGNUP ERROR", error);
-        window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
+        router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
       } finally {
         setLoading(false);
       }
@@ -368,6 +363,20 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     );
   };
 
+  const getViewType = (file: { name: string; url: string }): "image" | "pdf" => {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension === "pdf" || file.url.toLowerCase().includes(".pdf")) return "pdf";
+    return "image";
+  };
+
+  const openView = (file: UploadedFile) => {
+    setViewFile({
+      url: `/api/portal/${encodeURIComponent(clientId)}/file?url=${encodeURIComponent(file.url)}`,
+      name: file.name,
+      type: getViewType(file),
+    });
+  };
+
   const removeFile = async (field: FileField, index: number, persisted: boolean) => {
     if (!persisted) {
       const value = form[field];
@@ -442,18 +451,13 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
             <div className="space-y-2">
               {existingFiles.map((file, index) => (
                 <div key={`${file.url}-${index}`} className="flex items-center gap-3 rounded-md bg-white px-3 py-2 font-montserrat text-sm text-[#00305b]">
-                  <a
-                    href={`/api/portal/${encodeURIComponent(clientId)}/file?url=${encodeURIComponent(file.url)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-3 hover:text-[#004c8f]"
-                  >
+                  <button type="button" onClick={() => openView(file)} className="flex min-w-0 flex-1 items-center gap-3 text-left hover:text-[#004c8f]">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#00305b]/10 text-xs">✓</span>
 
                     <span className="min-w-0 flex-1 truncate">{file.name}</span>
 
                     <span className="shrink-0 text-xs font-semibold text-slate-500">View</span>
-                  </a>
+                  </button>
 
                   <button type="button" onClick={() => removeFile(field, index, true)} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50">
                     Remove
@@ -599,7 +603,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
       const data = await response.json();
 
       if (response.status === 401) {
-        window.location.href = `/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`;
+        router.push(`/api/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
         return;
       }
 
@@ -644,176 +648,214 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
   if (!mode) return null;
 
   return (
-    <main className="relative min-h-screen bg-white p-0 font-medium md:flex md:items-start md:justify-center md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:p-8">
-      <div className="absolute inset-0 hidden bg-[#00305bcf] md:block" />
-
-      <div className="relative z-10 mx-auto w-full max-w-7xl">
-        <div className="rounded-none bg-white p-5 shadow-[0_8px_35px_rgba(0,0,0,0.2)] md:rounded-xl sm:p-8 lg:p-10">
-          <div className="mb-9">
-            {mode === "client" && (
-              <div className="mb-10">
-                <Image src="/blue-logo.png" alt="GOC Legal" width={192} height={80} className="h-auto w-48 object-contain" priority />
+    <>
+      {viewFile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setViewFile(null);
+          }}
+        >
+          <div className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="truncate font-montserrat text-lg font-semibold text-[#00305b]">{viewFile.name}</h3>
+                <p className="mt-1 font-montserrat text-xs text-slate-500">Document view</p>
               </div>
-            )}
-            {mode === "admin" && (
-              <Link
-                href={`/portal/${encodeURIComponent(clientId)}`}
-                className="mb-5 inline-flex cursor-pointer items-center justify-center rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-5 py-3 font-montserrat text-base font-semibold text-white shadow-[0_0px_10px_rgba(0,0,0,0.3)] gradient-animate"
-              >
-                ← Profile
-              </Link>
-            )}
-
-            {banner && (
-              <div
-                role="alert"
-                className={`mb-6 rounded-lg border px-5 py-4 font-montserrat text-sm font-semibold ${
-                  banner.type === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
-                }`}
-              >
-                {banner.message}
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewFile(null)}
+                  className="rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-4 py-2 font-montserrat text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                >
+                  Close
+                </button>
               </div>
-            )}
+            </div>
 
-            <h1 className="text-center text-4xl font-bold tracking-tight text-[#00305b] sm:text-5xl">Tell Us About Your Case</h1>
-
-            <p className="mt-3 text-center font-montserrat leading-7 text-gray-600">Please provide the information below so our team can begin reviewing your case.</p>
-          </div>
-
-          <form onSubmit={submit} className="space-y-8">
-            {/* Client information */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Client Information</h2>
-
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                {input("clientName", "Client Name")}
-                {input("clientPhone", "Client Phone", "tel")}
-                {input("clientDob", "Date of Birth", "date")}
-                {input("clientEmail", "Client Email", "email")}
-                {input("clientSsnLast4", "Last 4 of SSN")}
-
-                {select("clientPronoun", "Client Pronoun", [
-                  { label: "His", value: "his" },
-                  { label: "Her", value: "her" },
-                ])}
-              </div>
-            </section>
-
-            {/* Auto insurance */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Auto Insurance</h2>
-
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                {input("clientVehicle", "Year, Make, and Model of Your Car")}
-                {input("clientAutoInsurance", "Auto Insurance")}
-                {input("clientPolicyNumber", "Policy Number")}
-                {input("clientClaimNumber", "Claim Number")}
-              </div>
-            </section>
-
-            {/* Health insurance */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Health Insurance</h2>
-
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                {input("clientHealthInsurance", "Health Insurance")}
-                {input("clientHealthInsuranceMemberNumber", "Member Number")}
-              </div>
-            </section>
-
-            {/* Injuries and medical care */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Injuries & Medical Care</h2>
-
-              <div className="mt-6 space-y-6">
-                {textarea("injuries", "Description of Injuries")}
-                {textarea("medicalCare", "Description of Medical Care Received")}
-                {textarea("medicalProvider", "Name and Address of Medical Provider")}
-              </div>
-            </section>
-
-            {/* Documents */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
-
-              <div className="mt-6 space-y-5">
-                {upload("driverLicense", "Photos of California Driver License", true)}
-                {upload("vehicleDamagePhotos", "Photos of Damage to Your Car", true)}
-                {upload("healthInsuranceCards", "Photos of Health Insurance Cards", true)}
-                {upload("medicalRecords", "Photos of Medical Records", true)}
-                {upload("declarationPage", "Client’s Declaration Page")}
-              </div>
-            </section>
-
-            {/* Collision information */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Collision Information</h2>
-
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                {input("collisionLocation", "Collision Location")}
-                {input("collisionDate", "Collision Date", "date")}
-                {input("collisionTime", "Collision Time")}
-                {input("defendantVehicle", "Year, Make, and Model of the Car That Hit You")}
-                {input("policeDepartment", "Police Department")}
-                {input("policeReportNumber", "Police Report Number")}
-              </div>
-
-              <div className="mt-6">{textarea("collisionDescription", "Collision Description")}</div>
-            </section>
-
-            {/* Defendant information - client view */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Other Driver / Defendant</h2>
-
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                {input("defendantName", "Defendant Name")}
-                {input("defendantInsurance", "Defendant Insurance")}
-                {input("defendantPolicyNumber", "Defendant Policy Number")}
-                {input("defendantClaimNumber", "Defendant Claim Number")}
-                {textarea("defendantAddress", "Defendant Address")}
-              </div>
-            </section>
-
-            {/* Attorney-only information */}
-            {mode === "admin" && (
-              <section className="rounded-xl border border-[#00305b]/20 bg-slate-50 p-6 shadow-sm sm:p-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-[#00305b]">Attorney Information</h2>
-                  <p className="mt-2 font-montserrat text-sm text-slate-500">These fields are visible to the attorney/staff only.</p>
+            <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
+              {viewFile.type === "pdf" ? (
+                <iframe src={viewFile.url} title={viewFile.name} className="h-[75vh] w-full rounded-lg border border-slate-300 bg-white" />
+              ) : (
+                <div className="flex min-h-[50vh] items-center justify-center">
+                  <Image src={viewFile.url} alt={viewFile.name} width={1600} height={1200} className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain shadow-sm" unoptimized />
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <main className="relative min-h-screen bg-white p-0 font-medium md:flex md:items-start md:justify-center md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:p-8">
+        <div className="absolute inset-0 hidden bg-[#00305bcf] md:block" />
+
+        <div className="relative z-10 mx-auto w-full max-w-7xl">
+          <div className="rounded-none bg-white p-5 shadow-[0_8px_35px_rgba(0,0,0,0.2)] md:rounded-xl sm:p-8 lg:p-10">
+            <div className="mb-9">
+              {mode === "client" && (
+                <div className="mb-10">
+                  <Image src="/blue-logo.png" alt="GOC Legal" width={192} height={80} className="h-auto w-48 object-contain" priority />
+                </div>
+              )}
+              {mode === "admin" && (
+                <Link
+                  href={`/portal/${encodeURIComponent(clientId)}`}
+                  className="mb-5 inline-flex cursor-pointer items-center justify-center rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-5 py-3 font-montserrat text-base font-semibold text-white shadow-[0_0px_10px_rgba(0,0,0,0.3)] gradient-animate"
+                >
+                  ← Profile
+                </Link>
+              )}
+
+              {banner && (
+                <div
+                  role="alert"
+                  className={`mb-6 rounded-lg border px-5 py-4 font-montserrat text-sm font-semibold ${
+                    banner.type === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {banner.message}
+                </div>
+              )}
+
+              <h1 className="text-center text-4xl font-bold tracking-tight text-[#00305b] sm:text-5xl">Tell Us About Your Case</h1>
+
+              <p className="mt-3 text-center font-montserrat leading-7 text-gray-600">Please provide the information below so our team can begin reviewing your case.</p>
+            </div>
+
+            <form onSubmit={submit} className="space-y-8">
+              {/* Client information */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Client Information</h2>
+
                 <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                  {input("defendantEmail", "Defendant Email", "email")}
-                  {input("defendantInsuranceEmail", "Defendant Insurance Email", "email")}
-                  {input("defendantCdl", "Defendant CDL")}
-                  {input("defendantDob", "Defendant Date of Birth", "date")}
-                  {input("defendantAdjuster", "Defendant Adjuster")}
-                  {input("defendantAttorney", "Defendant Attorney")}
-                  {textarea("defendantInsuranceAddress", "Defendant Insurance Address")}
-                  {textarea("defendantAttorneyAddress", "Defendant Attorney Address")}
-                  {input("defendantAttorneyEmail", "Defendant Attorney Email", "email")}
+                  {input("clientName", "Client Name")}
+                  {input("clientPhone", "Client Phone", "tel")}
+                  {input("clientDob", "Date of Birth", "date")}
+                  {input("clientEmail", "Client Email", "email")}
+                  {input("clientSsnLast4", "Last 4 of SSN")}
+
+                  {select("clientPronoun", "Client Pronoun", [
+                    { label: "His", value: "his" },
+                    { label: "Her", value: "her" },
+                  ])}
                 </div>
               </section>
-            )}
 
-            {/* Uber claim */}
-            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <h2 className="text-2xl font-bold text-[#00305b]">Uber Claim</h2>
+              {/* Auto insurance */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Auto Insurance</h2>
 
-              <div className="mt-6 grid gap-6 lg:grid-cols-2">{input("uberReferenceNumber", "Uber Reference Number")}</div>
-            </section>
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {input("clientVehicle", "Year, Make, and Model of Your Car")}
+                  {input("clientAutoInsurance", "Auto Insurance")}
+                  {input("clientPolicyNumber", "Policy Number")}
+                  {input("clientClaimNumber", "Claim Number")}
+                </div>
+              </section>
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-8 py-4 font-montserrat text-base font-semibold text-white shadow-[0_0px_10px_rgba(0,0,0,0.3)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {submitting ? "Submitting..." : "Submit Intake"}
-              </button>
-            </div>
-          </form>
+              {/* Health insurance */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Health Insurance</h2>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {input("clientHealthInsurance", "Health Insurance")}
+                  {input("clientHealthInsuranceMemberNumber", "Member Number")}
+                </div>
+              </section>
+
+              {/* Injuries and medical care */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Injuries & Medical Care</h2>
+
+                <div className="mt-6 space-y-6">
+                  {textarea("injuries", "Description of Injuries")}
+                  {textarea("medicalCare", "Description of Medical Care Received")}
+                  {textarea("medicalProvider", "Name and Address of Medical Provider")}
+                </div>
+              </section>
+
+              {/* Documents */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Documents</h2>
+
+                <div className="mt-6 space-y-5">
+                  {upload("driverLicense", "Photos of California Driver License", true)}
+                  {upload("vehicleDamagePhotos", "Photos of Damage to Your Car", true)}
+                  {upload("healthInsuranceCards", "Photos of Health Insurance Cards", true)}
+                  {upload("medicalRecords", "Photos of Medical Records", true)}
+                  {upload("declarationPage", "Client’s Declaration Page")}
+                </div>
+              </section>
+
+              {/* Collision information */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Collision Information</h2>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {input("collisionLocation", "Collision Location")}
+                  {input("collisionDate", "Collision Date", "date")}
+                  {input("collisionTime", "Collision Time")}
+                  {input("defendantVehicle", "Year, Make, and Model of the Car That Hit You")}
+                  {input("policeDepartment", "Police Department")}
+                  {input("policeReportNumber", "Police Report Number")}
+                </div>
+
+                <div className="mt-6">{textarea("collisionDescription", "Collision Description")}</div>
+              </section>
+
+              {/* Defendant information - client view */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Other Driver / Defendant</h2>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {input("defendantName", "Defendant Name")}
+                  {input("defendantInsurance", "Defendant Insurance")}
+                  {input("defendantPolicyNumber", "Defendant Policy Number")}
+                  {input("defendantClaimNumber", "Defendant Claim Number")}
+                  {textarea("defendantAddress", "Defendant Address")}
+                </div>
+              </section>
+
+              {/* Attorney-only information */}
+              {mode === "admin" && (
+                <section className="rounded-xl border border-[#00305b]/20 bg-slate-50 p-6 shadow-sm sm:p-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-[#00305b]">Attorney Information</h2>
+                    <p className="mt-2 font-montserrat text-sm text-slate-500">These fields are visible to the attorney/staff only.</p>
+                  </div>
+                  <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                    {input("defendantEmail", "Defendant Email", "email")}
+                    {input("defendantInsuranceEmail", "Defendant Insurance Email", "email")}
+                    {input("defendantCdl", "Defendant CDL")}
+                    {input("defendantDob", "Defendant Date of Birth", "date")}
+                    {input("defendantAdjuster", "Defendant Adjuster")}
+                    {input("defendantAttorney", "Defendant Attorney")}
+                    {textarea("defendantInsuranceAddress", "Defendant Insurance Address")}
+                    {textarea("defendantAttorneyAddress", "Defendant Attorney Address")}
+                    {input("defendantAttorneyEmail", "Defendant Attorney Email", "email")}
+                  </div>
+                </section>
+              )}
+
+              {/* Uber claim */}
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-2xl font-bold text-[#00305b]">Uber Claim</h2>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">{input("uberReferenceNumber", "Uber Reference Number")}</div>
+              </section>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-8 py-4 font-montserrat text-base font-semibold text-white shadow-[0_0px_10px_rgba(0,0,0,0.3)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {submitting ? "Submitting..." : "Submit Intake"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
