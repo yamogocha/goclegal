@@ -1,4 +1,5 @@
 "use client";
+
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     void loadClient();
   }, [clientId]);
 
-  // Upload interrogatories for this client.
+  // Upload interrogatories and send the client their secure questionnaire link.
   async function handleInterrogatoriesUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -53,66 +54,73 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     }
   }
 
-  if (loading) return <main className="min-h-screen flex items-center justify-center">Loading...</main>;
+  if (loading) return <main className="flex min-h-screen items-center justify-center">Loading...</main>;
   if (!clientData?._id) return <main className="p-8">Client not found.</main>;
 
   const clientName = clientData.clientName || "Unknown Client";
-  // const clientAccessToken = clientData.clientAccessToken;
   const hasInterrogatories = !!clientData.interrogatory;
   const interrogatoryHref = `/portal/${encodeURIComponent(clientId)}/interrogatories`;
 
   return (
-    <main className="min-h-screen relative font-medium bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-start md:justify-center p-0 md:p-8">
-      <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
-      <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
+    <main className="relative min-h-screen bg-white font-medium md:flex md:items-start md:justify-center md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:p-8">
+      <div className="absolute inset-0 hidden bg-[#00305bcf] md:block" />
+      <div className="relative z-10 mx-auto w-full max-w-7xl rounded-none bg-white p-4 shadow-none md:rounded-xl md:bg-white/95 md:p-8 md:shadow-xl md:backdrop-blur-sm">
         <Link
           href="/portal"
-          className="inline-flex items-center justify-center text-white font-montserrat font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate px-5 py-3 mb-5 cursor-pointer shadow-[0_0px_10px_rgba(0,0,0,0.3)]"
+          className="mb-5 inline-flex cursor-pointer items-center justify-center rounded bg-linear-to-r from-[#00305b] to-[#004c8f] px-5 py-3 font-montserrat font-medium text-white shadow-[0_0px_10px_rgba(0,0,0,0.3)] gradient-animate"
         >
           ← Dashboard
         </Link>
-        <h1 className="text-center text-3xl font-bold text-[#00305b]">{clientName}</h1>
-        <div className="text-center text-gray-500 font-montserrat mb-8">{clientData.clientPhone}</div>
 
-        <h2 className="font-montserrat font-semibold text-slate-800 mb-4">Client Tools</h2>
-        <div className="grid gap-4 md:grid-cols-3 items-stretch">
-          <Link href={`/portal/${encodeURIComponent(clientId)}/signUp`} className="h-full border rounded-lg p-5 hover:bg-gray-50 transition flex flex-col justify-center">
-            <div className="font-bold text-2xl text-[#00305b]">Client Sign-Up</div>
-            <div className="font-montserrat text-gray-500 mt-1">Client intake portal.</div>
+        <h1 className="text-center text-3xl font-bold text-[#00305b]">{clientName}</h1>
+        <div className="mb-8 text-center font-montserrat text-gray-500">{clientData.clientPhone}</div>
+
+        <h2 className="mb-4 font-montserrat font-semibold text-slate-800">Client Tools</h2>
+
+        <div className="grid items-stretch gap-4 md:grid-cols-3">
+          <Link href={`/portal/${encodeURIComponent(clientId)}/signUp`} className="flex h-full flex-col justify-center rounded-lg border p-5 transition hover:bg-gray-50">
+            <div className="text-2xl font-bold text-[#00305b]">Client Sign-Up</div>
+            <div className="mt-1 font-montserrat text-gray-500">Client intake portal.</div>
           </Link>
-          <Link href={`/portal/${encodeURIComponent(clientId)}/notices`} className="h-full border rounded-lg p-5 hover:bg-gray-50 transition flex flex-col justify-center">
-            <div className="font-bold text-2xl text-[#00305b]">Notices</div>
-            <div className="font-montserrat text-gray-500 mt-1">Generate and download client notices.</div>
+
+          <Link href={`/portal/${encodeURIComponent(clientId)}/notices`} className="flex h-full flex-col justify-center rounded-lg border p-5 transition hover:bg-gray-50">
+            <div className="text-2xl font-bold text-[#00305b]">Notices</div>
+            <div className="mt-1 font-montserrat text-gray-500">Generate and download client notices.</div>
           </Link>
+
           {hasInterrogatories ? (
-            <Link href={interrogatoryHref} className="h-full border rounded-lg p-5 hover:bg-gray-50 transition flex flex-col justify-center">
-              <div className="font-bold text-2xl text-[#00305b]">Interrogatories</div>
-              <div className="font-montserrat text-gray-500 mt-1">Review and manage responses.</div>
+            <Link href={interrogatoryHref} className="flex h-full flex-col justify-center rounded-lg border p-5 transition hover:bg-gray-50">
+              <div className="text-2xl font-bold text-[#00305b]">Interrogatories</div>
+              <div className="mt-1 font-montserrat text-gray-500">Review and manage responses.</div>
             </Link>
           ) : (
-            <div className="h-full border rounded-lg p-5 bg-gray-50 flex items-center justify-between gap-4">
+            <div className="flex h-full items-center justify-between gap-4 rounded-lg border bg-gray-50 p-5">
               <div>
-                <div className="font-bold text-2xl text-[#00305b]">Interrogatories</div>
-                <div className="font-montserrat text-gray-500 mt-1">Add interrogatories.</div>
+                <div className="text-2xl font-bold text-[#00305b]">Interrogatories</div>
+                <div className="mt-1 font-montserrat text-gray-500">Upload and send the client a secure questionnaire link.</div>
               </div>
+
               <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleInterrogatoriesUpload} />
+
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="shrink-0 cursor-pointer rounded-md bg-[#00305b] px-4 py-2.5 font-montserrat text-sm font-semibold text-white transition hover:bg-[#004c8f] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {uploading ? "Uploading..." : "Upload"}
+                {uploading ? "Sending..." : "Upload"}
               </button>
             </div>
           )}
         </div>
 
-        <h2 className="font-montserrat font-semibold text-slate-800 mt-10 mb-4">Coming Soon</h2>
-        <div className="grid gap-4 md:grid-cols-3 items-stretch">
+        <h2 className="mb-4 mt-10 font-montserrat font-semibold text-slate-800">Coming Soon</h2>
+
+        <div className="grid items-stretch gap-4 md:grid-cols-3">
           {["Medical Records", "Demands", "Settlement", "Expenses", "Liens"].map((item) => (
-            <div key={item} className="h-full border rounded-lg p-5 bg-gray-50 opacity-70 flex flex-col justify-center">
-              <div className="font-bold text-2xl text-[#00305b]">{item}</div>
-              <div className="font-montserrat text-gray-500 mt-1">Coming soon.</div>
+            <div key={item} className="flex h-full flex-col justify-center rounded-lg border bg-gray-50 p-5 opacity-70">
+              <div className="text-2xl font-bold text-[#00305b]">{item}</div>
+              <div className="mt-1 font-montserrat text-gray-500">Coming soon.</div>
             </div>
           ))}
         </div>
