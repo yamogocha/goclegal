@@ -41,7 +41,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
       const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}`, { method: "POST", body: formData });
       const data = await res.json();
       if (res.ok && data.redirectTo) {
-        router.push(data.redirectTo);
+        router.replace(data.redirectTo);
         return;
       }
       alert(data.error || "Unable to add interrogatories");
