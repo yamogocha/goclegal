@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname // force correct project root
   },
-  serverExternalPackages: ["fluent-ffmpeg", "ffmpeg-static"],
+  serverExternalPackages: ["fluent-ffmpeg", "ffmpeg-static", "pdfjs-dist"],
   images: {
     remotePatterns: [
       {
