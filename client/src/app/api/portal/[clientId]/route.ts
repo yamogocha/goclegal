@@ -153,7 +153,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ client
             caseNumber: payload.caseNumber,
             interrogatoryUrl: clientUrl,
             messageSent: true,
-            redirectTo: `/admin/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories`,
+            redirectTo: `/portal/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories`,
         });
     } catch (e: any) {
         console.error("ADD INTERROGATORIES ERROR", e);

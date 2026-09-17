@@ -52,7 +52,7 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/portal/:path*", "/api/portal/:path*"],
 };
 
 export type ClientAccess = {
