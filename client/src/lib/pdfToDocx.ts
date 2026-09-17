@@ -636,7 +636,7 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
       if (setMatch && !setNumber) setNumber = setMatch[1].replace(/\(.+\)/, "").trim();
 
       const plaintiffMatch = text.match(/RESPONDING\s+PARTY:\s*(.+)$/i);
-      if (plaintiffMatch && !plaintiffName) plaintiffName = plaintiffMatch[1].trim();
+      if (plaintiffMatch && !plaintiffName) plaintiffName = plaintiffMatch[1].trim().replace(/^PLAINTIFF\s+/i, "");
 
       const defendantMatch = text.match(/PROPOUNDING\s+PARTY:\s*(.+)$/i);
       if (defendantMatch && !defendantName) defendantName = defendantMatch[1].trim().replace(/^DEFENDANT\s+/i, "");
@@ -771,7 +771,7 @@ export async function loadFormInterrogatoryPdfQuestions(buffer: ArrayBuffer) {
       if (setMatch && !setNumber) setNumber = setMatch[1].replace(/\(.+\)/, "").trim();
 
       const plaintiffMatch = text.match(/RESPONDING\s+PARTY:\s*(.+)$/i);
-      if (plaintiffMatch && !plaintiffName) plaintiffName = plaintiffMatch[1].trim();
+      if (plaintiffMatch && !plaintiffName) plaintiffName = plaintiffMatch[1].trim().replace(/^PLAINTIFF\s+/i, "");
 
       const defendantMatch = text.match(/PROPOUNDING\s+PARTY:\s*(.+)$/i);
       if (defendantMatch && !defendantName) defendantName = defendantMatch[1].trim().replace(/^DEFENDANT\s+/i, "");
