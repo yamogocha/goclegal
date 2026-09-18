@@ -521,17 +521,17 @@ export async function generateWeeklyAd({ dryRun = false }: { dryRun?: boolean } 
 
       const existingHeyGenVideoId = existing.heygenVideoId;
 
-      // Existing HeyGen video: process B-roll and publish all remaining platforms now.
+      // Existing HeyGen video: do not process B-roll here.
+      // The HeyGen webhook → GitHub Actions path owns B-roll processing.
       if (existingHeyGenVideoId) {
-        console.log(`[WEEKLY AD] Existing HeyGen video found for "${title}": ${existingHeyGenVideoId}`);
-        const heygenStatus = await getHeyGenVideo(existingHeyGenVideoId);
-        const heygenVideoUrl = heygenStatus?.data?.video_url;
-        if (!heygenVideoUrl) throw new Error(`Existing HeyGen video ${existingHeyGenVideoId} has no video_url.`);
-        console.log(`[WEEKLY AD] Processing existing HeyGen video ${existingHeyGenVideoId} on GitHub runner.`);
-        const processed = await processWeeklyBrollVideo({ weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId, heygenVideoUrl });
-        Object.assign(result, processed, { weeklyAdId: existing._id, heygenVideoId: existingHeyGenVideoId });
+        console.log(`[WEEKLY AD] HeyGen video already exists for "${title}": ${existingHeyGenVideoId}`);
+        console.log("[WEEKLY AD] B-roll processing is owned by the HeyGen webhook.");
+        Object.assign(result, {
+          weeklyAdId: existing._id,
+          heygenVideoId: existingHeyGenVideoId,
+          waitingForHeyGenWebhook: true,
+        });
         result.durationMs = Date.now() - start;
-        await notifySlackResult("Weekly Ad Result", result);
         return result;
       }
 
