@@ -38,13 +38,17 @@ type BudgetControlResult = {
 type NumericLike = number | string | null | undefined;
 const toNumber = (v: NumericLike): number => Number(v ?? 0);
 const microsToDollars = (v: number) => v / 1e6;
-const DAILY_CAP_MICROS = 25 * 1e6;
+
+// HARD ACCOUNT CAMPAIGN BUDGET LIMIT: $750/month.
+const MONTHLY_CAP_DOLLARS = 750;
+const DAILY_CAP_MICROS = Math.floor((MONTHLY_CAP_DOLLARS / 30.4) * 1e6);
 const MIN_BUDGET_MICROS = 5 * 1e6;
 const CHANGE_THRESHOLD = 0.05;
+
 const isMature = (impr: number, clicks: number) => impr >= 1000 || clicks >= 20;
 const isLowData = (spend: number, clicks: number) => clicks < 5 && spend < 20 * 1e6;
 
-// Only these search intents qualify as auto-injury traffic.
+// Only auto-injury searches qualify as valid PI traffic.
 const AUTO_INJURY_PATTERNS = [
   /\bcar accident\b/, /\bcar wreck\b/, /\bcar crash\b/, /\bauto accident\b/, /\bauto wreck\b/, /\bauto crash\b/,
   /\bautomobile accident\b/, /\bautomobile wreck\b/, /\bautomobile crash\b/, /\bvehicle accident\b/, /\bvehicle wreck\b/,
@@ -52,7 +56,6 @@ const AUTO_INJURY_PATTERNS = [
   /\bcollision\b/, /\btraffic accident\b/, /\btraffic collision\b/,
 ];
 
-// Normalize search terms before classification.
 const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, "").trim();
 const isAutoInjurySearch = (s: string) => AUTO_INJURY_PATTERNS.some(p => p.test(normalize(s)));
 
@@ -91,7 +94,6 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     `);
     console.log("Query #2 OK");
 
-    // Pull search terms by campaign so invalid conversions can be removed from qualified lead metrics.
     console.log("Query #3");
     const searchTerms = await customer.query(`
       SELECT campaign.id, search_term_view.search_term, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.all_conversions
@@ -112,7 +114,7 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
       spend: microsToDollars(toNumber(x.metrics?.cost_micros)),
     }));
 
-    // Only auto-injury search terms count as qualified conversions.
+    // Only auto-injury conversions count as qualified leads.
     const qualifiedConversionsByCampaign = new Map<string, number>();
     for (const x of searchTerms as any[]) {
       const campaignId = x.campaign?.id != null ? String(x.campaign.id) : null;
@@ -156,15 +158,18 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
           reason = "performance_adjust";
         }
 
+        // NEVER allow the optimizer to exceed the $750/month equivalent daily budget.
+        adjusted = Math.min(adjusted, DAILY_CAP_MICROS);
+
         const finalBudget = Math.min(Math.max(Math.floor(adjusted), MIN_BUDGET_MICROS), DAILY_CAP_MICROS);
         const shouldUpdate = current > 0 && Math.abs(finalBudget - current) / current > CHANGE_THRESHOLD;
 
         if (shouldUpdate) {
           await customer.campaignBudgets.update([{ resource_name: resourceName, amount_micros: finalBudget }]);
           results.summary.updatedBudgets++;
-          results.campaigns.push({ id, action: "UPDATED", before: current, after: finalBudget, reason, spend, clicks, impressions, conversions, costPerConversion, conversionRate, maturity: mature ? "mature" : "learning" });
+          results.campaigns.push({ id, action: "UPDATED", before: current, after: finalBudget, reason: finalBudget < current ? "monthly_cap_enforced" : reason, spend, clicks, impressions, conversions, costPerConversion, conversionRate, maturity: mature ? "mature" : "learning" });
         } else {
-          results.campaigns.push({ id, action: "SKIPPED", before: current, after: finalBudget, reason, spend, clicks, impressions, conversions, costPerConversion, conversionRate, maturity: mature ? "mature" : "learning" });
+          results.campaigns.push({ id, action: "SKIPPED", before: current, after: finalBudget, reason: current > DAILY_CAP_MICROS ? "monthly_cap_enforced" : reason, spend, clicks, impressions, conversions, costPerConversion, conversionRate, maturity: mature ? "mature" : "learning" });
         }
       } catch (err) {
         results.ok = false;
@@ -183,7 +188,6 @@ export async function runBudgetControl(): Promise<BudgetControlResult> {
     results.summary.qualifiedLeads = qualifiedLeads;
     results.summary.qualifiedLeadCPA = qualifiedLeads > 0 ? microsToDollars(totalSpend) / qualifiedLeads : 0;
     results.summary.costPerLead = qualifiedLeads > 0 ? microsToDollars(totalSpend) / qualifiedLeads : 0;
-
     results.ok = results.errors.length === 0;
     results.success = results.ok;
     results.durationMs = Date.now() - start;
