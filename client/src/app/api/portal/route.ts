@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(clients.map((c: any) => ({ clientId: c.clientId || c._id, clientName: c.clientName, clientPhone: c.clientPhone })));
 }
 
-// Create client, record consent, and send intake link.
+// Create client, record consent, and send signUp link.
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,30 +38,20 @@ export async function POST(req: Request) {
     const normalizedClientName = clientName?.trim();
     const normalizedClientPhone = clientPhone?.trim();
 
-
-    if (!normalizedClientName || !normalizedClientPhone) {
-      return NextResponse.json({ error: "Client name and phone are required" }, { status: 400 });
-    }
-
-    if (!smsConsent?.consented) {
-      return NextResponse.json({ error: "SMS consent must be recorded before sending the intake link" }, { status: 400 });
-    }
-
-    if (!smsConsent.consentText?.trim()) {
-      return NextResponse.json({ error: "Consent language is required" }, { status: 400 });
-    }
+    if (!normalizedClientName || !normalizedClientPhone) return NextResponse.json({ error: "Client name and phone are required" }, { status: 400 });
+    if (!smsConsent?.consented) return NextResponse.json({ error: "SMS consent must be recorded before sending the signUp link" }, { status: 400 });
+    if (!smsConsent.consentText?.trim()) return NextResponse.json({ error: "Consent language is required" }, { status: 400 });
 
     const existingClient = await serverClient.fetch(
       groq`*[_type == "clientType" && clientPhone == $clientPhone][0]{_id,clientName}`,
       { clientPhone: normalizedClientPhone }
     );
 
-    if (existingClient) {
-      return NextResponse.json({ error: "A client with this phone number already exists" }, { status: 409 });
-    }
+    if (existingClient) return NextResponse.json({ error: "A client with this phone number already exists" }, { status: 409 });
 
     const clientId = crypto.randomUUID();
     const clientAccessToken = crypto.randomBytes(32).toString("hex");
+    const clientPortalCode = crypto.randomBytes(8).toString("base64url");
     const now = new Date().toISOString();
     const baseUrl = process.env.BASE_URL;
 
@@ -70,21 +60,19 @@ export async function POST(req: Request) {
     const consentedAt = smsConsent.consentedAt || now;
     const collectedBy = smsConsent.collectedBy || session.user?.email || session.user?.name || "GOC Legal Staff";
     const signupUrl = `${baseUrl}/portal/${encodeURIComponent(clientId)}/signUp?token=${encodeURIComponent(clientAccessToken)}`;
-    const message = `Hi ${normalizedClientName}, GOC Legal needs some information from you to help with your case. Please complete your secure client intake form here: ${signupUrl}`;
+    const shortUrl = `${baseUrl}/signUp/${encodeURIComponent(clientPortalCode)}`;
+    const message = `Hi ${normalizedClientName}, this is GOC Legal. Please complete your client sign up form through our secure portal: ${shortUrl}`;
 
     const doc = await serverClient.create({
       _id: clientId,
       _type: "clientType",
       clientId,
       clientAccessToken,
+      clientPortalCode,
       clientName: normalizedClientName,
       clientPhone: normalizedClientPhone,
-      intakeStatus: "link_sent",
-      communicationPreferences: {
-        smsEnabled: true,
-        emailEnabled: true,
-        preferredMethod: "sms",
-      },
+      signUpStatus: "link_sent",
+      communicationPreferences: { smsEnabled: true, emailEnabled: true, preferredMethod: "sms" },
       smsConsent: {
         consented: true,
         consentedAt,
@@ -106,7 +94,7 @@ export async function POST(req: Request) {
         _key: crypto.randomUUID(),
         direction: "outbound",
         channel: "sms",
-        type: "intake_link",
+        type: "signUp_link",
         message,
         status: "sent",
         providerMessageId: sms.sid,
@@ -119,13 +107,8 @@ export async function POST(req: Request) {
       success: true,
       clientId,
       signupUrl,
-      smsConsent: {
-        consented: true,
-        consentedAt,
-        method: smsConsent.method || "phone",
-        source: smsConsent.source || "attorney_phone_call",
-        collectedBy,
-      },
+      shortUrl,
+      smsConsent: { consented: true, consentedAt, method: smsConsent.method || "phone", source: smsConsent.source || "attorney_phone_call", collectedBy },
     });
   } catch (error) {
     console.error("CREATE CLIENT ERROR", error);

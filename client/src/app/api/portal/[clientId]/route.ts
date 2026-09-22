@@ -18,6 +18,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clientI
         clientPhone,
         clientEmail,
         clientAccessToken,
+        clientPortalCode,
         intakeStatus,
         clientAutoInsurance,
         clientPolicyNumber,
@@ -66,16 +67,18 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clientI
 }
 
 // Add interrogatories and send the client a secure questionnaire link.
-export async function POST(req: NextRequest, context: { params: Promise<{ clientId: string }> }) {
+export async function POST(req: Request, context: { params: Promise<{ clientId: string }> }) {
     try {
         const { clientId } = await context.params;
         const decodedClientId = decodeURIComponent(clientId);
         const existingClient = await serverClient.fetch(
-            groq`*[_type == "clientType" && (_id == $clientId || clientId == $clientId)][0]{_id,clientId,clientName,clientPhone,clientAccessToken}`,
+            groq`*[_type == "clientType" && (_id == $clientId || clientId == $clientId)][0]{_id,clientId,clientName,clientPhone,clientAccessToken,clientPortalCode}`,
             { clientId: decodedClientId }
         );
+
         if (!existingClient) return NextResponse.json({ error: "Client not found" }, { status: 404 });
         if (!existingClient.clientAccessToken) return NextResponse.json({ error: "Client access token is missing" }, { status: 400 });
+        if (!existingClient.clientPortalCode) return NextResponse.json({ error: "Client portal code is missing" }, { status: 400 });
         if (!existingClient.clientPhone) return NextResponse.json({ error: "Client phone number is missing" }, { status: 400 });
 
         const formData = await req.formData();
@@ -91,6 +94,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ client
             groq`*[_type == "interrogatory" && caseNumber == $caseNumber][0]{_id}`,
             { caseNumber: result.metadata.caseNumber }
         );
+
         if (existing) return NextResponse.json({ error: "Case already exists" }, { status: 409 });
 
         const now = new Date().toISOString();
@@ -113,12 +117,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ client
         };
 
         const interrogatory = await serverClient.create({ _type: "interrogatory", ...payload });
-
         const baseUrl = process.env.BASE_URL;
+
         if (!baseUrl) return NextResponse.json({ error: "BASE_URL is not configured" }, { status: 500 });
 
-        const clientUrl = `${baseUrl}/portal/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories?token=${encodeURIComponent(existingClient.clientAccessToken)}`;
-        const message = `Hi ${existingClient.clientName || "there"}, GOC Legal needs you to complete your interrogatories. Please complete all questions using this secure link: ${clientUrl}`;
+        const clientUrl = `${baseUrl}/interrogatories/${encodeURIComponent(existingClient.clientPortalCode)}`;
+        const secureUrl = `${baseUrl}/portal/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories?token=${encodeURIComponent(existingClient.clientAccessToken)}`;
+        const message = `Hi ${existingClient.clientName}, this is GOC Legal. Please complete your interrogatories through our secure portal: ${clientUrl}`;
 
         try {
             const sms = await sendSms(existingClient.clientPhone, message);
@@ -151,7 +156,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ client
             success: true,
             clientId: existingClient.clientId || existingClient._id,
             caseNumber: payload.caseNumber,
-            interrogatoryUrl: clientUrl,
+            interrogatoryUrl: secureUrl,
+            shortUrl: clientUrl,
             messageSent: true,
             redirectTo: `/portal/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories`,
         });

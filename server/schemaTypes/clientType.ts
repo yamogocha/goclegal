@@ -8,6 +8,7 @@ export const clientType = defineType({
         // Client identity
         defineField({ name: "clientId", title: "Client ID", type: "string", readOnly: true, hidden: true, validation: Rule => Rule.required() }),
         defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string", validation: Rule => Rule.required() }),
+        defineField({ name: "portalShortCode", title: "Portal Short Code", type: "string", readOnly: true, hidden: true, validation: Rule => Rule.length(8) }),
         defineField({ name: "clientName", title: "Client Name", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientPhone", title: "Client Phone", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientDob", title: "Date of Birth", type: "date", validation: Rule => Rule.required() }),
@@ -76,37 +77,6 @@ export const clientType = defineType({
         }),
         defineField({ name: "intakeStartedAt", title: "Intake Started At", type: "datetime" }),
         defineField({ name: "intakeSubmittedAt", title: "Intake Submitted At", type: "datetime" }),
-        // Communication preferences
-        defineField({
-            name: "communicationPreferences",
-            title: "Communication Preferences",
-            type: "object",
-            fields: [
-                defineField({ name: "smsEnabled", title: "SMS Enabled", type: "boolean", initialValue: true }),
-                defineField({ name: "emailEnabled", title: "Email Enabled", type: "boolean", initialValue: true }),
-                defineField({
-                    name: "preferredMethod",
-                    title: "Preferred Method",
-                    type: "string",
-                    initialValue: "sms",
-                    options: { list: [{ title: "SMS", value: "sms" }, { title: "Email", value: "email" }, { title: "Both", value: "both" }] },
-                }),
-            ],
-        }),
-        // SMS consent
-        defineField({
-            name: "smsConsent",
-            title: "SMS Consent",
-            type: "object",
-            fields: [
-                defineField({ name: "consented", title: "Consented", type: "boolean", initialValue: false }),
-                defineField({ name: "consentedAt", title: "Consented At", type: "datetime" }),
-                defineField({ name: "method", title: "Consent Method", type: "string", options: { list: [{ title: "Phone / Verbal", value: "phone" }, { title: "Written", value: "written" }, { title: "Website", value: "website" }] } }),
-                defineField({ name: "source", title: "Consent Source", type: "string" }),
-                defineField({ name: "collectedBy", title: "Collected By", type: "string" }),
-                defineField({ name: "consentText", title: "Consent Language Used", type: "text" }),
-            ],
-        }),
         // Communication history
         defineField({
             name: "communications",

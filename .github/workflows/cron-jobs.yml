@@ -5,6 +5,7 @@ on:
     - cron: "0 16 * * 1" # Weekly blog → Monday 9:00 AM PST
     - cron: "0 17 * * 1" # Weekly ad → Monday 10:00 AM PST
     - cron: "0 15 * * 1" # Weekly Google Ads Adjustments → Monday 8:00 AM PST
+    - cron: "0 18 * * 1" # Client reminders → Monday 11:00 AM PST
     - cron: "0 16 */2 * *" # Google Ads Optimization → Every 2 days @ 9:00 AM PST
     - cron: "0 10 * * *" # Daily Google Ads Budget Control at 10 UTC
   workflow_dispatch:
@@ -22,6 +23,7 @@ on:
           - optimize
           - adjust
           - budget
+          - reminders
   repository_dispatch:
     types:
       - weekly-ad-ready
@@ -190,6 +192,13 @@ jobs:
           set -euo pipefail
           echo "[CRON] Running Google Ads adjustments"
           npx tsx scripts/googleAds/adjust.ts
+
+      - name: Client Communication Reminders
+        if: github.event.schedule == '0 18 * * 1' || github.event.inputs.job == 'reminders' || github.event.inputs.job == 'all'
+        run: |
+          set -euo pipefail
+          echo "[CRON] Running client communication reminders"
+          npx tsx scripts/reminders.ts
 
       - name: Google Ads Setup
         if: github.event.inputs.job == 'setup'
