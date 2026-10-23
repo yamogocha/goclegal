@@ -88,7 +88,10 @@ export type PleadingLine = {
 async function getPdfJs() {
   if (pdfjsLib) return pdfjsLib;
 
-  const mod = await import("pdfjs-dist");
+  const mod = await import(
+    /* webpackIgnore: true */
+    "pdfjs-dist/legacy/build/pdf.js"
+  );
 
   pdfjsLib = (mod as any).default || mod;
 
