@@ -10,6 +10,7 @@ export const clientType = defineType({
         defineField({ name: "clientAccessToken", title: "Client Access Token", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "portalShortCode", title: "Portal Short Code", type: "string", readOnly: true, hidden: true, validation: Rule => Rule.length(8) }),
         defineField({ name: "clientName", title: "Client Name", type: "string", validation: Rule => Rule.required() }),
+        defineField({ name: "caseNumber", title: "Case Number", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientPhone", title: "Client Phone", type: "string", validation: Rule => Rule.required() }),
         defineField({ name: "clientDob", title: "Date of Birth", type: "date", validation: Rule => Rule.required() }),
         defineField({ name: "clientEmail", title: "Client Email", type: "string", validation: Rule => Rule.required() }),

@@ -3,7 +3,6 @@ import { client } from "@/sanity/client";
 import { serverClient } from "@/sanity/serverClient";
 import {
   buildSpecialInterrogatoryDocx,
-  createFinalResponse,
   Interrogatory,
   loadSpecialInterrogatoryPdfQuestions,
   loadFormInterrogatoryPdfQuestions,
@@ -22,14 +21,15 @@ type SavedInterrogatory = {
   questionLines?: string[];
   plaintiffAttorneyResponse?: string;
   plaintiffClientResponse?: string;
-  finalResponse?: string;
 };
 
 type ClientRecord = {
   _id: string;
   clientId?: string;
   clientName?: string;
+  caseNumber?: string;
   clientAccessToken?: string;
+  clientPronoun?: "his" | "her";
   defendantName?: string;
   defendantAttorney?: string;
   defendantAttorneyAddress?: string;
@@ -39,6 +39,7 @@ type ClientRecord = {
 type InterrogatoryMetadata = {
   serviceDate?: string;
   caseNumber?: string;
+  clientPronoun?: "his" | "her";
   setNumber?: string;
   title?: string;
   plaintiffName?: string;
@@ -61,14 +62,6 @@ type InterrogatoryRecord = {
 
 type ClientWithInterrogatory = ClientRecord & {
   interrogatory?: InterrogatoryRecord;
-};
-
-type RequestBody = {
-  action?: string;
-  question?: string;
-  attorneyResponse?: string;
-  clientResponse?: string;
-  interrogatories?: Array<SavedInterrogatory & Record<string, unknown>>;
 };
 
 function getServiceDate(): string {
@@ -131,22 +124,19 @@ async function getLatestInterrogatory(
     ][0]{
       _id,
       clientId,
+      caseNumber,
+      clientPronoun,
       clientName,
       clientAccessToken,
-      defendantName,
-      defendantAttorney,
-      defendantAttorneyAddress,
-      defendantAttorneyEmail,
       "interrogatory": *[
         _type == "interrogatory" &&
         references(^._id)
       ] | order(_createdAt desc)[0]{
         _id,
-        caseNumber,
-        "clientAccessToken": client->clientAccessToken,
         "metadata": {
           "serviceDate": $serviceDate,
-          "caseNumber": caseNumber,
+          "caseNumber": metadata.caseNumber,
+          "clientPronoun": metadata.clientPronoun,
           "setNumber": metadata.setNumber,
           "title": metadata.title,
           "plaintiffName": coalesce(metadata.plaintiffName, client->clientName),
@@ -179,6 +169,7 @@ function buildCaseMetadata(
   return {
     serviceDate: metadata?.serviceDate || "",
     caseNumber: metadata?.caseNumber || "",
+    clientPronoun: metadata?.clientPronoun || "his",
     setNumber: metadata?.setNumber || "",
     title: metadata?.title || "",
     plaintiffName: metadata?.plaintiffName || "",
@@ -288,7 +279,6 @@ export async function POST(
             existingQuestion?.plaintiffAttorneyResponse || "",
           plaintiffClientResponse:
             existingQuestion?.plaintiffClientResponse || "",
-          finalResponse: existingQuestion?.finalResponse || "",
         };
       });
 
@@ -296,6 +286,7 @@ export async function POST(
     const metadata: CaseMetadata = {
       serviceDate: getServiceDate(),
       caseNumber: result.metadata.caseNumber || "",
+      clientPronoun: clientRecord.clientPronoun || "his",
       setNumber: result.metadata.setNumber || "",
       title: result.metadata.title || "",
       plaintiffName: clientRecord.clientName || "",
@@ -454,23 +445,6 @@ export async function PATCH(
   context: { params: Promise<{ clientId: string }> },
 ) {
   try {
-    const rawBody: unknown = await req.json().catch(() => null);
-
-    const body: RequestBody =
-      typeof rawBody === "object" && rawBody !== null
-        ? (rawBody as RequestBody)
-        : {};
-
-    if (body.action === "generateFinalResponse") {
-      const finalResponse = await createFinalResponse({
-        question: body.question || "",
-        attorneyResponse: body.attorneyResponse || "",
-        clientResponse: body.clientResponse || "",
-      });
-
-      return NextResponse.json({ finalResponse });
-    }
-
     const { clientId } = await context.params;
     const decodedClientId = decodeURIComponent(clientId);
 

@@ -9,8 +9,11 @@ export function buildPlaintiffAttorneyLines(plaintiffName: string) {
       stacked: true,
     },
     {
-      text: "Telephone: (510) 846-0928\nEmail: oconnell.gregory@gmail.com",
+      text: "Telephone: (510) 846-0928\nFax: (510) 426-9577",
       stacked: true,
+    },
+    {
+      text: "Email: greg@goclegal.com"
     },
     { text: "" },
     {
@@ -63,7 +66,8 @@ export function buildPlaintiffCaptionRightLines(caseNumber: string, documentTitl
 export function buildIntroLines(
   plaintiffName: string,
   defendantName: string,
-  setNumber: string
+  setNumber: string,
+  clientPronoun: "his" | "her"
 ) {
   return [
     { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName }] },
@@ -76,11 +80,11 @@ export function buildIntroLines(
     { text: " This responding party and his counsel have not completed their discovery or preparation", firstLine: true },
     { text: "for trial nor have they completed their analysis and review of the investigation and other trial" },
     { text: "preparation matters, and subjects obtained or conducted to date. These responses therefore state" },
-    { text: "the present information and analysis of the responding party and his counsel as acquired and" },
+    { text: `the present information and analysis of the responding party and ${clientPronoun} counsel as acquired and` },
     { text: "reviewed to date without prejudice to this responding party's right to present additional facts," },
     { text: "contentions or theories at trial based upon information, evidence or analysis hereafter obtained or" },
     { text: "evaluated. The following responses state the information, facts, evidence and contentions known" },
-    { text: "to and evaluated by this responding party and his counsel." },
+    { text: `to and evaluated by this responding party and ${clientPronoun} counsel.` },
 
     { text: " This responding party further hereby provides the following responses without prejudice", firstLine: true },
     { text: "to further discovery and specifically reserves the right to present subsequently discovered" },

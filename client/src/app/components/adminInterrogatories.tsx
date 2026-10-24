@@ -10,7 +10,6 @@ type Interrogatory = {
   questionLines?: string[];
   plaintiffAttorneyResponse: string;
   plaintiffClientResponse: string;
-  finalResponse: string;
 };
 
 const backLinkClass =
@@ -86,7 +85,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
   );
 
   // Update a field and debounce save.
-  function saveField(index: number, field: "plaintiffAttorneyResponse" | "plaintiffClientResponse" | "finalResponse", value: string) {
+  function saveField(index: number, field: "plaintiffAttorneyResponse" | "plaintiffClientResponse", value: string) {
     const updated = latestInterrogatoriesRef.current.map((item, i) => (i === index ? { ...item, [field]: value } : item));
     latestInterrogatoriesRef.current = updated;
     setInterrogatories(updated);
@@ -294,14 +293,6 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
             <div className="mt-5">
               <div className="font-bold mb-2">Client Response</div>
               <textarea value={currentInterrogatory.plaintiffClientResponse || ""} onChange={(e) => saveField(currentPage, "plaintiffClientResponse", e.target.value)} className={textareaClass} />
-            </div>
-
-            <div className="mt-5">
-              <div className="font-bold mb-2">Final Response</div>
-              <button type="button" onClick={generateFinalResponse} disabled={loading} className="px-3 py-1 mb-3 rounded-md bg-[#00305b] text-white text-sm cursor-pointer disabled:opacity-50">
-                ✨ Generate
-              </button>
-              <textarea value={currentInterrogatory.finalResponse || ""} onChange={(e) => saveField(currentPage, "finalResponse", e.target.value)} className={textareaClass} />
             </div>
           </div>
         )}

@@ -1,31 +1,6 @@
 import { SectionType, AlignmentType, BorderStyle, Document, Footer, HeightRule, Packer, PageNumber, Paragraph, Table, TableCell, TableLayoutType, TableRow, TextRun, Textbox, VerticalAlign, WidthType } from "docx";
 import { buildCourtTitle, buildFormInterrogatoryIntroLines, buildInterrogatoryResponseLines, buildIntroLines, buildPlaintiffAttorneyLines, buildPlaintiffCaptionLines, buildPlaintiffCaptionRightLines, buildProofOfServiceLines, buildServiceListLines } from "./tempates";
-import { getOpenAI, finalResponsePrompt } from "@/lib/openai";
 
-const openai = getOpenAI();
-
-export async function createFinalResponse(params: {
-  question: string;
-  attorneyResponse: string;
-  clientResponse: string;
-}) {
-  const resp = await openai.responses.create({
-    model: "gpt-5",
-    instructions: `You are an experienced California plaintiff attorney.
-    You draft polished interrogatory responses.
-    Preserve objections.
-    Do not invent facts.
-    Maintain the attorney's writing style and tone.
-    `,
-    input: finalResponsePrompt({
-      question: params.question,
-      attorneyResponse: params.attorneyResponse,
-      clientResponse: params.clientResponse,
-    }),
-  });
-
-  return resp.output_text?.trim() || "";
-}
 
 let pdfjsLib: any;
 
@@ -58,6 +33,7 @@ export type FormInterrogatory = {
 
 export type CaseMetadata = {
   caseNumber: string;
+  clientPronoun: "his" | "her";
   plaintiffName: string;
   defendantName: string;
   setNumber: string;
@@ -128,6 +104,7 @@ function isJunkLine(text: string) {
 
   const blocked = [
     "DEFENDANT CITY OF OAKLAND’S SPECIAL INTERROGATORIES TO",
+    "DEF CITY OF OAKLAND'S SPECIAL INTERROGATORIES",
     "PLAINTIFF DENISE WINKELSTEIN, SET ONE",
     "CITY OF OAKLAND; AND DOES 1",
     "THROUGH 5, INCLUSIVE",
@@ -439,8 +416,8 @@ function insertCaptionSection(pleadingLines: PleadingLine[], caseMetadata: CaseM
 }
 
 function insertIntroductorySection(pleadingLines: PleadingLine[], caseMetadata: CaseMetadata) {
-  const { plaintiffName, defendantName, setNumber } = caseMetadata
-  buildIntroLines(plaintiffName, defendantName, setNumber).forEach((line) =>
+  const { plaintiffName, defendantName, setNumber, clientPronoun } = caseMetadata
+  buildIntroLines(plaintiffName, defendantName, setNumber, clientPronoun).forEach((line) =>
     pleadingLines.push({ text: line.text || "", runs: line.runs, firstLine: line.firstLine })
   );
 }
@@ -465,7 +442,7 @@ function insertInterrogatoryResponses(
       true,
       interrogatory.number,
       interrogatory.question,
-      interrogatory.finalResponse || "",
+      interrogatory.plaintiffAttorneyResponse || "",
       interrogatory.questionLines || [],
     );
 
@@ -494,7 +471,7 @@ function insertFormInterrogatoryResponses(
       false,
       interrogatory.number,
       interrogatory.question,
-      interrogatory.finalResponse || "",
+      interrogatory.plaintiffAttorneyResponse || "",
       interrogatory.questionLines || [],
     );
 
