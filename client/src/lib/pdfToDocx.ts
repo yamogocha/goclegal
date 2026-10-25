@@ -291,7 +291,7 @@ function buildRows(lines: PleadingLine[], layout: PageLayout) {
             children: [
               new Paragraph({
                 spacing: { before: 0, after: 0, line: layout.lineHeight },
-                children: [new TextRun({ text: String(i + 1), size: 20, font: FONT })],
+                children: [new TextRun({ text: String(i + 1), size: 24, font: FONT })],
               }),
             ],
           }),
