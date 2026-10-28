@@ -33,7 +33,6 @@ export const interrogatoryType = defineType({
           defineField({ name: "questionLines", type: "array", of: [{ type: "string" }] }),
           defineField({ name: "plaintiffAttorneyResponse", type: "text" }),
           defineField({ name: "plaintiffClientResponse", type: "text" }),
-          defineField({ name: "finalResponse", type: "text" }),
         ],
       }],
     }),

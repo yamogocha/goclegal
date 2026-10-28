@@ -60,9 +60,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ clientI
         );
         if (!data) return NextResponse.json({ error: "Client not found" }, { status: 404 });
         return NextResponse.json(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error("LOAD CLIENT ERROR", e);
-        return NextResponse.json({ error: e.message }, { status: 500 });
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Unable to load client" }, { status: 500 });
     }
 }
 
@@ -72,7 +72,14 @@ export async function POST(req: Request, context: { params: Promise<{ clientId: 
         const { clientId } = await context.params;
         const decodedClientId = decodeURIComponent(clientId);
         const existingClient = await serverClient.fetch(
-            groq`*[_type == "clientType" && (_id == $clientId || clientId == $clientId)][0]{_id,clientId,clientName,clientPhone,clientAccessToken,clientPortalCode}`,
+            groq`*[_type == "clientType" && (_id == $clientId || clientId == $clientId)][0]{
+        _id,
+        clientId,
+        clientName,
+        clientPhone,
+        clientAccessToken,
+        clientPortalCode
+      }`,
             { clientId: decodedClientId }
         );
 
@@ -88,19 +95,24 @@ export async function POST(req: Request, context: { params: Promise<{ clientId: 
 
         const buffer = await file.arrayBuffer();
         const interrogatoryType = await detectInterrogatoryType(buffer);
-        const result = interrogatoryType === "form" ? await loadFormInterrogatoryPdfQuestions(buffer) : await loadSpecialInterrogatoryPdfQuestions(buffer);
+        const result = interrogatoryType === "form"
+            ? await loadFormInterrogatoryPdfQuestions(buffer)
+            : await loadSpecialInterrogatoryPdfQuestions(buffer);
 
-        const existing = await serverClient.fetch(
-            groq`*[_type == "interrogatory" && caseNumber == $caseNumber][0]{_id}`,
-            { caseNumber: result.metadata.caseNumber }
-        );
-
-        if (existing) return NextResponse.json({ error: "Case already exists" }, { status: 409 });
+        // Only check duplicates when the PDF provides a non-empty case number.
+        const caseNumber = String(result.metadata.caseNumber || "").trim();
+        if (caseNumber) {
+            const existing = await serverClient.fetch(
+                groq`*[_type == "interrogatory" && caseNumber == $caseNumber][0]{_id}`,
+                { caseNumber }
+            );
+            if (existing) return NextResponse.json({ error: "Case already exists" }, { status: 409 });
+        }
 
         const now = new Date().toISOString();
         const payload = {
             client: { _type: "reference", _ref: existingClient._id },
-            caseNumber: result.metadata.caseNumber,
+            caseNumber,
             metadata: result.metadata,
             interrogatoryType: interrogatoryType === "form" ? "form" : "special",
             interrogatories: result.interrogatories.map((q) => ({
@@ -110,7 +122,6 @@ export async function POST(req: Request, context: { params: Promise<{ clientId: 
                 questionLines: q.questionLines || [],
                 plaintiffAttorneyResponse: "",
                 plaintiffClientResponse: "",
-                finalResponse: "",
             })),
             createdAt: now,
             updatedAt: now,
@@ -118,7 +129,6 @@ export async function POST(req: Request, context: { params: Promise<{ clientId: 
 
         const interrogatory = await serverClient.create({ _type: "interrogatory", ...payload });
         const baseUrl = process.env.BASE_URL;
-
         if (!baseUrl) return NextResponse.json({ error: "BASE_URL is not configured" }, { status: 500 });
 
         const clientUrl = `${baseUrl}/interrogatories/${encodeURIComponent(existingClient.clientPortalCode)}`;
@@ -161,8 +171,8 @@ export async function POST(req: Request, context: { params: Promise<{ clientId: 
             messageSent: true,
             redirectTo: `/portal/${encodeURIComponent(existingClient.clientId || existingClient._id)}/interrogatories`,
         });
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error("ADD INTERROGATORIES ERROR", e);
-        return NextResponse.json({ error: e.message }, { status: 500 });
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Unable to add interrogatories" }, { status: 500 });
     }
 }

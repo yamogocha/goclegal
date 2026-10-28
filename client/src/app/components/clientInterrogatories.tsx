@@ -1,4 +1,5 @@
 "use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
@@ -9,7 +10,6 @@ type Interrogatory = {
   questionLines?: string[];
   plaintiffAttorneyResponse: string;
   plaintiffClientResponse: string;
-  finalResponse: string;
 };
 
 export default function ClientInterrogatories({ clientId }: { clientId: string }) {
@@ -21,55 +21,55 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
   const latestRef = useRef<Interrogatory[]>([]);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep ref and state synchronized without a separate state-setting effect.
+  // Keep state and the latest-response ref synchronized.
   const setResponses = useCallback((value: Interrogatory[]) => {
     latestRef.current = value;
     setInterrogatories(value);
   }, []);
 
-  // Load the client's latest interrogatories.
+  // Load the client's interrogatories.
   useEffect(() => {
     let cancelled = false;
+
     const load = async () => {
       try {
-        const res = await fetch(`/api/portal/${clientId}/interrogatories`, { cache: "no-store" });
+        const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/interrogatories`, { cache: "no-store" });
         const data = await res.json();
         if (cancelled) return;
-        if (!res.ok) {
-          setError(data.error || "Unable to load interrogatories");
-          return;
-        }
+        if (!res.ok) throw new Error(data.error || "Unable to load interrogatories");
         setResponses(Array.isArray(data.interrogatories) ? data.interrogatories : []);
-      } catch {
-        if (!cancelled) setError("Unable to load interrogatories");
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Unable to load interrogatories");
       }
     };
+
     void load();
     return () => {
       cancelled = true;
     };
   }, [clientId, setResponses]);
 
-  // Save pending responses before the browser closes.
+  // Save current responses when the browser closes.
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!latestRef.current.length) return;
-      navigator.sendBeacon(`/api/portal/${clientId}/interrogatories`, new Blob([JSON.stringify({ interrogatories: latestRef.current })], { type: "application/json" }));
+      navigator.sendBeacon(`/api/portal/${encodeURIComponent(clientId)}/interrogatories`, new Blob([JSON.stringify({ interrogatories: latestRef.current })], { type: "application/json" }));
     };
+
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [clientId]);
 
-  // Persist responses.
+  // Persist client responses.
   const persist = useCallback(
     async (value: Interrogatory[]) => {
       try {
-        const res = await fetch(`/api/portal/${clientId}/interrogatories`, {
+        const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/interrogatories`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ interrogatories: value }),
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) throw new Error("Save failed");
         setSaveStatus("✓ Progress saved");
         window.setTimeout(() => setSaveStatus(""), 2000);
       } catch {
@@ -85,10 +85,13 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
     setResponses(updated);
     setSaveStatus("Saving...");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => void persist(updated), 1500);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
+      void persist(updated);
+    }, 1500);
   }
 
-  // Flush pending save.
+  // Flush pending changes before navigation.
   async function flushPendingSave() {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -97,10 +100,14 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
     }
   }
 
-  // Find the next unanswered question.
-  function findNextUnanswered(current: number) {
-    for (let i = current + 1; i < interrogatories.length; i++) if (!interrogatories[i]?.plaintiffClientResponse?.trim()) return i;
-    for (let i = 0; i <= current; i++) if (!interrogatories[i]?.plaintiffClientResponse?.trim()) return i;
+  // Find the next unanswered client response.
+  function findNextUnanswered(currentIndex: number) {
+    for (let i = currentIndex + 1; i < interrogatories.length; i++) {
+      if (!interrogatories[i]?.plaintiffClientResponse?.trim()) return i;
+    }
+    for (let i = 0; i <= currentIndex; i++) {
+      if (!interrogatories[i]?.plaintiffClientResponse?.trim()) return i;
+    }
     return -1;
   }
 
@@ -124,6 +131,7 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
         <div className="mb-7">
           <Image src="/blue-logo.png" alt="GOC Legal" width={192} height={80} className="h-auto w-48 object-contain" priority />
         </div>
+
         <div className="sticky top-0 z-20 mb-4 text-center rounded-md px-4 py-2 text-green-700 font-medium">{saveStatus}</div>
 
         {!interrogatories.length ? (
@@ -137,6 +145,7 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
                 {current?.question}
                 {current?.questionLines?.length ? `\n\n${current.questionLines.join("\n")}` : ""}
               </div>
+
               <div className="mt-5">
                 <div className="font-bold mb-2">Your Response</div>
                 <textarea
@@ -157,13 +166,18 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
               >
                 Previous
               </button>
+
               <div className="text-center font-medium">
                 {currentPage + 1} / {interrogatories.length}
               </div>
+
               <button
                 onClick={async () => {
                   await flushPendingSave();
-                  if (currentPage < interrogatories.length - 1) return setCurrentPage(currentPage + 1);
+                  if (currentPage < interrogatories.length - 1) {
+                    setCurrentPage(currentPage + 1);
+                    return;
+                  }
                   if (unanswered > 0) {
                     const next = findNextUnanswered(currentPage);
                     if (next >= 0) setCurrentPage(next);
@@ -183,7 +197,7 @@ export default function ClientInterrogatories({ clientId }: { clientId: string }
                 }}
                 className="text-[#00305b] font-medium underline cursor-pointer"
               >
-                Save & Continue Later
+                Save &amp; Continue Later
               </button>
             </div>
 

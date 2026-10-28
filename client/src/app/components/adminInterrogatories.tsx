@@ -1,4 +1,5 @@
 "use client";
+
 import { OBJECTIONS } from "@/lib/tempates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,11 +40,11 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error || "Unable to load interrogatories");
-        const items = Array.isArray(data.interrogatories) ? data.interrogatories : [];
+        const items: Interrogatory[] = Array.isArray(data.interrogatories) ? data.interrogatories : [];
         latestInterrogatoriesRef.current = items;
         setInterrogatories(items);
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || "Unable to load interrogatories");
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Unable to load interrogatories");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -54,7 +55,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     };
   }, [clientId]);
 
-  // Save pending changes when leaving the page.
+  // Save current responses when the page is closed.
   useEffect(() => {
     const handleBeforeUnload = () => {
       const items = latestInterrogatoriesRef.current;
@@ -84,7 +85,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     [clientId],
   );
 
-  // Update a field and debounce save.
+  // Update a response and debounce saving.
   function saveField(index: number, field: "plaintiffAttorneyResponse" | "plaintiffClientResponse", value: string) {
     const updated = latestInterrogatoriesRef.current.map((item, i) => (i === index ? { ...item, [field]: value } : item));
     latestInterrogatoriesRef.current = updated;
@@ -94,7 +95,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     saveTimeoutRef.current = setTimeout(() => void persistInterrogatories(updated), 1500);
   }
 
-  // Flush pending save.
+  // Flush a pending save before navigation or download.
   async function flushPendingSave() {
     if (!saveTimeoutRef.current) return;
     clearTimeout(saveTimeoutRef.current);
@@ -102,7 +103,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     await persistInterrogatories(latestInterrogatoriesRef.current);
   }
 
-  // Download latest DOCX.
+  // Download the latest DOCX.
   async function downloadDocx() {
     setLoading(true);
     setError("");
@@ -122,16 +123,16 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e.message || "Download failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Download failed");
     } finally {
       setLoading(false);
     }
   }
 
-  // Insert an objection.
+  // Insert an objection into the attorney response.
   function insertObjection(title: string) {
-    const objection = OBJECTIONS.find((o) => o.title === title);
+    const objection = OBJECTIONS.find((item) => item.title === title);
     if (!objection) return;
     const textarea = attorneyResponseRef.current;
     const current = latestInterrogatoriesRef.current[currentPage]?.plaintiffAttorneyResponse || "";
@@ -160,37 +161,15 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     setObjectionMenuOpen(false);
   }
 
-  // Find next unanswered question.
+  // Find the next unanswered attorney response.
   function findNextUnansweredQuestion() {
-    for (let i = currentPage + 1; i < interrogatories.length; i++) if (!interrogatories[i]?.plaintiffAttorneyResponse?.trim()) return i;
-    for (let i = 0; i <= currentPage; i++) if (!interrogatories[i]?.plaintiffAttorneyResponse?.trim()) return i;
-    return -1;
-  }
-
-  // Generate final response.
-  async function generateFinalResponse() {
-    const current = latestInterrogatoriesRef.current[currentPage];
-    if (!current) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/portal/${encodeURIComponent(clientId)}/interrogatories`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "generateFinalResponse",
-          question: current.question,
-          attorneyResponse: current.plaintiffAttorneyResponse,
-          clientResponse: current.plaintiffClientResponse,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to generate response");
-      saveField(currentPage, "finalResponse", data.finalResponse || "");
-    } catch (e: any) {
-      setError(e.message || "Unable to generate response");
-    } finally {
-      setLoading(false);
+    for (let i = currentPage + 1; i < interrogatories.length; i++) {
+      if (!interrogatories[i]?.plaintiffAttorneyResponse?.trim()) return i;
     }
+    for (let i = 0; i <= currentPage; i++) {
+      if (!interrogatories[i]?.plaintiffAttorneyResponse?.trim()) return i;
+    }
+    return -1;
   }
 
   const currentInterrogatory = interrogatories[currentPage];
@@ -198,7 +177,9 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
   const unansweredCount = interrogatories.filter((q) => !q.plaintiffAttorneyResponse?.trim()).length;
   const completedCount = interrogatories.length - unansweredCount;
 
-  if (loading && !interrogatories.length) return <main className="min-h-screen flex items-center justify-center">Loading interrogatories...</main>;
+  if (loading && !interrogatories.length) {
+    return <main className="min-h-screen flex items-center justify-center">Loading interrogatories...</main>;
+  }
 
   if (error && !interrogatories.length) {
     return (
@@ -217,16 +198,13 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
     <main className="min-h-screen relative font-montserrat bg-white md:bg-[url('https://res.cloudinary.com/dre1b2zmh/image/upload/v1781392342/goclegal/background_image_two.webp')] md:bg-cover md:bg-center md:flex md:items-center md:justify-center p-0 md:p-8">
       <div className="hidden md:block absolute inset-0 bg-[#00305bcf]" />
       <div className="relative z-10 w-full max-w-7xl mx-auto bg-white md:bg-white/95 md:backdrop-blur-sm rounded-none md:rounded-xl shadow-none md:shadow-xl p-4 md:p-8">
-        {/* Keep desktop toolbar unchanged; only stack status below buttons on mobile. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button onClick={() => router.back()} className={backLinkClass}>
             ← Profile
           </button>
-
           <div className="hidden sm:block flex-1 text-center">
             {loading ? "Processing..." : error ? <span className="text-red-500">{error}</span> : <span className="text-green-700 font-medium">{saveStatus}</span>}
           </div>
-
           <button
             onClick={downloadDocx}
             disabled={loading || !interrogatories.length}
@@ -234,8 +212,6 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
           >
             Download DOCX
           </button>
-
-          {/* Mobile-only status row. */}
           <div className="w-full text-center sm:hidden">
             {loading ? "Processing..." : error ? <span className="text-red-500">{error}</span> : <span className="text-green-700 font-medium">{saveStatus}</span>}
           </div>
@@ -259,7 +235,6 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
                 <span>{selectedObjection || "Select Objection"}</span>
                 <span>▼</span>
               </button>
-
               {objectionMenuOpen && (
                 <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-300 bg-white shadow-lg max-h-[300px] overflow-y-auto">
                   {OBJECTIONS.map((objection) => (
@@ -309,11 +284,9 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
                 >
                   Previous
                 </button>
-
                 <div className="text-center font-medium">
                   {currentPage + 1} / {interrogatories.length}
                 </div>
-
                 <button
                   className="text-white font-medium rounded bg-linear-to-r from-[#00305b] to-[#004c8f] gradient-animate min-w-30 p-5 cursor-pointer"
                   onClick={async () => {
@@ -338,7 +311,7 @@ export default function AdminInterrogatories({ clientId }: { clientId: string })
                 }}
                 className="text-[#00305b] font-medium underline cursor-pointer"
               >
-                Save & Continue Later
+                Save &amp; Continue Later
               </button>
 
               {showContinueLaterModal && (
