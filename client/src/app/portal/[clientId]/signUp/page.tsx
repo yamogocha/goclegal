@@ -8,6 +8,7 @@ import Image from "next/image";
 type UploadedFile = { url: string; name: string; assetId: string };
 
 type FormData = {
+  caseNumber: string;
   clientName: string;
   clientPhone: string;
   clientDob: string;
@@ -57,6 +58,7 @@ type StringField = Exclude<keyof FormData, "driverLicense" | "healthInsuranceCar
 type FileField = "driverLicense" | "healthInsuranceCards" | "medicalRecords" | "vehicleDamagePhotos" | "declarationPage";
 
 const initialForm: FormData = {
+  caseNumber: "",
   clientName: "",
   clientPhone: "",
   clientDob: "",
@@ -102,6 +104,7 @@ const initialForm: FormData = {
 };
 
 const optionalFields = new Set<StringField | FileField>([
+  "caseNumber",
   "clientPronoun",
   "driverLicense",
   "medicalRecords",
@@ -129,6 +132,7 @@ const optionalFields = new Set<StringField | FileField>([
 ]);
 
 const stringFields: StringField[] = [
+  "caseNumber",
   "clientName",
   "clientPhone",
   "clientDob",
@@ -526,6 +530,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
     const missing: string[] = [];
 
     const requiredLabels: Partial<Record<StringField | FileField, string>> = {
+      caseNumber: "Case Number",
       clientName: "Client Name",
       clientPhone: "Client Phone",
       clientDob: "Date of Birth",
@@ -823,6 +828,7 @@ export default function ClientSignupPage({ params, searchParams }: { params: Pro
                     <p className="mt-2 font-montserrat text-sm text-slate-500">These fields are visible to the attorney/staff only.</p>
                   </div>
                   <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                    {input("caseNumber", "Case Number")}
                     {input("defendantEmail", "Defendant Email", "email")}
                     {input("defendantInsuranceEmail", "Defendant Insurance Email", "email")}
                     {input("defendantCdl", "Defendant CDL")}

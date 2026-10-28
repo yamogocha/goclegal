@@ -72,15 +72,13 @@ function getServiceDate(): string {
   });
 }
 
-// Find the existing client by clientId or exact client name.
+// Find the current client. clientType is the source of truth for client data.
 async function findClientByIdentifier(
   identifier: string,
 ): Promise<ClientRecord | null> {
   const decodedIdentifier = decodeURIComponent(identifier).trim();
 
-  if (!decodedIdentifier) {
-    return null;
-  }
+  if (!decodedIdentifier) return null;
 
   return client.fetch<ClientRecord | null>(
     `*[
@@ -93,7 +91,9 @@ async function findClientByIdentifier(
       _id,
       clientId,
       clientName,
+      caseNumber,
       clientAccessToken,
+      clientPronoun,
       defendantName,
       defendantAttorney,
       defendantAttorneyAddress,
@@ -103,16 +103,13 @@ async function findClientByIdentifier(
   );
 }
 
-// Get the latest interrogatory through the client's reference.
+// Load the latest interrogatory linked to the current client.
 async function getLatestInterrogatory(
   identifier: string,
 ): Promise<ClientWithInterrogatory | null> {
   const decodedIdentifier = decodeURIComponent(identifier).trim();
-  const currentServiceDate = getServiceDate();
 
-  if (!decodedIdentifier) {
-    return null;
-  }
+  if (!decodedIdentifier) return null;
 
   return client.fetch<ClientWithInterrogatory | null>(
     `*[
@@ -124,60 +121,59 @@ async function getLatestInterrogatory(
     ][0]{
       _id,
       clientId,
-      caseNumber,
-      clientPronoun,
       clientName,
+      caseNumber,
       clientAccessToken,
+      clientPronoun,
+      defendantName,
+      defendantAttorney,
+      defendantAttorneyAddress,
+      defendantAttorneyEmail,
       "interrogatory": *[
         _type == "interrogatory" &&
         references(^._id)
       ] | order(_createdAt desc)[0]{
         _id,
-        "metadata": {
-          "serviceDate": $serviceDate,
-          "caseNumber": metadata.caseNumber,
-          "clientPronoun": metadata.clientPronoun,
-          "setNumber": metadata.setNumber,
-          "title": metadata.title,
-          "plaintiffName": coalesce(metadata.plaintiffName, client->clientName),
-          "defendantName": coalesce(metadata.defendantName, client->defendantName),
-          "defendantAttorney": client->defendantAttorney,
-          "defendantAttorneyAddress": client->defendantAttorneyAddress,
-          "defendantAttorneyEmail": client->defendantAttorneyEmail
-        },
         interrogatoryType,
         interrogatories,
         status,
         createdAt,
-        updatedAt
+        updatedAt,
+        "metadata": {
+          "serviceDate": $serviceDate,
+          "setNumber": metadata.setNumber,
+          "title": metadata.title
+        }
       }
     }`,
     {
       identifier: decodedIdentifier,
-      serviceDate: currentServiceDate,
+      serviceDate: getServiceDate(),
     },
   );
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Server error";
-}
-
+// Always build document metadata from the current clientType profile.
 function buildCaseMetadata(
-  metadata?: InterrogatoryMetadata,
+  clientRecord: ClientRecord,
+  interrogatoryMetadata?: InterrogatoryMetadata,
 ): CaseMetadata {
   return {
-    serviceDate: metadata?.serviceDate || "",
-    caseNumber: metadata?.caseNumber || "",
-    clientPronoun: metadata?.clientPronoun || "his",
-    setNumber: metadata?.setNumber || "",
-    title: metadata?.title || "",
-    plaintiffName: metadata?.plaintiffName || "",
-    defendantName: metadata?.defendantName || "",
-    defendantAttorney: metadata?.defendantAttorney || "",
-    defendantAttorneyAddress: metadata?.defendantAttorneyAddress || "",
-    defendantAttorneyEmail: metadata?.defendantAttorneyEmail || "",
+    serviceDate: getServiceDate(),
+    caseNumber: clientRecord.caseNumber || "",
+    clientPronoun: clientRecord.clientPronoun || "his",
+    setNumber: interrogatoryMetadata?.setNumber || "",
+    title: interrogatoryMetadata?.title || "",
+    plaintiffName: clientRecord.clientName || "",
+    defendantName: clientRecord.defendantName || "",
+    defendantAttorney: clientRecord.defendantAttorney || "",
+    defendantAttorneyAddress: clientRecord.defendantAttorneyAddress || "",
+    defendantAttorneyEmail: clientRecord.defendantAttorneyEmail || "",
   };
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Server error";
 }
 
 // LOAD LATEST INTERROGATORY FOR CLIENT.
@@ -205,7 +201,17 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(record.interrogatory);
+    // Always expose current clientType data to the UI.
+    const metadata = buildCaseMetadata(
+      record,
+      record.interrogatory.metadata,
+    );
+
+    return NextResponse.json({
+      ...record.interrogatory,
+      caseNumber: metadata.caseNumber,
+      metadata,
+    });
   } catch (error: unknown) {
     console.error("LOAD INTERROGATORY ERROR", error);
 
@@ -237,6 +243,7 @@ export async function POST(
 
     const buffer = await file.arrayBuffer();
 
+    // The uploaded PDF is only the master question source.
     const interrogatoryType = await detectInterrogatoryType(buffer);
 
     const result =
@@ -244,7 +251,7 @@ export async function POST(
         ? await loadFormInterrogatoryPdfQuestions(buffer)
         : await loadSpecialInterrogatoryPdfQuestions(buffer);
 
-    // Resolve the existing client.
+    // Resolve the current client.
     const clientRecord = await findClientByIdentifier(decodedClientId);
 
     if (!clientRecord) {
@@ -254,6 +261,7 @@ export async function POST(
       );
     }
 
+    // Load existing responses so reloading the master template does not erase attorney/client responses.
     const existingRecord = await getLatestInterrogatory(
       clientRecord.clientId || clientRecord.clientName || decodedClientId,
     );
@@ -266,6 +274,7 @@ export async function POST(
       ),
     );
 
+    // Use only questions extracted from the master template.
     const interrogatories: SavedInterrogatory[] =
       result.interrogatories.map((question: Interrogatory) => {
         const existingQuestion = existingResponses.get(question.number);
@@ -282,21 +291,11 @@ export async function POST(
         };
       });
 
-    // Client information is the source of truth.
-    const metadata: CaseMetadata = {
-      serviceDate: getServiceDate(),
-      caseNumber: result.metadata.caseNumber || "",
-      clientPronoun: clientRecord.clientPronoun || "his",
-      setNumber: result.metadata.setNumber || "",
-      title: result.metadata.title || "",
-      plaintiffName: clientRecord.clientName || "",
-      defendantName: clientRecord.defendantName || "",
-      defendantAttorney: clientRecord.defendantAttorney || "",
-      defendantAttorneyAddress:
-        clientRecord.defendantAttorneyAddress || "",
-      defendantAttorneyEmail:
-        clientRecord.defendantAttorneyEmail || "",
-    };
+    // ClientType is the authoritative source for all client/case information.
+    const metadata: CaseMetadata = buildCaseMetadata(
+      clientRecord,
+      result.metadata,
+    );
 
     const payload = {
       caseNumber: metadata.caseNumber,
@@ -308,7 +307,7 @@ export async function POST(
     };
 
     if (existing?._id) {
-      // Existing interrogatory: make sure it references the correct client.
+      // Replace the existing interrogatory for this client.
       await serverClient
         .patch(existing._id)
         .set({
@@ -320,7 +319,7 @@ export async function POST(
         })
         .commit();
     } else {
-      // New interrogatory: automatically reference the existing client.
+      // Create the interrogatory only when this client has none.
       await serverClient.create({
         _type: "interrogatory",
         client: {
@@ -335,10 +334,16 @@ export async function POST(
 
     return NextResponse.json({
       interrogatories,
+      caseNumber: metadata.caseNumber,
+      metadata,
+      interrogatoryType: payload.interrogatoryType,
       client: {
         _id: clientRecord._id,
+        clientId: clientRecord.clientId,
         clientName: clientRecord.clientName,
+        caseNumber: clientRecord.caseNumber,
         clientAccessToken: clientRecord.clientAccessToken,
+        clientPronoun: clientRecord.clientPronoun,
         defendantName: clientRecord.defendantName,
         defendantAttorney: clientRecord.defendantAttorney,
         defendantAttorneyAddress:
@@ -389,7 +394,7 @@ export async function PUT(
       }
     ).interrogatories;
 
-    // Resolve the client first so the interrogatory always stays linked.
+    // Resolve the current client.
     const clientRecord = await findClientByIdentifier(decodedClientId);
 
     if (!clientRecord) {
@@ -415,14 +420,19 @@ export async function PUT(
     await serverClient
       .patch(existing._id)
       .set({
-        // Keep the client reference authoritative.
         client: {
           _type: "reference",
           _ref: clientRecord._id,
         },
         interrogatories: interrogatories.map((question) => ({
           _key: question._key || crypto.randomUUID(),
-          ...question,
+          number: question.number,
+          question: question.question,
+          questionLines: question.questionLines || [],
+          plaintiffAttorneyResponse:
+            question.plaintiffAttorneyResponse || "",
+          plaintiffClientResponse:
+            question.plaintiffClientResponse || "",
         })),
         updatedAt: new Date().toISOString(),
       })
@@ -439,14 +449,26 @@ export async function PUT(
   }
 }
 
-// GENERATE FINAL RESPONSES OR DOCX.
+// GENERATE DOCX USING CURRENT CLIENT PROFILE DATA.
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ clientId: string }> },
 ) {
   try {
+    await req.json().catch(() => null);
+
     const { clientId } = await context.params;
     const decodedClientId = decodeURIComponent(clientId);
+
+    // Resolve the current client directly from clientType.
+    const clientRecord = await findClientByIdentifier(decodedClientId);
+
+    if (!clientRecord) {
+      return NextResponse.json(
+        { error: "Client not found" },
+        { status: 404 },
+      );
+    }
 
     const record = await getLatestInterrogatory(decodedClientId);
     const existing = record?.interrogatory;
@@ -461,8 +483,11 @@ export async function PATCH(
       );
     }
 
-    // Convert optional metadata into the required CaseMetadata type.
-    const metadata = buildCaseMetadata(existing.metadata);
+    // Rebuild metadata from the current clientType profile at download time.
+    const metadata = buildCaseMetadata(
+      clientRecord,
+      existing.metadata,
+    );
 
     const buffer =
       existing.interrogatoryType === "form"
@@ -475,8 +500,14 @@ export async function PATCH(
           metadata,
         );
 
-    const filename = `${existing.caseNumber || "interrogatories"
-      }.docx`;
+    const filenameBase =
+      clientRecord.caseNumber ||
+      clientRecord.clientName ||
+      "interrogatories";
+
+    const filename = `${filenameBase
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .trim()}.docx`;
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

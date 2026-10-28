@@ -98,21 +98,26 @@ function isDefinitionsLine(text: string) {
   );
 }
 
-function isJunkLine(text: string) {
+function isJunkLine(
+  text: string,
+  caseNumber = "",
+  plaintiffName = "",
+  defendantName = "",
+) {
   if (!text) return true;
   if (/^\d+$/.test(text)) return true;
+  if (caseNumber && text.includes(caseNumber)) return true;
+  if (plaintiffName && text.includes(plaintiffName)) return true;
+  if (defendantName && text.includes(defendantName)) return true;
 
   const blocked = [
-    "DEFENDANT CITY OF OAKLAND’S SPECIAL INTERROGATORIES TO",
-    "DEF CITY OF OAKLAND'S SPECIAL INTERROGATORIES",
-    "PLAINTIFF DENISE WINKELSTEIN, SET ONE",
-    "CITY OF OAKLAND; AND DOES 1",
-    "THROUGH 5, INCLUSIVE",
+    "DEFENDANT",
+    "SPECIAL INTERROGATORIES TO",
+    "SET ONE",
     "Complaint Filed:",
     "Trial Date:",
     "EXEMPT PER GOV. CODE SECTION 6103",
-    "25CV153765",
-    "SET ONE",
+    "THROUGH 5, INCLUSIVE",
     "Defendants.",
     "PROOF OF SERVICE",
   ];
@@ -191,25 +196,25 @@ function paginate(lines: PleadingLine[], rowsPerPage: number) {
   return pages;
 }
 
-function buildCaptionLineOverlay() {
-  const line = Array(25).fill("│").join("\n");
-  return new Textbox({
-    children: [
-      new Paragraph({
-        spacing: { before: .1, after: .1 },
-        children: [new TextRun({ text: line })],
-      }),
-    ],
-    style: {
-      width: ".1pt",
-      height: "135pt",
-      position: "absolute",
-      left: "267pt",
-      top: "260pt",
-      wrapStyle: "none",
-    },
-  });
-}
+// function buildCaptionLineOverlay() {
+//   const line = Array(25).fill("│").join("\n");
+//   return new Textbox({
+//     children: [
+//       new Paragraph({
+//         spacing: { before: .1, after: .1 },
+//         children: [new TextRun({ text: line })],
+//       }),
+//     ],
+//     style: {
+//       width: ".1pt",
+//       height: "135pt",
+//       position: "absolute",
+//       left: "267pt",
+//       top: "260pt",
+//       wrapStyle: "none",
+//     },
+//   });
+// }
 
 function buildRows(lines: PleadingLine[], layout: PageLayout) {
   const rows: TableRow[] = [];
@@ -362,7 +367,7 @@ async function generateDocx(pleadingLines: PleadingLine[], caseMetadata: CaseMet
     return sectionChildren;
   }
 
-  const pleadingChildren = [buildCaptionLineOverlay(), ...buildSectionChildren(pleadingLines, PLEADING_LAYOUT)];
+  const pleadingChildren = [...buildSectionChildren(pleadingLines, PLEADING_LAYOUT)];
 
   const proofChildren = buildSectionChildren(proofLines, PROOF_OF_SERVICE_LAYOUT);
 
@@ -620,7 +625,7 @@ export async function loadSpecialInterrogatoryPdfQuestions(buffer: ArrayBuffer) 
 
       text = normalize(text.replace(/^\d+\s+/, ""));
 
-      if (isDefinitionsLine(text) || isJunkLine(text)) continue;
+      if (isDefinitionsLine(text) || isJunkLine(text, caseNumber, plaintiffName, defendantName)) continue;
 
       if (
         text.startsWith("Dated:") ||

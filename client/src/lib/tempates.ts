@@ -70,8 +70,8 @@ export function buildIntroLines(
   clientPronoun: "his" | "her"
 ) {
   return [
-    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName }] },
-    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName }] },
+    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName.toUpperCase() }] },
+    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName.toUpperCase() }] },
     { runs: [{ text: "SET NUMBER: ", bold: true }, { text: setNumber }] },
 
     { text: " Pursuant to Code of Civil Procedure section 2030.210, et seq, Responding Party responds", firstLine: true },
@@ -131,8 +131,8 @@ export function buildFormInterrogatoryIntroLines(
   setNumber: string
 ) {
   return [
-    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName }] },
-    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName }] },
+    { runs: [{ text: "PROPOUNDING PARTY: ", bold: true }, { text: plaintiffName.toUpperCase() }] },
+    { runs: [{ text: "RESPONDING PARTY: ", bold: true }, { text: defendantName.toUpperCase() }] },
     { runs: [{ text: "SET NUMBER: ", bold: true }, { text: setNumber }] },
 
     { text: 'Plaintiff (“Plaintiff” and/or “Responding Party”) hereby responds to Form Interrogatories', firstLine: true },
